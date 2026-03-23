@@ -1,108 +1,93 @@
-# designdoc
+# design-doc
 
-> 产品设计文档 Skill 库 - 规范项目产品设计文档的层级体系、目录结构、格式和模板
+AI 驱动的产品设计文档规范库 — 让你与 AI 协作高效编写标准化的技术文档
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Agent Skills Standard](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
+## 为什么使用 design-doc？
 
-## 简介
+| 传统方式 | 使用 design-doc |
+|---------|-----------------|
+| 文档格式不统一，每个团队各有风格 | 统一模板，AI 自动遵循规范 |
+| 文档结构混乱，审阅困难 | L0-L6 清晰层级，按需选用 |
+| 需求/设计变更难以追溯 | 全局唯一编码，全程可追溯 |
+| 编写文档费时费力 | AI 辅助生成，只需补充业务细节 |
 
-本仓库是一个 Skill 库，用于规范项目产品设计文档（ued/ 目录）的层级体系、目录结构、格式和模板。包含 L0-L6 层级的设计文档模板（愿景、需求、架构、系统设计、详细设计、验证策略等）。
+## 功能特性
 
-## 目录结构
+- **L0-L6 完整层级** — 覆盖愿景、需求、概念架构、系统设计、详细设计、验证策略
+- **开箱即用模板** — 8+ 文档模板，AI 直接调用
+- **统一编码体系** — 文档和细项全局唯一编码，变更可追溯
+- **内置审核清单** — AI 帮你检查文档完整性和一致性
+- **多 IDE 支持** — Cursor、Windsurf、Claude Code、VS Code 等主流工具自动识别
 
-```
-designdoc/
-├── .agents/
-│   └── skills/
-│       └── design-doc/           # design-doc skill 主目录
-│           ├── SKILL.md          # 规范主文件
-│           ├── assets/
-│           │   └── templates/    # 文档模板
-│           └── references/       # 参考文档
-├── agent_skills_standard.md      # Agent Skills 标准说明
-├── agents_md_guide.md            # AGENTS.md 编写指南
-├── cursor_guide.md               # Cursor 使用指南
-├── windsurf_guide.md             # Windsurf 使用指南
-└── README.md
-```
+## 快速开始
 
-## 标准
-
-本 skill 遵循 [Agent Skills 开放标准](https://agentskills.io/specification)。
-
-## IDE 支持情况
-
-### 项目级（自动发现，无需配置）
-
-所有支持 Agent Skills 标准的工具会自动扫描 `.agents/skills/`：
-
-| IDE / 工具 | 项目级发现路径 | 状态 |
-|-----------|--------------|------|
-| Cursor | `.agents/skills/`、`.cursor/skills/`、`.claude/skills/` | 已验证 |
-| Windsurf | `.agents/skills/`、`.windsurf/skills/`、`.claude/skills/` | 已验证 |
-| Claude Code | `.agents/skills/`、`.claude/skills/` | 已验证 |
-| GitHub Copilot | `.agents/skills/` | 已验证 |
-| VS Code | `.agents/skills/` | 已验证 |
-| Qoder | `.qoder/skills/` | 需 symlink |
-
-### 用户级（全局，需手动安装）
-
-各工具的用户级扫描路径不同，建议按实际使用的工具逐个安装：
-
-| IDE / 工具 | 用户级发现路径 | 备注 |
-|-----------|--------------|------|
-| Cursor | `~/.cursor/skills/` | 也扫描 `~/.claude/skills/`、`~/.codex/skills/`，但对 `.claude` 支持不完整，建议用原生路径 |
-| Windsurf | `~/.codeium/windsurf/skills/` | 也扫描 `~/.agents/skills/` |
-| Claude Code | `~/.claude/skills/` | |
-| Qoder | `~/.qoder/skills/` | |
-
-### 暂不支持
-
-| IDE / 工具 | 原因 |
-|-----------|------|
-| Trae（CN / 国际版） | 不支持 Agent Skills 标准，仅支持 `.trae/rules/` 格式。后续如需支持可增加翻译脚本 |
-
-## 全局安装
-
-按使用的工具创建对应 symlink：
+### 1. 安装 skill（项目级，自动发现）
 
 ```bash
-# Cursor（推荐优先安装）
-mkdir -p ~/.cursor/skills
-ln -sfn /path/to/project/.agents/skills/design-doc ~/.cursor/skills/design-doc
-
-# Claude Code
-mkdir -p ~/.claude/skills
-ln -sfn /path/to/project/.agents/skills/design-doc ~/.claude/skills/design-doc
-
-# Windsurf
-mkdir -p ~/.codeium/windsurf/skills
-ln -sfn /path/to/project/.agents/skills/design-doc ~/.codeium/windsurf/skills/design-doc
-
-# Qoder
-mkdir -p ~/.qoder/skills
-ln -sfn /path/to/project/.agents/skills/design-doc ~/.qoder/skills/design-doc
+# 克隆到你的项目
+cp -r .agents/skills/design-doc /your-project/.agents/skills/
 ```
 
-## 用户配置
+或创建符号链接：
 
-创建文档时，作者字段通过以下优先级自动获取：
+```bash
+ln -sfn /path/to/designdoc/.agents/skills/design-doc /your-project/.agents/skills/design-doc
+```
 
-1. 项目配置 `ued/.doc-config.json` 中的 `author` 字段
-2. `git config user.name`
-3. 默认值：`产品架构组`
+### 2. 在 AI 助手中使用
+
+```
+帮我写一份用户认证系统的系统设计文档（L4）
+```
+
+AI 会自动：
+- 选用正确的模板
+- 分配唯一文档编码
+- 生成符合规范的文档结构
+
+### 3. 配置作者信息（可选）
+
+在 `ued/.doc-config.json` 中配置：
 
 ```json
 {
-  "author": "张三"
+  "author": "你的名字"
 }
 ```
 
-## 后续扩展
+## 文档层级
 
-如需为不支持通用标准的工具增加适配，在项目根目录添加翻译脚本（如 `sync-trae.sh`），从 `.agents/skills/design-doc/` 读取源文件并转换为目标格式。
+| 层级 | 名称 | 用途 |
+|-----|------|------|
+| L0 | 战略愿景 | 产品愿景、目标市场、竞争分析 |
+| L1 | 干系人需求 | 用户画像、需求来源、业务目标 |
+| L2 | 需求定义 | 功能需求、非功能需求、业务规则 |
+| L3 | 概念架构 | 总体架构、模块划分、技术选型 |
+| L4 | 系统设计 | 接口设计、数据模型、流程设计 |
+| L5 | 详细设计 | 实现细节、算法说明、配置说明 |
+| L6 | 验证策略 | 测试计划、验收标准、上线方案 |
+
+## 支持的 IDE
+
+| IDE | 支持状态 |
+|-----|---------|
+| Cursor | ✅ 自动发现 |
+| Windsurf | ✅ 自动发现 |
+| Claude Code | ✅ 自动发现 |
+| VS Code | ✅ 自动发现 |
+| GitHub Copilot | ✅ 自动发现 |
+
+## 了解更多
+
+- [Skill 规范](./.agents/skills/design-doc/SKILL.md) — 完整规范说明
+- [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档编码规则
+- [审核指南](./.agents/skills/design-doc/references/review-guidelines.md) — 文档检查清单
+- [模板库](./.agents/skills/design-doc/assets/templates/index.md) — 所有模板预览
+- [srspub](https://srs.pub/) — 产品需求规范参考
 
 ## 许可证
 
-本项目采用 [MIT License](LICENSE) 开源协议。
+[MIT License](./LICENSE) — 可自由使用于商业和非商业项目
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
