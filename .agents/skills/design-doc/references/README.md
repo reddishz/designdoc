@@ -8,3 +8,4 @@
 | [layer-system.md](layer-system.md) | L0–L6 层级定义与目录结构 |
 | [status-definitions.md](status-definitions.md) | 标准状态值与流转 |
 | [review-guidelines.md](review-guidelines.md) | 审核流程与检查项 |
+| [deprecation-guide.md](deprecation-guide.md) | 细项废弃流程、标记与引用追溯 |

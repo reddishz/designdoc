@@ -1,6 +1,6 @@
 # 设计文档模板索引
 
-> **说明**：可复制的文档骨架均在本目录（`assets/templates/`）。流程图写法、AI 编码约束等**非模板**说明见 [辅助指南](../guides/README.md)。
+> **说明**：可复制的文档骨架均在本目录（`assets/templates/`）。流程图写法、AI 编码约束等见 [辅助指南](../guides/README.md)；专项规范（含废弃细项）见 [references 索引](../../references/README.md)。
 
 ## 快速模板选择
 
@@ -30,15 +30,12 @@
 | REF | 外部参考资料 | 有效/废弃 | 管理外部参考资源 | [ref.md](ref.md) ✅ |
 | README | 项目文档索引 | - | 全局编码索引、文档导航、编码计数器 | [readme-template.md](readme-template.md) ✅ |
 | 项目注册表 | 项目编码管理 | - | 企业级项目编码统一管理 | [project-registry.md](project-registry.md) ✅ |
-| 流程图指南 | 流程图格式规范 | - | 指导如何选择合适的流程图格式 | [../guides/flowchart-guide.md](../guides/flowchart-guide.md) ✅ |
-| AI 操作指南 | 编码修改防护 | - | AI 智能体操作规范和编码防护机制 | [../guides/ai-operation-guide.md](../guides/ai-operation-guide.md) ✅ |
-| 废弃处理指南 | 废弃细项处理 | - | 规范废弃细项的处理流程和标准 | [../../references/deprecation-guide.md](../../references/deprecation-guide.md) ✅ |
 
 ## 使用方法
 
 1. **选择模板**：根据文档类型打开上表对应文件
 2. **复制内容**：以模板为起点编写
-3. **替换占位符**：更新 `{编号}`、`{文档名称}` 等
+3. **替换占位符**：更新 `{项目编码}`、`{编号}`、`{文档名称}` 等
 4. **设置状态**：从标准状态值中选择
 5. **维护编码**：确保全局唯一编码
 
@@ -54,4 +51,5 @@
 ## 结构说明
 
 - **模板**（本目录）：独立 `.md` 文件，按需打开，利于渐进式加载。
-- **辅助指南**（[`../guides/`](../guides/README.md)）：规范与操作说明，非填空模板。
+- **辅助指南**（[`../guides/`](../guides/README.md)）：流程图、AI 操作等非填空说明。
+- **专项规范**（[`../../references/`](../../references/README.md)）：编码、层级、状态、审核、**废弃细项**等，真值源以该目录为准。

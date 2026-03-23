@@ -59,6 +59,8 @@
 
 #### 3.1 状态流转图
 
+> **说明**：下图为**示例性**工作流示意（含「审核中」等中间态）。**真值源**以 [status-definitions.md](../../references/status-definitions.md) 中 L0–L6 文档状态及状态图为准；若与下图不一致，以 `status-definitions` 为准。若组织采用「废弃后重新激活为草稿」等策略，须在项目级裁减并写入过程规范，避免与「废弃不可逆」类表述冲突。
+
 ```mermaid
 stateDiagram-v2
     [*] --> 草稿

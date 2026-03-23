@@ -7,7 +7,7 @@
 | 路径 | 内容 |
 |------|------|
 | [`SKILL.md`](SKILL.md) | 主指令：原则、范围、快速步骤、详细规范链接 |
-| [`references/`](references/README.md) | 编码体系、层级、状态、审核等专项规范 |
+| [`references/`](references/README.md) | 编码体系、层级、状态、审核、废弃细项等专项规范 |
 | [`assets/templates/`](assets/templates/index.md) | 可复制文档模板（L0–L6、ADR、REF、README、项目注册表） |
 | [`assets/guides/`](assets/guides/README.md) | 非模板的辅助说明（流程图、AI 编码操作） |
 

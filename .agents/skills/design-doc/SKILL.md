@@ -1,9 +1,9 @@
 ---
 name: design-doc
-description: 规范项目产品设计文档（ued/目录）的层级体系、目录结构、格式和模板。当用户需要创建或审查 L0-L6 层级的设计文档（愿景、需求、架构、系统设计、详细设计、验证策略等）时使用此 skill。不适用于代码实现、部署运维(docs/)或用户手册类文档。
+description: 规范项目产品设计文档（ued/目录）的层级体系、目录结构、格式和模板。当用户需要创建或审查设计文档（包括愿景、需求、架构、系统设计、详细设计、验证策略等）时使用此 skill。不适用于代码实现、部署运维(docs/)或用户手册类文档。
 license: Apache-2.0
 metadata:
-  version: "2.1"
+  version: "2.2"
   spec-compliance: 遵循 Agent Skills 开放标准
 compatibility: 需能访问 ued/ 目录，可选 git config 用户名获取
 ---
@@ -109,6 +109,7 @@ compatibility: 需能访问 ued/ 目录，可选 git config 用户名获取
 - [模板库](assets/templates/index.md) - 各层级文档模板索引（可复制骨架）
 - [辅助指南](assets/guides/README.md) - 流程图规范与 AI 编码操作说明（非模板）
 - [审核指南](references/review-guidelines.md) - 文档审核流程和检查项
+- [废弃细项处理](references/deprecation-guide.md) - 细项废弃标注与引用更新
 
 ## 多工具兼容
 
