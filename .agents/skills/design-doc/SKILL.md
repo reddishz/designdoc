@@ -13,25 +13,42 @@ compatibility: 需能访问 ued/ 目录，可选 git config 用户名获取
 ## 当前用户
 
 - 作者：!`cat ued/.doc-config.json 2>/dev/null | grep -o '"author"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"author"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//' | grep -v '^$' || git config user.name 2>/dev/null || echo '产品架构组'`
+- 项目编码：!`cat ued/.doc-config.json 2>/dev/null | grep -o '"project_code"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"project_code"[[:space:]]*:[[:space:]]*"//' | sed 's/"$//' | grep -v '^$' || echo $DESIGN_DOC_PROJECT_CODE 2>/dev/null || echo 'DEFAULT'`
 
 ## 用户配置
 
-创建或编辑设计文档时，"作者"字段使用上方"当前用户"中注入的值。
+创建或编辑设计文档时，"作者"和"项目编码"字段使用上方注入的值。
 
 **获取优先级**（高到低）：
+
+**作者字段**：
 1. 项目配置文件 `ued/.doc-config.json` 中的 `author` 字段
 2. 当前 `git config user.name`
 3. 默认值：`产品架构组`
+
+**项目编码字段**：
+1. 项目配置文件 `ued/.doc-config.json` 中的 `project_code` 字段
+2. 环境变量 `DESIGN_DOC_PROJECT_CODE`
+3. 默认值：`DEFAULT`
 
 **配置文件格式**（`ued/.doc-config.json`）：
 
 ```json
 {
-  "author": "张三"
+  "author": "张三",
+  "project_code": "CRM"
 }
 ```
 
-若配置文件不存在，首次使用本 skill 创建文档时，应询问用户称呼并创建该文件。
+若配置文件不存在，首次使用本 skill 创建文档时，应询问用户称呼和项目编码并创建该文件。
+
+**项目编码规则**：
+- 长度：2-4位大写字母
+- 只能包含字母 A-Z
+- 建议体现项目或产品线特征
+- 企业内统一分配管理
+
+**有效示例**：`CRM`、`ERP`、`CMS`、`COM`、`HRS`
 
 ## 基本原则
 
