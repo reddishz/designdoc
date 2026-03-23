@@ -1,16 +1,35 @@
-# design-doc skill
+# designdoc
 
-规范项目产品设计文档的层级体系、目录结构、格式和模板。
+> 产品设计文档 Skill 库 - 规范项目产品设计文档的层级体系、目录结构、格式和模板
+
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Agent Skills Standard](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
+
+## 简介
+
+本仓库是一个 Skill 库，用于规范项目产品设计文档（ued/ 目录）的层级体系、目录结构、格式和模板。包含 L0-L6 层级的设计文档模板（愿景、需求、架构、系统设计、详细设计、验证策略等）。
+
+## 目录结构
+
+```
+designdoc/
+├── .agents/
+│   └── skills/
+│       └── design-doc/           # design-doc skill 主目录
+│           ├── SKILL.md          # 规范主文件
+│           ├── assets/
+│           │   └── templates/    # 文档模板
+│           └── references/       # 参考文档
+├── agent_skills_standard.md      # Agent Skills 标准说明
+├── agents_md_guide.md            # AGENTS.md 编写指南
+├── cursor_guide.md               # Cursor 使用指南
+├── windsurf_guide.md             # Windsurf 使用指南
+└── README.md
+```
 
 ## 标准
 
-本 skill 遵循 [Agent Skills 开放标准](https://agentskills.io/specification)，源文件位于：
-
-```
-.agents/skills/design-doc/
-├── SKILL.md        # 规范主文件
-└── templates.md    # L0-L6 / ADR / REF 文档模板
-```
+本 skill 遵循 [Agent Skills 开放标准](https://agentskills.io/specification)。
 
 ## IDE 支持情况
 
@@ -83,3 +102,7 @@ ln -sfn /path/to/project/.agents/skills/design-doc ~/.qoder/skills/design-doc
 ## 后续扩展
 
 如需为不支持通用标准的工具增加适配，在项目根目录添加翻译脚本（如 `sync-trae.sh`），从 `.agents/skills/design-doc/` 读取源文件并转换为目标格式。
+
+## 许可证
+
+本项目采用 [MIT License](LICENSE) 开源协议。
