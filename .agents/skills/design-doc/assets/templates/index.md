@@ -31,6 +31,7 @@
 | REF | 外部参考资料 | 有效/废弃 | 管理外部参考资源 | [ref.md](ref.md) ✅ |
 | README | 项目文档索引 | - | 全局编码索引、文档导航、编码计数器 | [readme-template.md](readme-template.md) ✅ |
 | 项目注册表 | 项目编码管理 | - | 企业级项目编码统一管理 | [project-registry.md](project-registry.md) ✅ |
+| 流程图指南 | 流程图格式规范 | - | 指导如何选择合适的流程图格式 | [flowchart-guide.md](flowchart-guide.md) ✅ |
 
 ## 使用方法
 
