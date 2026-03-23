@@ -32,6 +32,7 @@
 | README | 项目文档索引 | - | 全局编码索引、文档导航、编码计数器 | [readme-template.md](readme-template.md) ✅ |
 | 项目注册表 | 项目编码管理 | - | 企业级项目编码统一管理 | [project-registry.md](project-registry.md) ✅ |
 | 流程图指南 | 流程图格式规范 | - | 指导如何选择合适的流程图格式 | [flowchart-guide.md](flowchart-guide.md) ✅ |
+| AI 操作指南 | 编码修改防护 | - | AI 智能体操作规范和编码防护机制 | [ai-operation-guide.md](ai-operation-guide.md) ✅ |
 
 ## 使用方法
 
