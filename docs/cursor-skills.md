@@ -584,7 +584,7 @@ A: 可以。Cursor 会自动发现 `.claude/skills/` 和 `~/.claude/skills/` 中
 - [Cursor Settings](https://cursor.com/docs/settings)
 
 ### Agent Skills 标准
-- [标准规范](./agent_skills_standard.md)
+- [标准规范](./agent-skills-standard.md)
 - [官方规范网站](https://agentskills.io/specification)
 - [示例 Skills](https://github.com/anthropics/skills)
 
