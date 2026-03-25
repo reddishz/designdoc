@@ -49,51 +49,31 @@ compatibility: 需能访问 ued/ 目录，可选 git config 用户名获取
 
 **有效示例**：`CRM`、`ERP`、`CMS`、`COM`、`HRS`
 
-## 项目特定 AGENTS.md 生成
+## 入口介绍
 
-当用户需要为他的项目生成统一入口时，本技能会基于项目结构动态生成适合的 AGENTS.md 文件。
+**详细规范**请参考 `references/` 目录下的专项文档：
+- 编码体系：[references/coding-system.md](references/coding-system.md)
+- AI 操作指南：[references/ai-operations.md](references/ai-operations.md)
+- RFC2119 规范：[references/rfc2119-evaluation.md](references/rfc2119-evaluation.md)
+- 文档模板：[assets/templates/](assets/templates/)
 
-### 生成场景
-- **项目初始化**：首次使用技能时，生成项目特定的 AGENTS.md
-- **技能更新**：当项目结构变化时，更新 AGENTS.md
-- **团队协作**：为团队成员提供统一的项目导航
+## 使用场景
 
-### 生成内容
-基于当前项目的 ued/ 目录结构、文档类型、编码体系等，生成包含以下内容的 AGENTS.md：
+### 创建设计文档
+- L0-L6 各层级设计文档
+- 需求、架构、系统设计、详细设计、验证策略等
 
-```markdown
-# AGENTS.md
+### 审查文档
+- 检查文档规范性和一致性
+- 编码体系完整性验证
 
-## 项目目录
-```
-{项目根目录}/
-├── ued/                    # 产品设计文档目录
-├── docs/                   # 项目文档和规范
-├── assets/                  # 项目资源文件
-├── scripts/                 # 项目脚本
-└── AGENTS.md               # 统一入口（本文件）
-```
-
-## 可用技能
-
-### 🎨 设计文档规范 (design-doc)
-**功能**：规范 {项目编码} 项目的设计文档创建、审查和维护  
-**使用**：直接说"创建需求文档"、"检查文档规范性"等  
-**位置**：`.agents/skills/design-doc/SKILL.md`
-
-### 🔧 项目特定技能
-（基于项目实际需求生成）
-
-## 快速开始
-
-**创建设计文档** → 直接说"帮我创建用户登录需求文档"  
-**检查文档规范** → 直接说"检查这个架构文档的规范性"  
-**分配编码** → 直接说"为这个新功能分配一个编码"
+### 编码管理
+- 分配全局唯一编码
+- 处理编码冲突和废弃
 
 ---
 
-*由 design-doc skill 基于项目结构动态生成*
-```
+*详细操作指南请参考 references/ 目录下的专项文档*
 
 ## 核心原则
 
