@@ -4,9 +4,9 @@
 
 本文档使用 RFC2119 定义的词汇表示需求级别：
 
-- **MUST**：绝对要求，必须遵守
-- **SHOULD**：强烈推荐，除非有充分理由否则应遵守  
-- **MAY**：可选，可根据具体情况决定
+- **必须**：绝对要求，无任何例外情况
+- **应当**：强烈推荐，除非有充分且合理的理由
+- **可以**：真正可选，可根据具体情况自由选择
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", 
 "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" 
