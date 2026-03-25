@@ -19,7 +19,7 @@
 | L2 | 系统/产品需求 | 草稿/正式/废弃 | 功能需求、非功能需求 | [l2-requirements.md](l2-requirements.md) ✅ |
 | L3 | 概念架构 | 草稿/正式/废弃 | 架构原则、组件设计 | [l3-concept-architecture.md](l3-concept-architecture.md) ✅ |
 | L4 | 逻辑/系统设计 | 草稿/正式/废弃 | 系统设计、接口契约 | [l4-system-design.md](l4-system-design.md) ✅ |
-| L5 | 详细设计 | 草稿/正式/废弃 | 组件详细设计 | [l5-detailed-design.md](l5-detailed-design.md) ✅ |
+| L5 | 详细设计 | 草稿/正式/废弃 | 具体实现设计、数据结构 | [l5-detailed-design.md](l5-detailed-design.md) ✅ |
 | L6 | 验证与确认 | 草稿/正式/废弃 | 测试策略、需求追溯 | [l6-verification.md](l6-verification.md) ✅ |
 
 ### 专项模板
@@ -30,6 +30,13 @@
 | REF | 外部参考资料 | 有效/废弃 | 管理外部参考资源 | [ref.md](ref.md) ✅ |
 | README | 项目文档索引 | - | 全局编码索引、文档导航、编码计数器 | [readme-template.md](readme-template.md) ✅ |
 | 项目注册表 | 项目编码管理 | - | 企业级项目编码统一管理 | [project-registry.md](project-registry.md) ✅ |
+
+### 辅助指南
+
+| 类型 | 指南名称 | 用途 | 位置 |
+|------|----------|------|------|
+| 流程图指南 | 流程图格式规范 | 指导如何选择合适的流程图格式 | [../guides/flowchart-guide.md](../guides/flowchart-guide.md) ✅ |
+| AI 操作指南 | 编码修改防护 | AI 智能体操作规范和编码防护机制 | [../../references/ai-operations.md](../../references/ai-operations.md) ✅ |
 
 ## 使用方法
 

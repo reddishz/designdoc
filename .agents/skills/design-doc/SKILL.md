@@ -159,7 +159,7 @@ compatibility: 需能访问 ued/ 目录，可选 git config 用户名获取
 
 ### 操作指南
 
-- **AI 操作指南**：[assets/guides/ai-operation-guide.md](assets/guides/ai-operation-guide.md)
+- **AI 操作指南**：[references/ai-operations.md](references/ai-operations.md)
 - **流程图指南**：[assets/guides/flowchart-guide.md](assets/guides/flowchart-guide.md)
 
 ## 使用场景
