@@ -11,4 +11,4 @@
 | [`assets/templates/`](assets/templates/index.md) | 可复制文档模板（L0–L6、ADR、REF、README、项目注册表） |
 | [`assets/guides/`](assets/guides/README.md) | 非模板的辅助说明（流程图、AI 编码操作） |
 
-宿主项目需存在可写的 `ued/`；可选配置 `ued/.doc-config.json`（作者、项目编码）。
+宿主项目需存在可写的 `ued/`；推荐配置 `ued/.doc-config.json`（作者、项目编码）。缺失时可回退默认值继续生成，再由用户后续补充。

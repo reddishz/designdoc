@@ -19,8 +19,8 @@
 | L2 | 系统/产品需求 | 草稿/正式/废弃 | 功能需求、非功能需求 | [l2-requirements.md](l2-requirements.md) ✅ |
 | L3 | 概念架构 | 草稿/正式/废弃 | 架构原则、组件设计 | [l3-concept-architecture.md](l3-concept-architecture.md) ✅ |
 | L4 | 逻辑/系统设计 | 草稿/正式/废弃 | 系统设计、接口契约 | [l4-system-design.md](l4-system-design.md) ✅ |
-| L5 | 详细设计 | 草稿/正式/废弃 | 具体实现设计、数据结构 | [l5-detailed-design.md](l5-detailed-design.md) ✅ |
-| L6 | 验证与确认 | 草稿/正式/废弃 | 测试策略、需求追溯 | [l6-verification.md](l6-verification.md) ✅ |
+| L5 | 详细设计 | 草稿/正式/废弃 | 算法、流程逻辑、状态与配置约束 | [l5-detailed-design.md](l5-detailed-design.md) ✅ |
+| L6 | 验证与确认 | 草稿/正式/废弃 | 验证策略、需求追溯、验收标准 | [l6-verification.md](l6-verification.md) ✅ |
 
 ### 专项模板
 
@@ -44,7 +44,7 @@
 2. **复制内容**：以模板为起点编写
 3. **替换占位符**：更新 `{项目编码}`、`{编号}`、`{文档名称}` 等
 4. **设置状态**：从标准状态值中选择
-5. **维护编码**：确保全局唯一编码
+5. **维护编码**：确保全局唯一编码，且索引与清单使用完整编码
 
 ## 状态值标准
 

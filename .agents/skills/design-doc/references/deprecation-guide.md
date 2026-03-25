@@ -42,9 +42,7 @@
 
 **搜索所有引用**（须同时搜简写与全量编码，避免漏网）：
 
-```bash
-grep -rE "CRM-RUL-004|RUL-004" ued/ --include="*.md"
-```
+在 `ued/` 目录中同时检索 `CRM-RUL-004` 与 `RUL-004`。
 
 **追溯范围**：
 - 同文档内的引用
@@ -159,9 +157,7 @@ grep -rE "CRM-RUL-004|RUL-004" ued/ --include="*.md"
 
 **1. 全面搜索**：
 
-```bash
-grep -rE "CRM-RUL-004|RUL-004" ued/ --include="*.md" | grep -v "已废弃"
-```
+在 `ued/` 目录中同时检索 `CRM-RUL-004` 与 `RUL-004`，并区分“已废弃引用”与“未处理引用”。
 
 **2. 分类处理**：
 - **直接引用**：直接引用该细项的文档
@@ -239,38 +235,24 @@ grep -rE "CRM-RUL-004|RUL-004" ued/ --include="*.md" | grep -v "已废弃"
 
 ## 工具支持
 
-### 废弃处理脚本
+### 废弃处理能力
 
-**检查脚本**（思路示意，需按环境调整）：
+建议工具或 AI 至少支持以下能力：
 
-```bash
-#!/bin/bash
-check_deprecated_items() {
-    local coding=$1
-    echo "=== 查找 $coding 的引用 ==="
-    grep -r "$coding" ued/ --include="*.md" | while read -r line; do
-        file=$(echo "$line" | cut -d: -f1)
-        if [[ "$line" != *"已废弃"* ]]; then
-            echo "❌ $file 中有未标注废弃的引用：$line"
-        else
-            echo "✅ $file 中的引用已标注废弃"
-        fi
-    done
-}
-```
+1. 同时搜索完整编码与简写编码
+2. 区分“定义位置”“有效引用”“已废弃引用”
+3. 识别尚未标记废弃的引用位置
+4. 校验文档清单与全局索引是否已同步更新
 
-**批量废弃脚本**：
+### 批量废弃处理
 
-```bash
-#!/bin/bash
-batch_deprecate() {
-    local deprecated_list=$1
-    while read -r coding; do
-        echo "处理废弃：$coding"
-        # 1. 标记细项废弃 2. 查找引用 3. 标注引用废弃 4. 更新索引
-    done < "$deprecated_list"
-}
-```
+批量处理时建议统一执行以下步骤：
+
+1. 读取待废弃编码列表
+2. 逐个标记细项废弃
+3. 检索并处理所有引用
+4. 更新文档清单与全局索引
+5. 汇总仍需人工判断的语义失效项
 
 ## 审核要点
 
