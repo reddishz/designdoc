@@ -28,8 +28,6 @@
 {项目根目录}/
 ├── ued/                    # 产品设计文档目录
 ├── docs/                   # 项目文档和规范
-├── assets/                  # 项目资源文件
-├── scripts/                 # 项目脚本
 └── AGENTS.md               # 统一入口
 ```
 
@@ -106,8 +104,7 @@ AI：我来为你的项目生成适合的 AGENTS.md 统一入口。
 - 项目编码：CRM
 - ued/ 目录：存在
 - docs/ 目录：存在
-- assets/ 目录：存在
-- scripts/ 目录：存在
+
 
 正在生成 AGENTS.md...
 ✅ 已生成：/path/to/project/AGENTS.md
