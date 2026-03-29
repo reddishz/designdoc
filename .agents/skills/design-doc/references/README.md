@@ -18,8 +18,6 @@
 |------|------|
 | [ai-operations.md](ai-operations.md) | AI 执行编码分配、废弃、引用修正时的操作指南 |
 | [project-agents-guide.md](project-agents-guide.md) | 为宿主项目生成 AGENTS.md 的建议写法 |
-| [rfc2119-evaluation.md](rfc2119-evaluation.md) | RFC2119 术语使用与审查方式 |
-| [rfc2119-templates.md](rfc2119-templates.md) | RFC2119 写作模板与措辞示例 |
 
 ## Assets 中的非模板资源
 
