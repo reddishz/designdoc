@@ -1,6 +1,13 @@
 # 设计文档模板索引
 
-> **说明**：可复制的文档骨架均在本目录（`assets/templates/`）。流程图写法、AI 编码约束等见 [辅助指南](../guides/README.md)；专项规范（含废弃细项）见 [references 索引](../../references/README.md)。
+> **说明**：可复制的文档骨架均在本目录（`assets/templates/`）。流程图格式见 [flowchart-guide.md](../guides/flowchart-guide.md)；AI 编码操作见 [ai-operations.md](../../references/ai-operations.md)。专项规范（含废弃细项）见 [references/README.md](../../references/README.md)。
+
+## 编写约定（SSoT）
+
+- **不得包含可执行代码与实现片段**；允许算法、规则、约束、逻辑、流程、状态、假定、接口契约与决策说明等设计性内容（与 `SKILL.md` 一致）。
+- **细项编码**：格式与是否带项目前缀以 [coding-system.md](../../references/coding-system.md) 为准；正文中定义的细项须在文末维护**细项编码清单**，且清单与 `ued/README.md` 索引中的编码形式保持一致。
+- **交叉引用**：使用规范规定的编码形式；下层可引用上层，上层无需引用下层。
+- **`{当前用户.作者}`**：按 `SKILL.md`「用户配置」解析。
 
 ## 快速模板选择
 
@@ -31,20 +38,20 @@
 | README | 项目文档索引 | - | 全局编码索引、文档导航、编码计数器 | [readme-template.md](readme-template.md) ✅ |
 | 项目注册表 | 项目编码管理 | - | 企业级项目编码统一管理 | [project-registry.md](project-registry.md) ✅ |
 
-### 辅助指南
+### 相关说明（非本目录模板）
 
-| 类型 | 指南名称 | 用途 | 位置 |
-|------|----------|------|------|
-| 流程图指南 | 流程图格式规范 | 指导如何选择合适的流程图格式 | [../guides/flowchart-guide.md](../guides/flowchart-guide.md) ✅ |
-| AI 操作指南 | 编码修改防护 | AI 智能体操作规范和编码防护机制 | [../../references/ai-operations.md](../../references/ai-operations.md) ✅ |
+| 说明 | 位置 |
+|------|------|
+| 流程图格式 | [../guides/flowchart-guide.md](../guides/flowchart-guide.md) |
+| AI 操作与编码防护 | [../../references/ai-operations.md](../../references/ai-operations.md) |
 
 ## 使用方法
 
 1. **选择模板**：根据文档类型打开上表对应文件
 2. **复制内容**：以模板为起点编写
-3. **替换占位符**：更新 `{项目编码}`、`{编号}`、`{文档名称}` 等
+3. **替换占位符**：更新 `{项目编码}`、`{编号}`、`{文档名称}` 等（未启用项目前缀时 `{项目编码}` 为空，见 coding-system）
 4. **设置状态**：从标准状态值中选择
-5. **维护编码**：确保全局唯一编码，且索引与清单使用完整编码
+5. **维护编码**：全局唯一；索引与清单使用与规范一致的完整形式
 
 ## 状态值标准
 
@@ -57,6 +64,5 @@
 
 ## 结构说明
 
-- **模板**（本目录）：独立 `.md` 文件，按需打开，利于渐进式加载。
-- **辅助指南**（[`../guides/`](../guides/README.md)）：流程图、AI 操作等非填空说明。
-- **专项规范**（[`../../references/`](../../references/README.md)）：编码、层级、状态、审核、**废弃细项**等，真值源以该目录为准。
+- **模板**（本目录）：独立 `.md` 文件，按需加载。
+- **专项规范**（[`../../references/`](../../references/README.md)）：编码、层级、状态、审核、废弃等真值源。

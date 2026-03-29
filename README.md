@@ -85,14 +85,15 @@ AI 会自动：
 
 ### Skill 与规范
 
-- [Skill 入口](./.agents/skills/design-doc/README.md) — 目录说明与导航
+- [Skill 入口](./.agents/skills/design-doc/README.md) — 极简导航（主文档见 SKILL.md）
 - [SKILL.md](./.agents/skills/design-doc/SKILL.md) — 完整规范说明
 - [规范索引](./.agents/skills/design-doc/references/README.md) — `references/` 总览
 - [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档编码规则
 - [审核指南](./.agents/skills/design-doc/references/review-guidelines.md) — 文档检查清单
 - [废弃细项处理](./.agents/skills/design-doc/references/deprecation-guide.md) — 细项废弃与引用更新
 - [模板库](./.agents/skills/design-doc/assets/templates/index.md) — 文档模板索引
-- [辅助指南](./.agents/skills/design-doc/assets/guides/README.md) — 流程图与 AI 编码说明（非模板）
+- [流程图指南](./.agents/skills/design-doc/assets/guides/flowchart-guide.md) — 箭头 / 表格 / Mermaid
+- [AI 操作说明](./.agents/skills/design-doc/references/ai-operations.md) — 编码分配与废弃等（非模板）
 
 ### 仓库参考（非业务模板）
 

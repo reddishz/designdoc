@@ -3,7 +3,7 @@ name: design-doc
 description: 规范项目产品设计文档（ued/目录）的层级体系、目录结构、格式和模板。当用户需要创建或审查设计文档（包括战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等）时使用此 skill。
 license: Apache-2.0
 metadata:
-  version: "2.5"
+  version: "2.6"
   author: "产品架构组"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
