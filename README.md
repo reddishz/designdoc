@@ -89,6 +89,7 @@ AI 会自动：
 - [SKILL.md](./.agents/skills/design-doc/SKILL.md) — 完整规范说明
 - [规范索引](./.agents/skills/design-doc/references/README.md) — `references/` 总览
 - [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档编码规则
+- [术语与概念](./.agents/skills/design-doc/references/glossary-conventions.md) — 词汇表与细项编码分工
 - [审核指南](./.agents/skills/design-doc/references/review-guidelines.md) — 文档检查清单
 - [废弃细项处理](./.agents/skills/design-doc/references/deprecation-guide.md) — 细项废弃与引用更新
 - [模板库](./.agents/skills/design-doc/assets/templates/index.md) — 文档模板索引

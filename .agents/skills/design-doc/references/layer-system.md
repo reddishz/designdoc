@@ -17,6 +17,8 @@
 
 **术语**：模板中「概念架构」与目录名 `L3-architecture` 指同一层级（`architecture` 表示架构蓝图，非代码实现）。
 
+**业务与领域用语**：当多文档、多角色需对齐同一套名词时，可采用**项目级词汇表**（路径自定，常见为 `ued/` 下单独文件），并在 `ued/README.md` 中登记；与细项编码的分工见 [glossary-conventions.md](glossary-conventions.md)。
+
 ## 目录结构规范
 
 ### 单层模式（默认）

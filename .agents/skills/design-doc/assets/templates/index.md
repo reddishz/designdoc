@@ -8,6 +8,7 @@
 - **细项编码**：格式与是否带项目前缀以 [coding-system.md](../../references/coding-system.md) 为准；正文中定义的细项须在文末维护**细项编码清单**，且清单与 `ued/README.md` 索引中的编码形式保持一致。
 - **交叉引用**：使用规范规定的编码形式；下层可引用上层，上层无需引用下层。
 - **`{当前用户.作者}`**：按 `SKILL.md`「用户配置」解析。
+- **术语与概念**：非必填；需要统一名词时见 [glossary-conventions.md](../../references/glossary-conventions.md)，模板中「术语与概念（可选）」小节与项目词汇表二选一或组合使用。
 
 ## 快速模板选择
 
