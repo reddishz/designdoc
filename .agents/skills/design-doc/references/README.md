@@ -1,8 +1,8 @@
 # 专项规范（references）
 
-与 [`SKILL.md`](../SKILL.md) 配合使用；**细则冲突时以本目录文件为准**。
+与 [`SKILL.md`](../SKILL.md) 配合使用；细则冲突时以本目录文件为准。
 
-## 规范真值源
+## 真值源
 
 | 文件 | 内容 |
 |------|------|
@@ -10,17 +10,17 @@
 | [layer-system.md](layer-system.md) | L0–L6 层级定义、目录结构与命名规则 |
 | [status-definitions.md](status-definitions.md) | 标准状态值与流转 |
 | [deprecation-guide.md](deprecation-guide.md) | 细项废弃流程、标记与引用追溯 |
-| [glossary-conventions.md](glossary-conventions.md) | 术语表/概念定义：项目级、文档级与编码分工 |
+| [glossary-conventions.md](glossary-conventions.md) | 术语与概念定义（项目级、文档级、编码级） |
 | [review-guidelines.md](review-guidelines.md) | 审核流程、检查项与一致性校验 |
 
-## 操作与辅助（本目录）
+## 操作与辅助
 
 | 文件 | 内容 |
 |------|------|
 | [ai-operations.md](ai-operations.md) | AI 执行编码分配、废弃、引用修正时的操作指南 |
 | [project-agents-guide.md](project-agents-guide.md) | 为宿主项目生成 AGENTS.md 的建议写法 |
 
-## Assets 中的非模板资源
+## 非模板资源
 
 | 资源 | 说明 |
 |------|------|
