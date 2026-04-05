@@ -60,7 +60,8 @@
 | AC | 验收标准（Acceptance Criteria） | L2, L6 | 功能验收的具体标准 | `AC-001`: 支付成功后 5s 内发送短信通知 |
 | CON | 约束（Constraint） | 所有层级 | 技术或业务约束 | `CON-001`: 必须兼容 IE11 浏览器 |
 | RUL | 规则（Rule） | 所有层级 | 业务规则或计算规则 | `RUL-001`: 只有会员才能参与秒杀活动 |
-| REF | 外部参考（Reference） | L2-L6 | 外部资料细项 | `REF-001`: 《行业支付安全协议 v2.0》 |
+| ACT | 动作定义（Action） | L4, L5 | 系统执行的具体动作和行为，包括消息、事件、命令、菜单等交互类型 | ACT-001: 用户注册动作定义 |
+| REF | 外部参考（Reference） | L2-L6 | 外部资料细项 | REF-001: 《行业支付安全协议 v2.0》 |
 
 ### 编码生命周期规则
 
@@ -173,3 +174,52 @@ AI **MUST** 能够：
 ### 锚点命名规范
 - 格式：`#{编码全小写}`
 - 示例：`#fr-001`、`#crm-fr-001`
+
+---
+
+## ACT类型详细说明
+
+### 概念范围
+ACT类型用于定义系统执行的具体动作和行为，涵盖以下交互类型：
+
+**消息类型（Message）**：
+- Actor间的消息传递
+- 系统组件间的通信消息
+- 异步消息定义
+
+**事件类型（Event）**：
+- 领域事件（Domain Event）
+- 系统事件（System Event）
+- 集成事件（Integration Event）
+
+**命令类型（Command）**：
+- 用户命令（User Command）
+- 系统命令（System Command）
+- 管理命令（Admin Command）
+
+**菜单类型（Menu）**：
+- 用户界面菜单动作
+- 功能菜单定义
+- 操作菜单行为
+
+**其他交互类型**：
+- 查询动作（Query Action）
+- 通知动作（Notification Action）
+- 调用动作（Invocation Action）
+
+### 命名规范
+```
+ACT-{序号}: {动作类型} - {具体动作描述}
+```
+
+**示例**：
+- `ACT-001: UserRegistrationCommand - 用户注册命令`
+- `ACT-002: OrderCreatedEvent - 订单创建事件`
+- `ACT-003: SendEmailMessage - 发送邮件消息`
+- `ACT-004: MainMenuAction - 主菜单动作`
+- `ACT-005: UserQueryAction - 用户查询动作`
+
+### 与其他类型的关系
+- **ACT vs IF**：ACT定义行为动作，IF定义数据接口
+- **ACT vs FLW**：ACT是单个动作，FLW是完整流程
+- **ACT vs ALG**：ACT是业务动作，ALG是计算逻辑
