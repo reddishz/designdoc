@@ -17,7 +17,6 @@
 
 | 文件 | 内容 |
 |------|------|
-| [ai-operations.md](ai-operations.md) | AI 执行编码分配、废弃、引用修正时的操作指南 |
 | [project-agents-guide.md](project-agents-guide.md) | 为宿主项目生成 AGENTS.md 的建议写法 |
 
 ## 非模板资源

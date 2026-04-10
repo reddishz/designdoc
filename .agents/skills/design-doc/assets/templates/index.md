@@ -1,6 +1,6 @@
 # 设计文档模板索引
 
-> **说明**：可复制的文档骨架均在本目录（`assets/templates/`）。流程图格式见 [flowchart-guide.md](../guides/flowchart-guide.md)；AI 编码操作见 [ai-operations.md](../../references/ai-operations.md)。专项规范（含废弃细项）见 [references/README.md](../../references/README.md)。
+> **说明**：可复制的文档骨架均在本目录（`assets/templates/`）。流程图格式见 [flowchart-guide.md](../guides/flowchart-guide.md)；专项规范（含编码分配与废弃细项）见 [references/README.md](../../references/README.md)。
 
 ## 编写约定（SSoT）
 
@@ -44,7 +44,6 @@
 | 说明 | 位置 |
 |------|------|
 | 流程图格式 | [../guides/flowchart-guide.md](../guides/flowchart-guide.md) |
-| AI 操作与编码防护 | [../../references/ai-operations.md](../../references/ai-operations.md) |
 
 ## 使用方法
 
