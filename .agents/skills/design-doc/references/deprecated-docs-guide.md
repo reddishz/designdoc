@@ -187,6 +187,54 @@ mv ued/deprecated/2024/03/CRM-L2-001_用户管理系统需求.md \
 
 ### 清理操作流程
 
+**0. 引用检查（MANDATORY - 清理前必须执行）**：
+
+**在执行清理前，必须排查现有设计文档中是否还有对该废弃文档的引用**：
+
+```bash
+# 在 active 目录中搜索对废弃文档的引用
+grep -r "CRM-L2-001" ued/active/
+
+# 搜索文档编码和文档标题
+grep -r "用户管理系统需求" ued/active/
+
+# 使用文档检查脚本进行更全面的检查
+python scripts/check_docs.py -p ued/active
+```
+
+**引用排查清单**：
+- [ ] 搜索文档编码的全量引用（如 `CRM-L2-001`）
+- [ ] 搜索文档编码的简写引用（如 `L2-001`）
+- [ ] 搜索文档标题的引用（如 `用户管理系统需求`）
+- [ ] 检查是否有相对路径引用（如 `../deprecated/2024/03/CRM-L2-001_*.md`）
+- [ ] 检查全局索引中的引用
+- [ ] 检查其他废弃文档的引用（防止废弃文档互相引用）
+
+**引用处理策略**：
+
+| 检查结果 | 处理方式 | 说明 |
+|---------|---------|------|
+| 无引用 | ✅ 可以清理 | 安全清理或归档 |
+| 有引用，引用方也废弃 | ✅ 可以清理 | 一并处理引用方文档 |
+| 有引用，引用方仍活跃 | ❌ 禁止清理 | 必须先更新或移除引用 |
+
+**引用处理示例**：
+
+```bash
+# 发现活跃文档中有引用
+$ grep -r "CRM-L2-001" ued/active/
+ued/active/CRM-L3-001_架构设计.md:参见 [CRM-L2-001 用户管理系统需求](../deprecated/2024/03/CRM-L2-001_用户管理系统需求.md)
+
+# 处理方案1：更新引用（如果有替代文档）
+# 将引用更新为替代文档，或添加废弃标记
+
+# 处理方案2：评估引用方是否也应废弃
+# 如果引用方的内容完全依赖该废弃文档，考虑同时废弃引用方
+
+# 处理方案3：延长保留期
+# 如果引用方短期内无法更新，延长该废弃文档的保留期
+```
+
 **1. 评估清理清单**：
 ```bash
 # 查找过期的废弃文档
@@ -195,6 +243,7 @@ find ued/deprecated -name "*.md" -mtime +180
 
 **2. 确认清理必要性**：
 - [ ] 确认文档已超过保留期限
+- [ ] **确认无活跃文档引用该废弃文档**（MANDATORY）
 - [ ] 确认无历史追溯需求
 - [ ] 确认相关项目已结束或文档已归档
 
@@ -306,17 +355,28 @@ ued/
 - ❌ 废弃文档后不管引用关系
 - ✅ 更新所有引用文档，确保引用关系清晰
 
-**3. 记录详细信息**：
+**3. 清理前必须排查引用**：
+- ❌ 未检查引用就直接清理废弃文档
+- ✅ **清理前必须在 active 目录中排查所有引用**（MANDATORY）
+- ✅ 发现引用时先处理引用，再清理废弃文档
+
+**4. 记录详细信息**：
 - ❌ 废弃时只改文档状态
 - ✅ 记录废弃时间、原因、替代方案、影响范围
 
-**4. 定期清理**：
+**5. 定期清理**：
 - ❌ 废弃文档无限期堆积
 - ✅ 按清理策略定期清理或归档
 
-**5. 恢复流程规范**：
+**6. 恢复流程规范**：
 - ❌ 随意从 deprecated 目录复制文档
 - ✅ 按照恢复流程正式恢复文档
+
+**7. 安全清理原则**：
+- ❌ 发现引用但认为不重要直接清理
+- ✅ 所有引用都必须处理，无引用方可清理
+- ❌ 依赖人工记忆检查引用
+- ✅ 使用脚本和工具进行系统性引用排查
 
 ## 工具支持
 
@@ -330,17 +390,70 @@ python scripts/check_docs.py -p ued/deprecated
 python scripts/check_docs.py -p ued/active
 ```
 
-**清理脚本建议**（可扩展）：
+**清理前的引用排查脚本**：
 
 ```bash
 # 查找可清理的废弃文档
 find ued/deprecated -name "*.md" -mtime +180
 
-# 统计废弃文档数量
-find ued/deprecated -name "*.md" | wc -l
+# 排查指定废弃文档的引用（替换 CRM-L2-001 为实际文档编码）
+echo "=== 搜索文档编码引用 ==="
+grep -r "CRM-L2-001" ued/active/
 
-# 生成废弃文档报告
-find ued/deprecated -name "*.md" -exec ls -lh {} \; > deprecated_report.txt
+echo "=== 搜索简写引用 ==="
+grep -r "L2-001" ued/active/ | grep -i "用户管理系统"
+
+echo "=== 搜索文档标题引用 ==="
+grep -r "用户管理系统需求" ued/active/
+
+echo "=== 检查相对路径引用 ==="
+grep -r "../deprecated" ued/active/
+
+# 统计引用数量
+echo "=== 引用统计 ==="
+echo "文档编码引用数: $(grep -r "CRM-L2-001" ued/active/ | wc -l)"
+echo "简写引用数: $(grep -r "L2-001" ued/active/ | grep -i "用户管理系统" | wc -l)"
+echo "标题引用数: $(grep -r "用户管理系统需求" ued/active/ | wc -l)"
+```
+
+**批量排查脚本示例**：
+
+```bash
+#!/bin/bash
+# check-deprecated-refs.sh
+# 批量检查所有废弃文档的引用
+
+DEPRECATED_DIR="ued/deprecated"
+ACTIVE_DIR="ued/active"
+
+echo "=== 废弃文档引用检查报告 ==="
+echo "检查时间: $(date)"
+echo ""
+
+# 遍历所有废弃文档
+find "$DEPRECATED_DIR" -name "*.md" | while read -r deprecated_file; do
+    # 提取文档编码（假设文件名格式：CRM-L2-001_标题.md）
+    doc_code=$(basename "$deprecated_file" | sed 's/_.*//' | sed 's/_已废弃$//')
+    doc_title=$(basename "$deprecated_file" | sed 's/^[^_]*_//' | sed 's/.md$//' | sed 's/_已废弃$//')
+
+    echo "文档: $doc_code - $doc_title"
+
+    # 搜索引用
+    ref_count=$(grep -r "$doc_code" "$ACTIVE_DIR" 2>/dev/null | wc -l)
+    title_count=$(grep -r "$doc_title" "$ACTIVE_DIR" 2>/dev/null | wc -l)
+
+    if [ "$ref_count" -gt 0 ] || [ "$title_count" -gt 0 ]; then
+        echo "  ⚠️  发现引用:"
+        [ "$ref_count" -gt 0 ] && echo "     - 文档编码引用: $ref_count 处"
+        [ "$title_count" -gt 0 ] && echo "     - 标题引用: $title_count 处"
+        echo "  建议处理: 先更新引用再清理"
+    else
+        echo "  ✅ 无引用，可以清理"
+    fi
+    echo ""
+done
+
+echo "=== 检查完成 ==="
 ```
 
 ## 附录：废弃文档检查清单
@@ -352,11 +465,24 @@ find ued/deprecated -name "*.md" -exec ls -lh {} \; > deprecated_report.txt
 - [ ] 确认是否有替代文档
 - [ ] 移动文档到 deprecated 目录
 - [ ] 在文档中添加废弃标记
-- [ ] 更新所有引用文档
+- [ ] **搜索并更新所有引用文档**（MANDATORY）
 - [ ] 更新全局索引（ued/README.md）
 - [ ] 记录废弃操作日志
 - [ ] 通知相关团队成员
 - [ ] 更新 deprecated/README.md
+
+彻底清理前的安全检查：
+
+- [ ] **在 active 目录中搜索文档编码的全量引用**（MANDATORY）
+- [ ] **在 active 目录中搜索文档编码的简写引用**（MANDATORY）
+- [ ] **在 active 目录中搜索文档标题的引用**（MANDATORY）
+- [ ] **检查是否有相对路径引用**（MANDATORY）
+- [ ] **检查全局索引中的引用**（MANDATORY）
+- [ ] **使用文档检查脚本进行全面检查**（推荐）
+- [ ] 如有活跃文档引用，先处理引用再清理
+- [ ] 确认文档已超过保留期限
+- [ ] 确认无历史追溯需求
+- [ ] 确认相关项目已结束或文档已归档
 
 ---
 
