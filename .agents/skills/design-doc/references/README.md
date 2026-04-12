@@ -10,6 +10,7 @@
 | [layer-system.md](layer-system.md) | L0–L6 层级定义、目录结构与命名规则 |
 | [status-definitions.md](status-definitions.md) | 标准状态值与流转 |
 | [deprecation-guide.md](deprecation-guide.md) | 细项废弃流程、标记与引用追溯 |
+| [deprecated-docs-guide.md](deprecated-docs-guide.md) | 文档废弃操作流程、目录管理和定期清理 |
 | [glossary-conventions.md](glossary-conventions.md) | 术语与概念定义（项目级、文档级、编码级） |
 | [review-guidelines.md](review-guidelines.md) | 审核流程、检查项与一致性校验 |
 
