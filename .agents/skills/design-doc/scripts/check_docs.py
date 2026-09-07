@@ -316,6 +316,41 @@ class DesignDocChecker:
                                 self.add_issue("WARNING", "活跃文档引用已废弃对象",
                                                f"{doc.path}: 引用了已废弃的 {code}，但未标注其废弃或改指替代")
 
+    def check_draft_finalization(self) -> None:
+        """状态即基线：遇到仍为 `草稿` 的文档 / 细项，提示用户定稿（`草稿→正式`）。
+
+        仅为提醒（INFO），是否升正式由人决定。草稿对象的删改不受废弃流程 / 版本递增约束。
+        """
+        # 索引表行：以编码开头且某单元格为「草稿」
+        row_draft_re = re.compile(r'^\|\s*([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b.*\|\s*草稿\s*\|?\s*$', re.M)
+        # 结构化字段：细项状态：草稿
+        field_draft_re = re.compile(r'细项状态\*{0,2}\s*[：:]\s*草稿')
+
+        for doc in self.docs:
+            if not doc.content:
+                continue
+
+            # ---- 文档级草稿 ----
+            if doc.status and doc.status.strip() == "草稿":
+                self.add_issue("INFO", "文档待定稿",
+                               f"{doc.path}: 状态为'草稿'，若已稳定请确认后定稿（草稿→正式）；草稿期可自由增删改、不递增版本、不走废弃流程")
+
+            # ---- 细项级草稿 ----
+            draft_codes: Set[str] = set(m.group(1) for m in row_draft_re.finditer(doc.content))
+            if field_draft_re.search(doc.content):
+                # 结构化字段命中的编码（就近取其所属标题编码）
+                for i, line in enumerate(doc.content.splitlines()):
+                    if field_draft_re.search(line):
+                        for prev in reversed(doc.content.splitlines()[:i + 1]):
+                            mh = re.match(r'^#{2,4}\s+([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b', prev.strip())
+                            if mh:
+                                draft_codes.add(mh.group(1))
+                                break
+            if draft_codes:
+                codes = ", ".join(sorted(draft_codes))
+                self.add_issue("INFO", "细项待定稿",
+                               f"{doc.path}: 以下细项仍为'草稿'，请确认是否定稿（草稿→正式）：{codes}")
+
     def add_issue(self, level: str, title: str, description: str) -> None:
         """添加问题"""
         self.issues.append({
@@ -339,6 +374,7 @@ class DesignDocChecker:
         self.check_status_validity()
         self.check_layer_references()
         self.check_deprecation()
+        self.check_draft_finalization()
 
         return self.issues
 
