@@ -9,8 +9,8 @@
 | [coding-system.md](coding-system.md) | 文档编码、细项编码、默认/扩展前缀与引用规则 |
 | [layer-system.md](layer-system.md) | L0–L6 层级定义、目录结构与命名规则 |
 | [status-definitions.md](status-definitions.md) | 标准状态值与流转 |
-| [deprecation-guide.md](deprecation-guide.md) | 细项废弃流程、标记与引用追溯 |
-| [deprecated-docs-guide.md](deprecated-docs-guide.md) | 文档废弃操作流程、目录管理和定期清理 |
+| [item-deprecation.md](item-deprecation.md) | 细项废弃：原地标注、标记与引用追溯 |
+| [doc-deprecation.md](doc-deprecation.md) | 文档废弃：两阶段（原地废弃→到期移除入各作用域 `deprecated/`）、建议移除日期 |
 | [glossary-conventions.md](glossary-conventions.md) | 术语与概念定义（项目级、文档级、编码级） |
 | [review-guidelines.md](review-guidelines.md) | 审核流程、检查项与一致性校验 |
 

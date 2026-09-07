@@ -10,6 +10,7 @@ import re
 import sys
 import json
 from pathlib import Path
+from datetime import date, datetime
 from typing import Dict, List, Set, Tuple
 from dataclasses import dataclass
 from collections import defaultdict
@@ -23,6 +24,7 @@ class DocInfo:
     doc_type: str
     layer: str = ""
     status: str = ""
+    status_category: str = ""
     content: str = ""
 
 
@@ -110,6 +112,12 @@ class DesignDocChecker:
         if status_match:
             doc_info.status = status_match.group(1)
 
+        # 派生状态类别（用于状态值校验）：L0-L6 取层码，ADR/REF 取类型码
+        if doc_info.doc_code:
+            first = doc_info.doc_code.split('-')[0]
+            if first in ("L0", "L1", "L2", "L3", "L4", "L5", "L6", "ADR", "REF"):
+                doc_info.status_category = first
+
         return doc_info
 
     def check_code_format(self) -> None:
@@ -192,9 +200,10 @@ class DesignDocChecker:
         }
 
         for doc in self.docs:
-            if doc.status and doc.layer in valid_statuses:
-                if doc.status not in valid_statuses[doc.layer]:
-                    self.add_issue("WARNING", "无效状态值", f"{doc.path}: 状态 '{doc.status}' 不在允许范围内")
+            if doc.status and doc.status_category in valid_statuses:
+                if doc.status not in valid_statuses[doc.status_category]:
+                    self.add_issue("WARNING", "无效状态值",
+                                   f"{doc.path}: 状态 '{doc.status}' 不在 {doc.status_category} 允许范围内")
 
     def check_layer_references(self) -> None:
         """检查层级引用关系"""
@@ -216,6 +225,96 @@ class DesignDocChecker:
 
             if not has_parent_reference:
                 self.add_issue("INFO", "缺少上级引用", f"{doc.path} 未引用上层文档")
+
+    def _is_archived(self, doc: "DocInfo") -> bool:
+        """文档是否已移入某作用域的 deprecated/ 目录（归档态）"""
+        norm = doc.path.replace(os.sep, "/")
+        return "/deprecated/" in norm
+
+    def _extract_heading_block(self, lines: List[str], idx: int) -> str:
+        """从标题行 idx 起，截取到下一个同级或更高级标题之前的正文块"""
+        cur_level = len(lines[idx]) - len(lines[idx].lstrip("#")) if lines[idx].lstrip().startswith("#") else 0
+        collected = [lines[idx]]
+        for line in lines[idx + 1:]:
+            stripped = line.lstrip()
+            if stripped.startswith("#"):
+                level = len(line) - len(line.lstrip("#"))
+                if level <= cur_level:
+                    break
+            collected.append(line)
+        return "\n".join(collected)
+
+    def check_deprecation(self) -> None:
+        """检查废弃处理规范性：细项废弃（原地）与文档废弃（两阶段）"""
+        item_heading_re = re.compile(r'^#{2,4}\s+([A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+)\b')
+        deprecated_doc_codes: Set[str] = set()
+        deprecated_item_codes: Set[str] = set()
+
+        # 第一遍：字段完整性、状态值归一、到期提醒
+        for doc in self.docs:
+            if not doc.content:
+                continue
+            archived = self._is_archived(doc)
+
+            # ---- 文档级废弃 ----
+            if doc.status and "废弃" in doc.status:
+                if doc.status.strip() == "已废弃":
+                    self.add_issue("WARNING", "文档状态值不规范",
+                                   f"{doc.path}: 状态值应统一为 '废弃'，而非 '已废弃'")
+                required = ["废弃时间", "废弃原因"]
+                if not archived:
+                    required.append("建议移除日期")
+                for field in required:
+                    if field not in doc.content:
+                        self.add_issue("ERROR", "废弃文档缺少必需字段",
+                                       f"{doc.path}: 缺少 '{field}'")
+                m = re.search(r'建议移除日期[^0-9]*(\d{4}-\d{2}-\d{2})', doc.content)
+                if m and not archived:
+                    try:
+                        d = datetime.strptime(m.group(1), "%Y-%m-%d").date()
+                        if d < date.today():
+                            self.add_issue("INFO", "废弃文档可移除",
+                                           f"{doc.path}: 已过建议移除日期 {m.group(1)}，可移除入 deprecated/")
+                    except ValueError:
+                        self.add_issue("WARNING", "建议移除日期格式错误",
+                                       f"{doc.path}: '{m.group(1)}' 非 YYYY-MM-DD")
+                if doc.doc_code:
+                    deprecated_doc_codes.add(doc.doc_code)
+
+            # ---- 细项级废弃（标题含 ~~已废弃~~）----
+            lines = doc.content.splitlines()
+            for i, line in enumerate(lines):
+                if line.lstrip().startswith("#") and "~~已废弃~~" in line:
+                    mh = item_heading_re.match(line.strip())
+                    code = mh.group(1) if mh else None
+                    block = self._extract_heading_block(lines, i)
+                    for field in ["细项状态", "废弃时间", "废弃原因", "替代方案"]:
+                        if field not in block:
+                            self.add_issue("ERROR", "废弃细项缺少必需字段",
+                                           f"{doc.path}: {code or '未知编码'} 缺少 '{field}'")
+                    if re.search(r'细项状态\*{0,2}\s*[：:]\s*已废弃', block):
+                        self.add_issue("WARNING", "细项状态值不规范",
+                                       f"{doc.path}: {code or ''} '细项状态' 应统一为 '废弃'")
+                    if code:
+                        deprecated_item_codes.add(code)
+
+        # 第二遍：引用完整性（活跃文档引用已废弃对象却未标注）
+        for doc in self.docs:
+            if not doc.content or self._is_archived(doc):
+                continue
+            if doc.status and "废弃" in doc.status:
+                continue  # 自身已废弃，跳过
+            seen: Set[str] = set()
+            for line in doc.content.splitlines():
+                for code in (deprecated_doc_codes | deprecated_item_codes):
+                    if code in line and code != doc.doc_code:
+                        # 该行未做任何废弃/删除线标注，视为对已废弃对象的有效引用
+                        if "~~" not in line and "废弃" not in line:
+                            key = f"{doc.path}::{code}"
+                            if key not in seen:
+                                seen.add(key)
+                                self.add_issue("WARNING", "活跃文档引用已废弃对象",
+                                               f"{doc.path}: 引用了已废弃的 {code}，但未标注其废弃或改指替代")
 
     def add_issue(self, level: str, title: str, description: str) -> None:
         """添加问题"""
@@ -239,6 +338,7 @@ class DesignDocChecker:
         self.check_doc_structure()
         self.check_status_validity()
         self.check_layer_references()
+        self.check_deprecation()
 
         return self.issues
 

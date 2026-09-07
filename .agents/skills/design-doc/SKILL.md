@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: Apache-2.0
 metadata:
-  version: "2.8"
+  version: "2.9"
   author: "产品架构组"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -84,8 +84,8 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 - 层级体系：[references/layer-system.md](references/layer-system.md)
 - 术语与概念：[references/glossary-conventions.md](references/glossary-conventions.md)
 - 状态定义：[references/status-definitions.md](references/status-definitions.md)
-- 废弃处理：[references/deprecation-guide.md](references/deprecation-guide.md)（细项废弃）
-- 废弃文档处理：[references/deprecated-docs-guide.md](references/deprecated-docs-guide.md)（文档废弃）
+- 细项废弃：[references/item-deprecation.md](references/item-deprecation.md)（文档内编码细项作废，原地保留）
+- 文档废弃：[references/doc-deprecation.md](references/doc-deprecation.md)（整份文档废止，含建议移除日期与到期移除入 `deprecated/`）
 - 审核指南：[references/review-guidelines.md](references/review-guidelines.md)
 - 项目 AGENTS.md 指南：[references/project-agents-guide.md](references/project-agents-guide.md)
 - 文档模板：[assets/templates/](assets/templates/)
@@ -156,11 +156,12 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 - **正确流程指导（REQUIRED）**：明确给出废弃+新增流程
 - **冲突检测（MANDATORY）**：修改前必须检查编码引用关系
 - **废弃标记规范（MUST COMPLY）**：
-  - MUST：废弃细项时必须标记标题删除线 `~~已废弃~~`
+  - MUST：废弃细项时必须标记标题删除线 `~~已废弃~~`（视觉标记），结构化状态值统一写 `废弃`
   - MUST：废弃细项必须包含四个必须字段：细项状态、废弃时间、废弃原因、替代方案
   - MUST：废弃后必须更新全局索引和文档清单
   - MUST：涉及大规模废弃时必须请求外部确认
-  - 详细废弃操作流程见 [references/deprecation-guide.md](references/deprecation-guide.md)
+  - MUST：整份文档废弃时，除上述字段外须给出**建议移除日期**，到期后移入本作用域的 `deprecated/`（只移除不删除，各子项目各自独立）
+  - 细项废弃流程见 [references/item-deprecation.md](references/item-deprecation.md)，文档废弃流程见 [references/doc-deprecation.md](references/doc-deprecation.md)
 
 ### 写作与审查统一门禁（新增，MANDATORY）
 
@@ -250,13 +251,24 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 ```markdown
 ### {项目码}-{类型码}-{序号} 细项标题 ~~已废弃~~
 
-**细项状态**：已废弃
+**细项状态**：废弃
 **废弃时间**：YYYY-MM-DD
 **废弃原因**：{具体原因}
 **替代方案**：{替代细项编码}（如无替代方案，填写"无"）
 ```
 
-**详细操作流程**：完整的废弃流程、引用追溯、索引更新等操作请参见 [references/deprecation-guide.md](references/deprecation-guide.md)。
+> 标题删除线 `~~已废弃~~` 为视觉标记；结构化状态值统一写 `废弃`。
+
+**详细操作流程**：完整的废弃流程、引用追溯、索引更新等操作请参见 [references/item-deprecation.md](references/item-deprecation.md)。
+
+### 废弃整份文档处理
+
+**核心要旨**：
+- 采用**两阶段**：先在原地标注 `废弃` 并给出**建议移除日期**（不移动），到期后**移除**入本作用域 `deprecated/`（`ued/deprecated/` 或 `ued/{app-name}/deprecated/`）。
+- 每个子项目各自独立维护自己的 `deprecated/`，**不使用顶层共享目录**；**只移除、不删除**。
+- 不存在也不需要 `active/` 目录；活跃与原地废弃文档同处作用域目录。
+
+**详细操作流程**：请参见 [references/doc-deprecation.md](references/doc-deprecation.md)。
 
 ## 范围界定
 
@@ -290,7 +302,8 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 - **术语与概念**：[references/glossary-conventions.md](references/glossary-conventions.md)
 - **状态定义**：[references/status-definitions.md](references/status-definitions.md)
 - **审核指南**：[references/review-guidelines.md](references/review-guidelines.md)
-- **废弃处理**：[references/deprecation-guide.md](references/deprecation-guide.md)
+- **细项废弃**：[references/item-deprecation.md](references/item-deprecation.md)
+- **文档废弃**：[references/doc-deprecation.md](references/doc-deprecation.md)
 
 ## 模板和工具
 
@@ -360,12 +373,16 @@ A: 这是给 AI 用的执行规范，不是给人类阅读的写作教程。其�
 
 **Q: 废弃的细项如何处理？**
 A: 废弃细项必须遵循以下核心要旨：
-1. 标题必须添加 `~~已废弃~~` 删除线
+1. 标题必须添加 `~~已废弃~~` 删除线（视觉标记），结构化状态值统一写 `废弃`
 2. 必须包含四个字段：细项状态、废弃时间、废弃原因、替代方案（如无则填"无"）
 3. 必须更新全局索引和文档清单
 4. 必须追溯并处理所有引用关系
+5. **原地保留，不移动**
 
-详细操作流程（反向追溯、引用处理、索引更新等）请参见 [references/deprecation-guide.md](references/deprecation-guide.md)。
+详细操作流程（反向追溯、引用处理、索引更新等）请参见 [references/item-deprecation.md](references/item-deprecation.md)。
+
+**Q: 废弃整份文档与废弃细项有何不同？**
+A: 细项废弃只在原地标注；整份文档废弃采用**两阶段**——先原地标 `废弃` 并给出**建议移除日期**，到期后**移除**入**本作用域独立**的 `deprecated/`（`ued/deprecated/` 或 `ued/{app-name}/deprecated/`），**只移除不删除**，不存在也不需要 `active/` 目录。详见 [references/doc-deprecation.md](references/doc-deprecation.md)。
 
 **Q: 文档中可以包含代码吗？**
 A: L0-L6 设计文档不可以包含可执行代码、脚本、SQL、配置片段等实现内容；但可以包含算法、流程、逻辑、模型、约束、状态机和决策说明。REF（外部参考资料）文档不在此限制内，可以包含外部资料中的代码示例和实现片段作为引用内容。
