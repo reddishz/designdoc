@@ -9,4 +9,4 @@
 | [windsurf-skills.md](windsurf-skills.md) | Windsurf Cascade 中 Skills 的创建与使用 |
 | [agents-md.md](agents-md.md) | AGENTS.md 规范与编写参考 |
 
-产品设计文档规范与模板见仓库内 [`.agents/skills/design-doc/`](../.agents/skills/design-doc/README.md)。
+产品设计文档规范与模板见仓库内 [`SKILL.md`](../.agents/skills/design-doc/SKILL.md)（入口）与[模板索引](../.agents/skills/design-doc/assets/templates/index.md)。

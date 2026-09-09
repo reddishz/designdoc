@@ -40,24 +40,21 @@ AI 会自动：
 
 ### 3. 配置项目信息（推荐）
 
-在 `ued/.doc-config.json` 中配置：
+项目元信息登记在**当前作用域的 `ued/README.md`**（不设独立配置文件）：
 
-```json
-{
-  "author": "你的名字",
-  "project_code": "CRM"
-}
-```
+| 字段 | 说明 |
+|------|------|
+| `doc_mode` | `single-app` 或 `multi-app` |
+| `project_name` | 项目 / 应用名称 |
+| `project_code` | 2-4 位大写字母的项目编码；留空即不启用前缀 |
+| `scope` | 应用范围说明 |
+| `author` / `maintainer` | 文档默认作者 |
 
-字段说明：
-- `author`：文档默认作者
-- `project_code`：2-4 位大写字母的项目编码
+多应用模式下，顶层 `ued/README.md` 只维护总入口与应用注册表，各 `ued/{app-name}/README.md` 维护自己的元信息、编码计数器与全局索引。区块写法见 [README 模板](./.agents/skills/design-doc/assets/templates/readme-template.md)。
 
-若配置文件不存在，skill 可先按默认值继续工作：
+若 `README.md` 不存在或未声明相应字段，skill 先按默认值继续工作，再提醒补齐：
 - `author` = `产品架构组`
-- `project_code` = `(空)`（默认不启用项目编码前缀，采用简洁编码格式）
-
-建议用户在首次落地到真实项目时尽早补齐该文件，避免后续编码和归属信息使用默认值。
+- `project_code` = `(空)`（默认不启用项目编码前缀，采用简洁编码格式，如 `FR-001`）
 
 ## 文档层级
 
@@ -87,16 +84,18 @@ AI 会自动：
 
 ### Skill 与规范
 
-- [Skill 入口](./.agents/skills/design-doc/README.md) — 极简导航（主文档见 SKILL.md）
-- [SKILL.md](./.agents/skills/design-doc/SKILL.md) — 完整规范说明
+- [SKILL.md](./.agents/skills/design-doc/SKILL.md) — 完整规范说明（入口）
 - [规范索引](./.agents/skills/design-doc/references/README.md) — `references/` 总览
-- [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档编码规则
+- [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档与细项编码规则
+- [层级体系](./.agents/skills/design-doc/references/layer-system.md) — L0-L6 层级与目录结构
+- [状态定义](./.agents/skills/design-doc/references/status-definitions.md) — 标准四态（初稿/正式/草案/废弃）、锁定矩阵、版本号递增与回退
 - [术语与概念](./.agents/skills/design-doc/references/glossary-conventions.md) — 词汇表与细项编码分工
 - [审核指南](./.agents/skills/design-doc/references/review-guidelines.md) — 文档检查清单
-- [废弃细项处理](./.agents/skills/design-doc/references/deprecation-guide.md) — 细项废弃与引用更新
+- [废弃细项处理](./.agents/skills/design-doc/references/item-deprecation.md) — 细项废弃与引用更新
+- [废弃文档处理](./.agents/skills/design-doc/references/doc-deprecation.md) — 整档废弃的两阶段流程
 - [模板库](./.agents/skills/design-doc/assets/templates/index.md) — 文档模板索引
 - [流程图指南](./.agents/skills/design-doc/assets/guides/flowchart-guide.md) — 箭头 / 表格 / Mermaid
-- [AI 操作说明](./.agents/skills/design-doc/references/ai-operations.md) — 编码分配与废弃等（非模板）
+- [静态检查脚本](./.agents/skills/design-doc/scripts/check_docs.py) — `python3 scripts/check_docs.py -p <ued 路径>`；加 `--refs <编码>` 可反查该编码的全部定义与引用位置
 
 ### 仓库参考（非业务模板）
 
