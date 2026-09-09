@@ -12,10 +12,15 @@ DesignDoc 文档检查工具
 - 版本号递增时机（仅 `正式→草案` 解冻时递增）、回退记录完整性、版本号不复用
 - 废弃流程字段（含 `建议归档日期`）与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
-- PLN 闭环：`正式` 即已落实且被目标细项 `规划来源` 回指；未定论者的 `建议复审日期`（到期提示）
+- PLN 闭环：`正式` 即已落实且被目标细项 `来源` 回指；未定论者的 `建议复审日期`（到期提示）
 - README 全局索引升序、编码缺口、计数器一致性
 - 零章节编号引用门禁、文件名与结构合规
+- 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、三部分连续
+- 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
+- ADR / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
+- `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏）
+- `--instantiate TPL`：剥除哨兵输出模板实例化后的正文，供预览评估
 
 规则本体的唯一完整表述在 `references/` 专项文件内，本脚本只执行校验、不重复定义
 规则；类型码清单优先从 `references/coding-system.md` 的类型码表读取，读取失败时
@@ -102,8 +107,43 @@ BOLD_ATTR_ANY = re.compile(
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
 EMPTY_MARKS = ("无", "暂无", "-", "—", "n/a")
 
+# ---- 定义块形态与锚点（房规：coding-system.md ·《细项定义块形态》《锚点定义位》）----
+ANCHOR_TAG = re.compile(r"""^\s*<a\s+(?:id|name)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
+HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*)$")
+# 合规属性行：列表项 + 要素名加粗（允许字段名后带括号说明）
+ATTR_LINE_OK = re.compile(
+    r"^\s*[-*+]\s+\*\*[^*\n]{1,24}\*\*"
+    r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
+# 禁止形态一：裸段落（有加粗、无列表符）
+ATTR_LINE_NO_BULLET = re.compile(
+    r"^\s{0,3}\*\*[^*\n]{1,24}\*\*"
+    r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
+# 禁止形态二：列表项但要素名未加粗
+ATTR_LINE_NO_BOLD = re.compile(r"^\s*[-*+]\s+([^*\n\[\]#]{1,16})\s*[:\uff1a]")
+# 禁止形态三：裸段落且要素名未加粗（如 `所属组件：…`）。限定短要素名、
+# 不以数字开头（避开 `1. 想法内容：` 类续行）、不含句读（避开散文段落）。
+ATTR_LINE_BARE_PLAIN = re.compile(
+    r"^\s{0,3}([^*\s>#\-|{\d][^*\n|]{0,11})\s*[:\uff1a]\s*\S")
+ATTR_NAME_PROSE = re.compile(r"[\u3002\uff0c\uff1b\uff1f\uff01,;?!]")
+MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+INLINE_CODE = re.compile(r"`[^`]*`")
+
 CHANGELOG_HEADINGS = ("变更记录", "变更历史", "版本历史", "修订记录")
 ITEM_LIST_HEADINGS = ("细项编码清单", "细项清单", "全局编码索引", "编码索引")
+
+# 模板哨兵：`assets/templates/` 用 HTML 注释界定「待复制正文」，取代 ```markdown
+# 外层围栏（围栏会使正文不可渲染，且与正文内 ```mermaid 等嵌套围栏相互破坏）。
+# 房规本体单点承载于 assets/templates/index.md · 模板边界（哨兵）。
+TEMPLATE_DIR = SKILL_ROOT / "assets" / "templates"
+TPL_BEGIN = re.compile(r"^<!--\s*TEMPLATE:BEGIN(?:\s+(.*?))?\s*-->$")
+TPL_END = re.compile(r"^<!--\s*TEMPLATE:END\s*-->$")
+TPL_LABEL = re.compile(r"^>\s+\*\*(.+?)\*\*\s*$")
+TPL_FENCE_WRAP = re.compile(r"^\s*(?:`{3,}|~{3,})\s*markdown\s*$")
+TPL_USAGE_HEAD = re.compile(r"^#{1,6}\s+使用说明\s*$")
+# 片段型模板：正文是嵌入宿主文档的片段，容器保留自身标题结构
+TPL_FRAGMENT_FILES = {"project-registry.md"}
+# 目录内的索引文件，不是模板，不含哨兵
+TPL_NON_FILES = {"index.md"}
 
 
 def load_type_codes() -> Set[str]:
@@ -170,6 +210,63 @@ def mask_fences(text: str) -> List[str]:
             continue
         out.append(line)
     return out
+
+
+def heading_slug(text: str) -> str:
+    """按 GitHub / cmark-gfm 规则把标题文本转为自动 slug（仅用于锚点可达性判定）。
+
+    小写 → 去行内标记与标点（保留字母数字、下划线、连字符、中日韩文字）
+    → 空格转连字符。如《ADR 与 DEC 的定位》→ `adr-与-dec-的定位`。
+
+    细项锚点 MUST NOT 依赖本 slug（会随标题改动而失效，房规见《锚点定义位》）；
+    本函数只用于判定小节链接能不能跳得过去。
+    """
+    s = re.sub(r"<[^>]*>", "", text.strip().lower())
+    s = s.replace("`", "").replace("*", "")
+    s = re.sub(r"[^\w\u4e00-\u9fff\- ]", "", s)
+    return s.replace(" ", "-")
+
+
+def template_segments(lines: List[str]) -> Tuple[List[Dict], List[str]]:
+    """切出模板哨兵段，返回 (段列表, 配对错误描述)。
+
+    段结构 `{name, begin, end, body}`，`begin` / `end` 为哨兵行号（1 起）；
+    未闭合的段 `end` 为 0。哨兵 MUST 成对、不嵌套、各自独占一行。
+    """
+    segs: List[Dict] = []
+    errs: List[str] = []
+    cur: Optional[Dict] = None
+    for n, line in enumerate(lines, 1):
+        begin, end = TPL_BEGIN.match(line), TPL_END.match(line)
+        if begin:
+            if cur is not None:
+                errs.append(f"{n}: `TEMPLATE:BEGIN` 未闭合即再次开启（哨兵 MUST NOT 嵌套）")
+                segs.append(cur)
+            cur = {"name": (begin.group(1) or "").strip(), "begin": n, "end": 0, "body": []}
+        elif end:
+            if cur is None:
+                errs.append(f"{n}: 孤立的 `TEMPLATE:END`（无配对 `TEMPLATE:BEGIN`）")
+                continue
+            cur["end"] = n
+            segs.append(cur)
+            cur = None
+        elif cur is not None:
+            cur["body"].append(line)
+    if cur is not None:
+        errs.append(f"{cur['begin']}: `TEMPLATE:BEGIN` 直到文件结束仍未闭合")
+        segs.append(cur)
+    return segs, errs
+
+
+def instantiate_template(text: str) -> List[Tuple[str, str]]:
+    """把模板还原为「实例化后的文档」：[(段名, 正文)]。
+
+    只保留哨兵之间的内容并删除两行哨兵，等价于 AI 实例化的产物；
+    哨兵外的模板名、元信息与使用说明一律不进入结果。
+    """
+    segs, _errs = template_segments(text.splitlines())
+    return [(s["name"], "\n".join(s["body"]).strip("\n") + "\n")
+            for s in segs if s["end"]]
 
 
 def norm(value: str) -> str:
@@ -289,6 +386,8 @@ class DesignDocChecker:
         self.codes: Set[str] = set()
         self.code_to_doc: Dict[str, DocInfo] = {}
         self.item_def_doc: Dict[str, DocInfo] = {}   # 细项编码 → 定义所在文档
+        self.doc_by_path: Dict[str, DocInfo] = {}    # 归一化路径 → 文档（跨文档锚点解析用）
+        self.anchor_cache: Dict[str, Set[str]] = {}  # 路径 → 可达锚点集合
         self.issues: List[Dict] = []
         self.legacy_hits: Set[Tuple[str, str]] = set()   # (文件, 旧值 → 新值)
 
@@ -312,6 +411,7 @@ class DesignDocChecker:
     def _build_code_maps(self) -> None:
         """建立编码 → 文档映射，并重判索引 / 清单行里的旧值 `草稿`。"""
         for doc in self.docs:
+            self.doc_by_path[os.path.normpath(doc.path)] = doc
             if doc.doc_code:
                 self.codes.add(doc.doc_code)
                 self.code_to_doc.setdefault(doc.doc_code, doc)
@@ -518,6 +618,19 @@ class DesignDocChecker:
         for item in doc.items:
             if not item.item_status and item.def_status:
                 item.item_status = item.def_status
+
+    def _doc_items(self, doc: DocInfo) -> List[ItemInfo]:
+        """本文档的细项，排除与**文档自身编码**同名的那一项。
+
+        `REF-{三位序号}` 既是文档编码格式、`REF` 又是类型码（编码空间重叠），
+        因此 REF 文档的 H1 会被解析成一个与 `doc_code` 同名的细项。但文档标题
+        不是细项：它不进本文档细项编码清单、不适用定义块形态与锚点房规（引用
+        ADR / REF 等整份文档用文档链接、不带锚点）。L0-L6 / ADR 的前缀不是类型码，
+        本过滤对它们是空操作。
+        """
+        if not doc.doc_code:
+            return doc.items
+        return [it for it in doc.items if it.code != doc.doc_code]
 
     def _heading_code(self, line: str) -> str:
         """取定义位开头的编码；允许行首带 `~~已废弃~~` 等修饰。"""
@@ -758,7 +871,7 @@ class DesignDocChecker:
         for doc in self.docs:
             if doc.is_index:
                 continue
-            for item in doc.items:
+            for item in self._doc_items(doc):
                 if item.defined and not item.listed:
                     self.add_issue("WARNING", "细项未登记入清单",
                                    f"{doc.path}:{item.line} {item.code} 在正文定义，但未出现在"
@@ -785,7 +898,7 @@ class DesignDocChecker:
             registered = index_by_scope.get(self._scope_of(doc.path))
             if registered is None:
                 continue
-            for item in doc.items:
+            for item in self._doc_items(doc):
                 if item.defined and item.type_code in self.type_codes and item.code not in registered:
                     self.add_issue("WARNING", "细项未登记入全局索引",
                                    f"{doc.path}:{item.line} {item.code} 未出现在作用域 README 的"
@@ -997,15 +1110,31 @@ class DesignDocChecker:
                         break
 
     def check_structure(self) -> None:
-        """结构完整性：必备小节、细项清单存在。"""
-        required: Dict[str, List[Tuple[str, ...]]] = {
-            "L0": [("愿景",), ("目标", "成功标准")],
-            "L1": [("利益相关者",), ("场景",)],
-            "L2": [("功能需求",), ("非功能需求",)],
-            "L3": [("架构",), ("组件", "子系统", "子系统")],
-            "L4": [("模块", "设计概述"), ("数据", "接口")],
-            "L5": [("算法", "流程"), ("约束", "配置")],
-            "L6": [("测试",), ("追溯",)],
+        """结构完整性：必备小节、细项清单存在。
+
+        key 优先用层级（`L0`-`L6`）；ADR / REF 的文档编码不含层级（`doc.layer`
+        为空），回退到 `doc.doc_type`，否则两类文档的结构校验会整体静默失效。
+
+        同一层级 MAY 有**多种文档形态**（与 `assets/templates/` 的官方模板一一对应：
+        L0 分产品战略 / 产品路线图，L1 分利益相关者需求 / 产品规划总览），命中任一
+        形态的完整小节集即视为合规；MUST NOT 拿单一形态的小节集去要求另一种形态。
+        均未命中时，按缺失最少（最接近）的形态报缺。
+        """
+        required: Dict[str, List[Tuple[str, List[Tuple[str, ...]]]]] = {
+            "L0": [("产品战略", [("愿景",), ("目标", "成功标准")]),
+                   ("产品路线图", [("阶段", "主题"), ("时间线", "演进")])],
+            "L1": [("利益相关者需求", [("利益相关者",), ("场景",)]),
+                   ("产品规划总览", [("登记口径", "落实"), ("统计", "分布")])],
+            "L2": [("系统/产品需求", [("功能需求",), ("非功能需求",)])],
+            "L3": [("概念架构", [("架构",), ("组件", "子系统")])],
+            "L4": [("逻辑/系统设计", [("模块", "设计概述"), ("数据", "接口")])],
+            "L5": [("详细设计", [("算法", "流程"), ("约束", "配置")])],
+            "L6": [("验证与确认", [("测试",), ("追溯",)])],
+            # ADR 的论证负担：完整记录背景、备选方案、选择理由、后果
+            # （房规见 coding-system.md ·《ADR 与 DEC 的定位》）
+            "ADR": [("架构决策记录",
+                     [("背景",), ("备选方案",), ("决策",), ("理由",), ("后果",)])],
+            "REF": [("外部参考资料", [("来源信息",)])],
         }
         for doc in self.docs:
             if doc.is_index or not doc.doc_code:
@@ -1015,14 +1144,266 @@ class DesignDocChecker:
             if not any(any(k in h for k in CHANGELOG_HEADINGS) for h in headings):
                 self.add_issue("WARNING", "缺少变更记录",
                                f"{doc.path}: 未找到 `变更记录`/`版本历史` 小节")
-            if doc.items and not any(any(k in h for k in ITEM_LIST_HEADINGS) for h in headings):
+            if self._doc_items(doc) and not any(any(k in h for k in ITEM_LIST_HEADINGS) for h in headings):
                 self.add_issue("WARNING", "缺少细项编码清单",
                                f"{doc.path}: 本文档定义/登记了细项，但文末无 `本文档细项编码清单` 小节")
-            for group in required.get(doc.layer, []):
-                if not any(any(k in h for k in group) for h in headings):
+            key = doc.layer or doc.doc_type
+            variants = required.get(key)
+            if not variants:
+                continue
+            best: Optional[Tuple[str, List[Tuple[str, ...]]]] = None
+            for form, groups in variants:
+                missing = [g for g in groups
+                           if not any(any(k in h for k in g) for h in headings)]
+                if not missing:
+                    best = None
+                    break
+                if best is None or len(missing) < len(best[1]):
+                    best = (form, missing)
+            if best:
+                form, missing = best
+                for group in missing:
                     self.add_issue("WARNING", "缺少必需章节",
-                                   f"{doc.path}: {doc.layer} 文档未找到含 "
+                                   f"{doc.path}: {key}「{form}」形态文档未找到含 "
                                    f"{'/'.join(group)} 的小节")
+
+    # ------------------------------------------------- 定义块形态与锚点
+
+    def check_def_blocks(self) -> None:
+        """定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态。
+
+        房规单点承载于 `references/coding-system.md` ·《细项定义块形态》与
+        《锚点定义位》；本方法只执行校验。仅针对**定义位**（`item.defined`），
+        登记表 / 索引行不适用定义块形态。
+
+        文档自身的 H1 跳过（见 `_doc_items`）：`REF-{三位序号}` 既是文档编码格式、
+        `REF` 又是类型码（编码空间重叠），因此 REF 文档的 H1 会被当成定义位；但
+        引用 REF / ADR 等**整份文档**时用文档链接、**不带锚点**，文档标题不适用
+        细项锚点房规。
+        """
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            lines = doc.lines
+            for item in self._doc_items(doc):
+                if not item.defined or item.path != doc.path:
+                    continue
+                idx = item.line - 1
+                if not (0 <= idx < len(lines)):
+                    continue
+                if ITEM_BOLD_DEF.match(lines[idx]):
+                    self.add_issue(
+                        "ERROR", "细项定义块形态不合规",
+                        f"{doc.path}:{item.line} `{item.code}`: 以 `- **{item.code}**：…` "
+                        "粗体列表项充当定义位——编码不进文档大纲、无具名属性行可承载五要素、"
+                        "不产生任何锚点；MUST 改为「`<a id>` 锚点行 + 标题行（`{编码}：{标题}`，"
+                        "全角冒号）+ `- **{要素名}**：{值}` 属性行」")
+                    continue        # 形态整体不合规，锚点与属性行不再重复报
+                self._check_def_anchor(doc, item, idx)
+                self._check_attr_lines(doc, item, idx)
+                self._check_block_contiguity(doc, item, idx)
+
+    def _check_def_anchor(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
+        """定义位标题行上方 MUST 有 `<a id="{编码全小写}">`，且锚点值与编码一致。"""
+        lines = doc.lines
+        want = item.code.lower()
+        j = idx - 1
+        while j >= 0 and not lines[j].strip():
+            j -= 1                  # 允许锚点行与标题行之间有空行
+        m = ANCHOR_TAG.match(lines[j]) if j >= 0 else None
+        found = m.group(1).strip().lower() if m else ""
+        if found == want:
+            return
+        if found:
+            self.add_issue("ERROR", "定义位锚点与编码不符",
+                           f"{doc.path}:{item.line} `{item.code}`: 标题行上方的锚点为 "
+                           f"`<a id=\"{found}\">`，MUST 为 `<a id=\"{want}\">`（锚点值与编码"
+                           "一一对应，MUST NOT 随标题改动而变动）")
+        else:
+            self.add_issue("ERROR", "定义位缺锚点",
+                           f"{doc.path}:{item.line} `{item.code}`: 标题行上方 MUST 有 "
+                           f"`<a id=\"{want}\"></a>`；MUST NOT 依赖标题自动 slug（含标题文本，"
+                           "改标题即失效），也 MUST NOT 用 `{#编码小写}` 属性语法（在 GitHub 等 "
+                           "cmark-gfm 渲染器下不生效）")
+
+    def _check_attr_lines(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
+        """属性行形态：MUST 为 `- **{要素名}**：{值}`；禁裸段落、禁要素名未加粗。
+
+        只判定标题行下方**紧邻的连续非空行**（即属性行组）；组内缩进更深的行是
+        多条目值的续行（如 `落实记录` / `业务流程` 的分条），不属属性行，跳过。
+        """
+        lines = doc.lines
+        j = idx + 1
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+        group: List[int] = []
+        while j < len(lines) and lines[j].strip():
+            group.append(j)
+            j += 1
+        if not group:
+            return
+        base = len(lines[group[0]]) - len(lines[group[0]].lstrip())
+        # 只有组内确实存在合规属性行时，才把同行的裸段落当属性行判定；
+        # 否则该组可能整段是叙述文字，不属属性行语义。
+        has_ok = any(ATTR_LINE_OK.match(lines[k]) for k in group)
+        for k in group:
+            line = lines[k]
+            if len(line) - len(line.lstrip()) > base:
+                continue            # 续行（多条目值），不是属性行
+            if ATTR_LINE_OK.match(line):
+                continue
+            if ATTR_LINE_NO_BULLET.match(line):
+                self.add_issue("ERROR", "属性行写成裸段落",
+                               f"{doc.path}:{k + 1} `{item.code}` 定义块的属性行 "
+                               f"`{line.strip()[:40]}` 缺列表符；MUST 为列表项 "
+                               "`- **{要素名}**：{值}`（一个要素独占一行）")
+                continue
+            m = ATTR_LINE_NO_BOLD.match(line)
+            if m and "{" not in m.group(1):
+                self.add_issue("WARNING", "属性行要素名未加粗",
+                               f"{doc.path}:{k + 1} `{item.code}` 定义块的属性行 "
+                               f"`{line.strip()[:40]}` 要素名未加粗；MUST 写成 "
+                               f"`- **{m.group(1).strip()}**：…`")
+                continue
+            bm = ATTR_LINE_BARE_PLAIN.match(line)
+            if (has_ok and bm and "{" not in bm.group(1)
+                    and not ATTR_NAME_PROSE.search(bm.group(1))):
+                self.add_issue("ERROR", "属性行写成裸段落",
+                               f"{doc.path}:{k + 1} `{item.code}` 定义块的属性行 "
+                               f"`{line.strip()[:40]}` 既无列表符也无粗体；MUST 写成 "
+                               f"`- **{bm.group(1).strip()}**：…`")
+
+    def _check_block_contiguity(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
+        """定义块三部分 MUST 连续：标题行与属性行组之间不得插入其他内容。
+
+        房规见 `references/coding-system.md` ·《细项定义块形态》。MUST 读
+        `raw_lines`——`doc.lines` 已把围栏抹成空行，插在标题与属性行之间的
+        mermaid 图会被静默放过。自行跟踪围栏状态，避免把围栏内的行当成标题或
+        属性行。
+
+        仅当**属性行组确实排在插入内容之后**时才报（顺序被打断）；若整块根本没有
+        属性行组，属「缺属性行」而非顺序问题，不在本方法职责内。
+        """
+        raw = doc.raw_lines
+        hm = HEADING_LINE.match(raw[idx]) if idx < len(raw) else None
+        level = len(hm.group(1)) if hm else 0
+        fence_char = ""
+        fence_len = 0
+        insert_kind = ""        # 插入内容的类型（标题行下首个非属性行）
+        insert_at = 0
+        j = idx + 1
+        while j < len(raw):
+            line = raw[j]
+            if fence_char:      # 围栏内：只找闭合，不参与任何判定
+                closer = FENCE_CLOSE.match(line)
+                if (closer and closer.group(1)[0] == fence_char
+                        and len(closer.group(1)) >= fence_len):
+                    fence_char, fence_len = "", 0
+                j += 1
+                continue
+            opener = FENCE.match(line)
+            if opener:
+                fence_char = opener.group(1)[0]
+                fence_len = len(opener.group(1))
+                if not insert_kind:
+                    insert_kind, insert_at = "图表 / 代码围栏", j + 1
+                j += 1
+                continue
+            if not line.strip():
+                j += 1
+                continue
+            if ATTR_LINE_OK.match(line):
+                if insert_kind:
+                    self.add_issue(
+                        "ERROR", "定义块顺序被打断",
+                        f"{doc.path}:{item.line} `{item.code}`: 标题行与属性行组之间插入了"
+                        f"{insert_kind}（第 {insert_at} 行起）；定义块三部分 MUST 连续，其间"
+                        "只允许空行——图表、表格、子标题与散文段落无具名要素可承载，夹在"
+                        "中间会使五要素不可机检。MUST 把叙述与图示移到属性行组之后，或作为"
+                        "某个属性行的值")
+                return
+            sub = HEADING_LINE.match(line)
+            if ANCHOR_TAG.match(line) or (sub and level and len(sub.group(1)) <= level):
+                return          # 已到下一个定义位 / 同级小节：本块无属性行组，不在此报
+            if not insert_kind:
+                if sub:
+                    insert_kind = "子标题"
+                elif line.lstrip().startswith("|"):
+                    insert_kind = "表格"
+                else:
+                    insert_kind = "散文段落"
+                insert_at = j + 1
+            j += 1
+
+    def _doc_anchors(self, doc: DocInfo) -> Set[str]:
+        """文档的可达锚点集合：显式 `<a id>` / `<a name>` ∪ 标题自动 slug。"""
+        key = os.path.normpath(doc.path)
+        cached = self.anchor_cache.get(key)
+        if cached is not None:
+            return cached
+        out: Set[str] = set()
+        for line in doc.lines:      # doc.lines 已屏蔽围栏，围栏内锚点自然不计
+            for m in ANCHOR_TAG.finditer(line):
+                out.add(m.group(1).strip().lower())
+            hm = HEADING_LINE.match(line)
+            if hm:
+                out.add(heading_slug(hm.group(2)))
+        self.anchor_cache[key] = out
+        return out
+
+    def check_anchor_reachability(self) -> None:
+        """锚点可达性：链接的 `#fragment` MUST 在目标文档的锚点集合中存在。
+
+        只判定**可解析**的目标：同文档锚点，或相对路径能落到本次扫描范围内文档的
+        跨文档锚点；含 `{占位符}` 的模板链接、外部 URL、目标不在扫描范围内的链接
+        一律跳过（不误报）。`doc.lines` 已屏蔽围栏，行内代码另行剔除，因此示例
+        片段不会被当成真链接。
+        """
+        for doc in self.docs:
+            for idx, line in enumerate(doc.lines):
+                for m in MD_LINK.finditer(INLINE_CODE.sub("", line)):
+                    target = m.group(1)
+                    if target.startswith(("http://", "https://", "mailto:", "//")):
+                        continue
+                    if "{" in target or "}" in target:
+                        continue            # 模板占位符，实例化后才成真链接
+                    path_part, _, frag = target.partition("#")
+                    if not frag:
+                        continue            # 无锚点；文件存在性不属本检查
+                    if path_part:
+                        tgt_path = os.path.normpath(
+                            os.path.join(os.path.dirname(doc.path), path_part))
+                        tgt = self.doc_by_path.get(tgt_path)
+                        if tgt is None:
+                            continue        # 目标不在本次扫描范围
+                    else:
+                        tgt = doc
+                    if frag.lower() in self._doc_anchors(tgt):
+                        continue
+                    self.add_issue(
+                        "WARNING", "锚点不可达",
+                        f"{doc.path}:{idx + 1}: 链接 `{target}` 的锚点 `#{frag}` 在 "
+                        f"{tgt.path} 中无对应目标（既无 `<a id=\"{frag.lower()}\">`，"
+                        "也无同名标题 slug）；细项锚点 MUST 由定义块的锚点行提供")
+
+    def check_dec_layer(self) -> None:
+        """`DEC` 量级提示：定义位落在 L2/L3 文档时提示评估是否升格为 ADR。
+
+        仅 INFO、**不报违规**：`DEC` MAY 被任何层级文档收录（类型码表的「典型层级」
+        是语义归属建议、不是物理存放限制）。ADR 文档自身豁免：ADR 就是「已升格」
+        的形态，其《决策》小节收录 DEC 是房规明确允许的做法。
+        """
+        for doc in self.docs:
+            if doc.archived or doc.doc_type == "ADR" or doc.layer not in ("L2", "L3"):
+                continue
+            for item in self._doc_items(doc):
+                if item.type_code != "DEC" or not item.defined or item.path != doc.path:
+                    continue
+                self.add_issue(
+                    "INFO", "DEC 量级可能偏大",
+                    f"{doc.path}:{item.line} `{item.code}`: `DEC` 的典型层级为 L4/L5，"
+                    f"本定义位落在 {doc.layer} 文档；若该决策属技术栈选型、子系统划分、"
+                    "数据一致性策略等宏观架构级，SHOULD 评估升格为 ADR 文档（一事一档）")
 
     def _item_block(self, doc: DocInfo, code: str) -> str:
         return "\n".join(doc.lines[i - 1] for i in self._own_lines(doc, code, block=True))
@@ -1389,7 +1770,7 @@ class DesignDocChecker:
                 continue            # 目标不在本次扫描范围，不误报
             if item.code not in self._item_block(tdoc, t):
                 self.add_issue("WARNING", "落实目标未回指 PLN",
-                               f"{tdoc.path}: `{t}` 的定义块缺 `规划来源` 回指 "
+                               f"{tdoc.path}: `{t}` 的定义块缺 `来源` 回指 "
                                f"`{item.code}`，双向追溯断裂")
 
     # ------------------------------------------------------------- 引用反查
@@ -1431,6 +1812,9 @@ class DesignDocChecker:
         self.check_version_flow()
         self.check_chapter_references()
         self.check_structure()
+        self.check_def_blocks()
+        self.check_anchor_reachability()
+        self.check_dec_layer()
         self.check_deprecation()
         self.check_draft_finalization()
         self.check_layer_references()
@@ -1538,6 +1922,135 @@ class DesignDocChecker:
         return 0
 
 
+class TemplateChecker:
+    """`assets/templates/` 哨兵房规校验。
+
+    只执行校验、不重复定义规则；规则本体见
+    `assets/templates/index.md · 模板边界（哨兵）`。
+    """
+
+    LEVELS = ("CRITICAL", "ERROR", "WARNING", "INFO")
+
+    def __init__(self, tpl_dir: Optional[Path] = None):
+        self.tpl_dir = Path(tpl_dir) if tpl_dir else TEMPLATE_DIR
+        self.issues: List[Dict] = []
+        self.checked = 0
+
+    def add_issue(self, level: str, title: str, description: str) -> None:
+        self.issues.append({"level": level, "title": title, "description": description})
+
+    def run(self) -> List[Dict]:
+        if not self.tpl_dir.exists():
+            self.add_issue("CRITICAL", "模板目录不存在", f"未找到 {self.tpl_dir}")
+            return self.issues
+        for path in sorted(self.tpl_dir.glob("*.md")):
+            if path.name in TPL_NON_FILES:
+                continue
+            self.checked += 1
+            try:
+                self._check_one(path, path.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001
+                self.add_issue("ERROR", "读取模板失败", f"{path.name}: {exc}")
+        return self.issues
+
+    def _check_one(self, path: Path, text: str) -> None:
+        name = path.name
+        lines = text.splitlines()
+        segs, errs = template_segments(lines)
+        for err in errs:
+            self.add_issue("ERROR", "模板哨兵不配对", f"{name}: {err}")
+        if not segs and not errs:
+            self.add_issue("ERROR", "模板缺哨兵",
+                           f"{name}: 未见 `TEMPLATE:BEGIN` / `TEMPLATE:END`，待复制正文无边界")
+            return
+        fragment = name in TPL_FRAGMENT_FILES
+        inside: Set[int] = set()
+        for seg in segs:
+            if seg["end"]:
+                inside.update(range(seg["begin"], seg["end"] + 1))
+
+        for n, line in enumerate(lines, 1):
+            if n in inside:
+                continue
+            if TPL_FENCE_WRAP.match(line):
+                self.add_issue("ERROR", "模板残留外层围栏",
+                               f"{name}:{n}: 哨兵外仍有 ```markdown 围栏——正文 MUST 由哨兵界定，"
+                               "不再用围栏包裹（围栏会使正文不可渲染）")
+            if not fragment and line.startswith("# "):
+                self.add_issue("ERROR", "整篇型模板容器自带 H1",
+                               f"{name}:{n}: 整篇型模板 MUST NOT 自带 H1；唯一 H1 应在哨兵内"
+                               "（即目标文档的标题）")
+
+        for seg in segs:
+            if not seg["end"]:
+                continue
+            body = seg["body"]
+            where = f"{name}:{seg['begin']}"
+            h1 = [ln for ln in body if ln.startswith("# ")]
+            if not fragment and len(h1) != 1:
+                self.add_issue("ERROR", "哨兵段 H1 数不合规",
+                               f"{where}: 整篇型模板每段 MUST 恰有一个 H1，实得 {len(h1)}")
+            for off, ln in enumerate(body, seg["begin"] + 1):
+                if TPL_USAGE_HEAD.match(ln):
+                    self.add_issue("ERROR", "使用说明混入待复制正文",
+                                   f"{name}:{off}: `使用说明` MUST 置于哨兵之外（前置），"
+                                   "否则会被复制进目标文档")
+            if len(segs) > 1 and seg["name"]:
+                label = self._label_above(lines, seg["begin"])
+                if label and label.replace("`", "") != seg["name"]:
+                    self.add_issue("WARNING", "哨兵段名与可见标签不一致",
+                                   f"{where}: 哨兵参数「{seg['name']}」与上方标签「{label}」不符")
+
+        if "正文边界" not in text:
+            self.add_issue("WARNING", "模板缺正文边界指针",
+                           f"{name}: 未见「正文边界」说明行，AI 可能连带复制哨兵外的元信息")
+
+    @staticmethod
+    def _label_above(lines: List[str], begin: int) -> str:
+        """取哨兵上方最近的 `> **{段名}**` 可见标签；无则返回空串。"""
+        for i in range(begin - 2, max(-1, begin - 6), -1):
+            match = TPL_LABEL.match(lines[i])
+            if match:
+                return match.group(1).strip()
+            if lines[i].strip() and not lines[i].startswith(">"):
+                break
+        return ""
+
+    def print_summary(self) -> int:
+        """打印模板校验结果并返回退出码（CRITICAL/ERROR 存在时为 1）。"""
+        if not self.issues:
+            print(f"✅ 模板哨兵校验通过：{self.checked} 个模板（{self.tpl_dir}）")
+            return 0
+        order = {level: n for n, level in enumerate(self.LEVELS)}
+        for issue in sorted(self.issues, key=lambda x: order.get(x["level"], 9)):
+            print(f"[{issue['level']}] {issue['title']}")
+            print(f"    {issue['description']}")
+        bad = any(i["level"] in ("CRITICAL", "ERROR") for i in self.issues)
+        print(f"\n{'❌' if bad else '⚠️'} {self.checked} 个模板共 {len(self.issues)} 个问题")
+        return 1 if bad else 0
+
+
+def _print_instantiated(tpl: str, segment: Optional[str]) -> int:
+    """把模板剥除哨兵后输出，供渲染预览与实例化效果评估。"""
+    path = Path(tpl)
+    if not path.exists():
+        path = TEMPLATE_DIR / tpl
+    if not path.exists():
+        print(f"未找到模板: {tpl}（已尝试 {TEMPLATE_DIR / tpl}）")
+        return 1
+    segs = instantiate_template(path.read_text(encoding="utf-8"))
+    if segment:
+        segs = [s for s in segs if s[0] == segment]
+    if not segs:
+        print(f"{path.name}: 无匹配哨兵段（--segment 需与哨兵参数完全一致）")
+        return 1
+    for name, body in segs:
+        if len(segs) > 1:
+            print(f"===== 段：{name or '(未命名)'} =====")
+        sys.stdout.write(body)
+    return 0
+
+
 def main() -> int:
     """命令行入口。"""
     import argparse
@@ -1549,7 +2062,21 @@ def main() -> int:
     parser.add_argument("-v", "--verbose", action="store_true", help="显示详细信息")
     parser.add_argument("--refs", metavar="CODE",
                         help="反查指定编码的全部出现位置（改标题 / `初稿` 期删除前 MUST 先执行）")
+    parser.add_argument("--check-templates", action="store_true",
+                        help="校验 assets/templates/ 的哨兵房规（成对、唯一 H1、无残留外层围栏）")
+    parser.add_argument("--instantiate", metavar="TPL",
+                        help="剥除哨兵输出模板实例化后的正文（文件名或路径），供预览评估")
+    parser.add_argument("--segment", metavar="NAME",
+                        help="配合 --instantiate：只输出指定段名的那一段")
     args = parser.parse_args()
+
+    if args.check_templates:
+        tpl_checker = TemplateChecker()
+        tpl_checker.run()
+        return tpl_checker.print_summary()
+
+    if args.instantiate:
+        return _print_instantiated(args.instantiate, args.segment)
 
     checker = DesignDocChecker(args.path)
 

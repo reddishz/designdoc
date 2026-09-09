@@ -12,8 +12,13 @@
 | L5 | 详细设计 | `L5-detail-design/` | 组件/模块级设计指导，算法逻辑、异常策略 |
 | L6 | 验证与确认 | `L6-verification/` | 测试策略、验收标准、质量度量（非代码） |
 | REF | 参考与引用 | `references/` | 外部资料来源（文档、链接），供所有层级引用 |
+| ADR | 架构决策记录 | `L3-architecture/`（与层级文档平放，无独立目录） | 宏观架构级决策的一事一档，见 [coding-system.md · ADR 与 DEC 的定位](coding-system.md#adr-与-dec-的定位) |
 
 **层级关系**：每一级为下一级提供依据和约束，同时是上一级的细化。非严格瀑布，可迭代渐进。
+
+**ADR 不占层级、归属 L3**：ADR 是**文档编码**（`ADR-{三位序号}`）而非层级，其序号为全局序号、不含层级，因此 MUST NOT 写进目录路径；ADR 文件直接存放在 `L3-architecture/`，靠文件名前缀区分。**MUST NOT** 单设 `adr/` 子目录。
+
+归属 L3 的依据是内容职责而非方便：ADR 论证的是技术栈选型、子系统划分、数据一致性策略等「怎么组织系统」的问题，这正是 L3 概念架构的职责；L2 表达「系统必须做什么」，不承载架构论证。若某个取舍只是需求级的（如「本轮不做离线模式」），用 `DEC` / `PRN` 细项而非 ADR。作用域尚未建 `L3-architecture/` 时，随首份 ADR 创建该目录（有 ADR 即有 L3 内容）。
 
 **按需启用原则（重要）**：
 - 层级是能力全集，不是每次交付清单。
@@ -37,8 +42,7 @@ ued/
 ├── L0-vision/
 ├── L1-stakeholder/
 ├── L2-requirements/
-├── L3-architecture/
-│   └── adr/                 # 架构决策记录
+├── L3-architecture/         # 层级文档与 ADR-*.md 同目录平放
 ├── L4-system-design/
 ├── L5-detail-design/
 ├── L6-verification/
@@ -62,7 +66,6 @@ ued/
 │   ├── README.md            # 应用元信息 + 应用索引 + 编码计数器 + 应用级全局编码索引
 │   ├── L2-requirements/
 │   ├── L3-architecture/
-│   │   └── adr/
 │   ├── L4-system-design/
 │   ├── L5-detail-design/
 │   └── L6-verification/
@@ -85,7 +88,7 @@ ued/
 - **层级目录**：`L{N}-{英文短名}/`，如 `L3-architecture/`
 - **应用目录**：小写英文，短横线分隔，如 `crm/`、`order-center/`
 - **文件名格式**：`L{N}-{三位编号}-{描述}.md`
-- **ADR 文件名**：`ADR-{三位编号}-{描述}.md`
+- **ADR 文件名**：`ADR-{三位编号}-{描述}.md`，存放于 `L3-architecture/`（ADR 归属 L3，见《层级定义》），**MUST NOT** 单设 `adr/` 子目录
 - **REF 文件名**：`REF-{三位编号}-{描述}.md`
 - **文件名禁止使用中文**，以兼容各类文件系统和版本管理系统。描述部分使用英文或拼音，小写，短横线分隔
 - **此规则仅限文件名和目录名**，文档内容（标题、正文、表格、描述等）一律使用中文

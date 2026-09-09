@@ -25,4 +25,4 @@
 | 资源 | 说明 |
 |------|------|
 | [flowchart-guide.md](../assets/guides/flowchart-guide.md) | 流程图：箭头 / 表格 / Mermaid 选用规则 |
-| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（含 `--refs {编码}` 引用反查）；只执行本目录规则，不定义规则 |
+| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（含 `--refs {编码}` 引用反查、`--check-templates` 模板哨兵自检、`--instantiate` 模板实例化预览）；只执行规则，不定义规则 |
