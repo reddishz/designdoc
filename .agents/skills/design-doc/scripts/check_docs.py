@@ -10,12 +10,15 @@ DesignDoc 文档检查工具
 - 正文定义 / 本文档清单 / 作用域 README 全局索引三方的编码与状态一致
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
 - 版本号递增时机（仅 `正式→草案` 解冻时递增）、回退记录完整性、版本号不复用
-- 废弃流程字段（含 `建议归档日期`）与活跃引用
+- 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
-- PLN 闭环：`正式` 即已落实且被目标细项 `来源` 回指；未定论者的 `建议复审日期`（到期提示）
+- PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
 - README 全局索引升序、编码缺口、计数器一致性
 - 零章节编号引用门禁、文件名与结构合规
 - 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、三部分连续
+- 属性行组三段：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、追溯段（`出处` → `来源`）居末且值形态互斥
+- 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期
+- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
@@ -97,8 +100,10 @@ REF_TIME_FIELDS = ("来源版本", "获取日期", "最近核验日期", "复查
 REF_FIELD = re.compile(
     r"^\s*(?:[-*+]\s*)?\*\*(" + "|".join(REF_TIME_FIELDS) + r")\*\*\s*[:\uff1a]\s*(.*)$")
 STATUS_NOTE_SUFFIX = re.compile(r"[\uff08(][^\uff09)]*[\uff09)]\s*$")
-PLN_RECORD_FIELDS = ("建议复审日期", "落实记录", "废弃原因")
-# 属性行允许在 `**字段名**` 与冒号之间带一段括号说明，如 `**落实记录**（与定稿同步写入）：`
+PLN_RECORD_FIELDS = ("建议复审日期", "落实情况", "落实记录", "废弃原因")
+# `落实情况` 的封闭值域（房规：coding-system.md ·《PLN 治理规则》第 10 条）
+PLN_LANDING_VALUES = ("未落实", "已落实")
+# 属性行允许在 `**字段名**` 与冒号之间带一段括号说明，如 `**落实记录**（记录型字段）：`
 PLN_FIELD = re.compile(
     r"^\s*(?:[-*+]\s*)?\*\*(" + "|".join(PLN_RECORD_FIELDS) + r")\*\*"
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]\s*(.*)$")
@@ -127,6 +132,16 @@ ATTR_LINE_BARE_PLAIN = re.compile(
 ATTR_NAME_PROSE = re.compile(r"[\u3002\uff0c\uff1b\uff1f\uff01,;?!]")
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 INLINE_CODE = re.compile(r"`[^`]*`")
+# 属性行拆分：与 ATTR_LINE_OK 同口径，另捕获要素名与值（供三段校验取用）
+ATTR_NAME_VALUE = re.compile(
+    r"^\s*[-*+]\s+\*\*([^*\n]{1,24})\*\*"
+    r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]\s*(.*)$")
+# 属性行组三段（房规：coding-system.md ·《细项定义块形态》）
+GOV_SEGMENT = ("细项状态", "修订版本号", "最后修订日期")
+TRACE_SEGMENT = ("出处", "来源")          # 追溯段固定序：`出处` 在 `来源` 之前
+REV_VALUE = re.compile(r"^\d+$")
+DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+DATE_IN_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")   # 表格单元格内提取日期（可带后缀说明）
 
 CHANGELOG_HEADINGS = ("变更记录", "变更历史", "版本历史", "修订记录")
 ITEM_LIST_HEADINGS = ("细项编码清单", "细项清单", "全局编码索引", "编码索引")
@@ -388,6 +403,7 @@ class DesignDocChecker:
         self.item_def_doc: Dict[str, DocInfo] = {}   # 细项编码 → 定义所在文档
         self.doc_by_path: Dict[str, DocInfo] = {}    # 归一化路径 → 文档（跨文档锚点解析用）
         self.anchor_cache: Dict[str, Set[str]] = {}  # 路径 → 可达锚点集合
+        self.chg_date_cache: Dict[str, str] = {}     # 路径 → 变更记录最新日期
         self.issues: List[Dict] = []
         self.legacy_hits: Set[Tuple[str, str]] = set()   # (文件, 旧值 → 新值)
 
@@ -780,13 +796,16 @@ class DesignDocChecker:
                         reported_plan = True
                         self.add_issue("WARNING", "存在第二套状态枚举",
                                        f"{doc.path}: 表头 {header} 含 `规划状态`；PLN 只用标准四态"
-                                       " `细项状态`，规划处置改用记录型字段 `落实记录` / `废弃原因` 承载")
+                                       " `细项状态` 表达生命周期，是否已展开改用记录型字段"
+                                       " `落实情况` / `落实记录` 承载")
                     for _r, cells in rows:
                         if plan_col < len(cells):
                             v = norm(cells[plan_col])
                             if v in LEGACY_PLAN_MAP:
                                 self.legacy_hits.add(
-                                    (doc.path, f"规划状态 {v} → {LEGACY_PLAN_MAP[v]}"))
+                                    (doc.path,
+                                     f"规划状态 {v} → {LEGACY_PLAN_MAP[v]}"
+                                     f" + 落实情况 {'已落实' if v == '已落实' else '未落实'}"))
                     continue
                 status_col = col_index(header, "状态")
                 code_col = col_index(header, "编码")
@@ -990,8 +1009,12 @@ class DesignDocChecker:
                         self.add_issue("INFO", "计数器提示存在缺口",
                                        f"{doc.path}: {type_code} 下一可用编号 {raw} > 已用最大编号 {top:03d} + 1")
 
-    def _changelog_rows(self, doc: DocInfo) -> List[Tuple[str, str]]:
-        """取变更记录表，返回 [(版本号, 变更说明)]，按文件中的顺序（应为倒序）。"""
+    def _changelog_start(self, doc: DocInfo) -> Optional[int]:
+        """定位 `变更记录` 小节标题行下标，无则返回 None。
+
+        取**最后一个**匹配标题：同一文档可能出现多个含「变更记录」字样的标题
+        （如正文散文引用），真正的小节在后。
+        """
         heading_at = {i: norm(m.group(1)) for i, line in enumerate(doc.lines)
                       if (m := re.match(r"^\s{0,3}#{1,6}\s+(.*)$", line))}
         start = None
@@ -999,6 +1022,11 @@ class DesignDocChecker:
             text = heading_at.get(i, "")
             if text and any(k in text for k in CHANGELOG_HEADINGS):
                 start = i
+        return start
+
+    def _changelog_rows(self, doc: DocInfo) -> List[Tuple[str, str]]:
+        """取变更记录表，返回 [(版本号, 变更说明)]，按文件中的顺序（应为倒序）。"""
+        start = self._changelog_start(doc)
         if start is None:
             return []
         for idx, header, rows in iter_tables(doc.lines):
@@ -1016,6 +1044,41 @@ class DesignDocChecker:
                     out.append((ver, desc))
             return out
         return []
+
+    def _changelog_latest_date(self, doc: DocInfo) -> str:
+        """取 `变更记录` 表的最新日期（`YYYY-MM-DD`），无则返回空串。
+
+        扫全部日期单元格取**最大值**而不取首行：表 MUST 倒序，但存量文档存在
+        乱序与日期缺失，取最大值对两种情形都稳。供「`最后修订日期` MUST NOT 晚于
+        本文档 `变更记录` 最新日期」不变式使用（房规见
+        `references/status-definitions.md` ·《细项修订版本号》）。
+
+        按文档缓存：本方法由治理段校验逐细项调用，而结果是文档级不变量。
+        """
+        if doc.path in self.chg_date_cache:
+            return self.chg_date_cache[doc.path]
+        latest = self._scan_changelog_latest_date(doc)
+        self.chg_date_cache[doc.path] = latest
+        return latest
+
+    def _scan_changelog_latest_date(self, doc: DocInfo) -> str:
+        start = self._changelog_start(doc)
+        if start is None:
+            return ""
+        for idx, header, rows in iter_tables(doc.lines):
+            if idx <= start:
+                continue
+            date_col = col_index(header, "日期", "变更日期", "时间")
+            if date_col is None:
+                return ""
+            dates = []
+            for _r, cells in rows:
+                if date_col < len(cells):
+                    m = DATE_IN_TEXT.search(norm(cells[date_col]))
+                    if m:
+                        dates.append(m.group(0))
+            return max(dates) if dates else ""
+        return ""
 
     def check_version_flow(self) -> None:
         """版本机制：起始 v1.0、初稿期与定稿不变号、解冻才递增且基于历史最大号、
@@ -1201,6 +1264,7 @@ class DesignDocChecker:
                     continue        # 形态整体不合规，锚点与属性行不再重复报
                 self._check_def_anchor(doc, item, idx)
                 self._check_attr_lines(doc, item, idx)
+                self._check_attr_segments(doc, item, idx)
                 self._check_block_contiguity(doc, item, idx)
 
     def _check_def_anchor(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
@@ -1272,6 +1336,205 @@ class DesignDocChecker:
                                f"{doc.path}:{k + 1} `{item.code}` 定义块的属性行 "
                                f"`{line.strip()[:40]}` 既无列表符也无粗体；MUST 写成 "
                                f"`- **{bm.group(1).strip()}**：…`")
+
+    def _attr_group(self, doc: DocInfo, idx: int) -> List[Tuple[str, str, int]]:
+        """取标题行下方属性行组的 `(要素名, 值, 行号)`。
+
+        与 `_check_attr_lines` 同口径：组 = 标题行下方紧邻的连续非空行，缩进更深
+        者是多条目值的续行（如 `落实记录` 的分条），不计入属性行。
+        """
+        lines = doc.lines
+        j = idx + 1
+        while j < len(lines) and not lines[j].strip():
+            j += 1
+        group: List[int] = []
+        while j < len(lines) and lines[j].strip():
+            group.append(j)
+            j += 1
+        if not group:
+            return []
+        base = len(lines[group[0]]) - len(lines[group[0]].lstrip())
+        out: List[Tuple[str, str, int]] = []
+        for k in group:
+            if len(lines[k]) - len(lines[k].lstrip()) > base:
+                continue                # 续行（多条目值）
+            m = ATTR_NAME_VALUE.match(lines[k])
+            if m:
+                out.append((m.group(1).strip(), m.group(2).strip(), k + 1))
+        return out
+
+    def _check_attr_segments(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
+        """属性行组三段校验：治理段齐备且居首、追溯段居末且值形态互斥。
+
+        房规单点承载于 `references/coding-system.md` ·《细项定义块形态》与
+        《追溯类属性行命名》；本方法只执行校验。废弃登记字段的值形态一并在此判，
+        因为它同样落在属性行组内（紧随治理段）。
+        """
+        attrs = self._attr_group(doc, idx)
+        if not attrs:
+            return                      # 整组缺失属「缺属性行」，不在本方法职责内
+        self._check_gov_segment(doc, item, attrs)
+        self._check_trace_segment(doc, item, attrs)
+        self._check_replacement_value(doc, item, attrs)
+
+    def _check_gov_segment(self, doc: DocInfo, item: ItemInfo,
+                           attrs: List[Tuple[str, str, int]]) -> None:
+        """治理段：`细项状态` / `修订版本号` / `最后修订日期` MUST 齐备、按序居首。
+
+        `细项状态` 缺失或不在首行报 ERROR（它同时受 `references/status-definitions.md`
+        ·《状态即基线》的「承载位 MUST 两处」约束）；`修订版本号` / `最后修订日期`
+        是新增治理字段，缺失按《存量文档迁移》回填，故报 WARNING 不阻断。
+        """
+        names = [n for n, _v, _l in attrs]
+        pos: Dict[str, int] = {}
+        for i, n in enumerate(names):
+            pos.setdefault(n, i)
+        if "细项状态" not in pos:
+            self.add_issue("ERROR", "定义块缺细项状态属性行",
+                           f"{doc.path}:{item.line} `{item.code}`: 属性行组 MUST 以 "
+                           "`- **细项状态**：{值}` 开头——它与清单 / 索引表的状态列同为"
+                           "必备承载位，缺任一处即违规")
+            return
+        anchored = pos["细项状态"] == 0
+        if not anchored:
+            self.add_issue("ERROR", "细项状态未位于属性行组首行",
+                           f"{doc.path}:{attrs[pos['细项状态']][2]} `{item.code}`: "
+                           f"`细项状态` 排在第 {pos['细项状态'] + 1} 行（首行是 "
+                           f"`{names[0]}`）；治理段 MUST 按 {' / '.join(GOV_SEGMENT)} "
+                           "之序位于属性行组最前")
+        for want, slot in (("修订版本号", 1), ("最后修订日期", 2)):
+            if want not in pos:
+                self.add_issue("WARNING", "治理段缺行",
+                               f"{doc.path}:{item.line} `{item.code}`: 属性行组缺 "
+                               f"`- **{want}**：…`；治理段三行 MUST 齐备并按序居首，"
+                               "存量文档按《存量文档迁移》回填")
+            elif not anchored:
+                # 首行错位时槽位判定无意义：把 `细项状态` 移回首位，其余两行自然归槽。
+                # 连带报「顺序错乱」会把 1 处笔误放大成 3 条 ERROR，且后两条不可独立处置。
+                continue
+            elif pos[want] != slot:
+                self.add_issue("ERROR", "治理段顺序错乱",
+                               f"{doc.path}:{attrs[pos[want]][2]} `{item.code}`: "
+                               f"`{want}` 排在第 {pos[want] + 1} 行，MUST 排在第 "
+                               f"{slot + 1} 行（治理段固定序：{' / '.join(GOV_SEGMENT)}）")
+        for field, pat, msg in (("修订版本号", REV_VALUE,
+                                 "MUST 是单个正整数（新建为 1、每轮解冻 +1、单调不回退）"),
+                                ("最后修订日期", DATE_VALUE,
+                                 "MUST 为 YYYY-MM-DD")):
+            if field not in pos:
+                continue
+            val, lineno = attrs[pos[field]][1], attrs[pos[field]][2]
+            if val and "{" not in val and val.lower() not in EMPTY_MARKS \
+                    and not pat.match(val):
+                self.add_issue("WARNING", f"{field}取值非法",
+                               f"{doc.path}:{lineno} `{item.code}`: `{field}` "
+                               f"'{val[:24]}' {msg}")
+        self._check_rev_invariants(doc, item, attrs, pos)
+
+    def _check_rev_invariants(self, doc: DocInfo, item: ItemInfo,
+                              attrs: List[Tuple[str, str, int]],
+                              pos: Dict[str, int]) -> None:
+        """`修订版本号` / `最后修订日期` 与状态、变更记录的一致性不变式。
+
+        房规见 `references/status-definitions.md` ·《细项修订版本号》「状态与修订号
+        的一致性（可机检）」：`初稿` → rev **MUST** = 1；`草案` → **MUST** ≥ 2；
+        `最后修订日期` **MUST NOT** 晚于本文档 `变更记录` 的最新日期（细项修订必然
+        落在某个文档变更轮次内）。
+
+        取值非单一规范形态时跳过（模板占位符、`初稿 / 正式 / 草案 / 废弃` 一类枚举
+        示例、非数字 rev）——形态问题已由「取值非法」与状态值校验覆盖，本方法只判
+        语义一致性。报 WARNING 不阻断：两个字段本轮新增，存量文档待回填。
+        """
+        status = attrs[pos["细项状态"]][1].strip()
+        if "修订版本号" in pos:
+            val, lineno = attrs[pos["修订版本号"]][1].strip(), attrs[pos["修订版本号"]][2]
+            if val.isdigit():
+                rev = int(val)
+                if status == "初稿" and rev != 1:
+                    self.add_issue("WARNING", "修订版本号与状态不一致",
+                                   f"{doc.path}:{lineno} `{item.code}`: `细项状态` 为 "
+                                   f"`初稿` 而 `修订版本号` 为 {rev}；`初稿` = 从未解冻，"
+                                   "rev MUST 为 1（递增唯一时机是 `正式→草案` 解冻）")
+                elif status == "草案" and rev < 2:
+                    self.add_issue("WARNING", "修订版本号与状态不一致",
+                                   f"{doc.path}:{lineno} `{item.code}`: `细项状态` 为 "
+                                   f"`草案` 而 `修订版本号` 为 {rev}；`草案` 必经一轮解冻，"
+                                   "rev MUST ≥ 2（解冻时 +1）")
+        if "最后修订日期" in pos:
+            val, lineno = attrs[pos["最后修订日期"]][1].strip(), attrs[pos["最后修订日期"]][2]
+            m = DATE_IN_TEXT.search(val)
+            latest = self._changelog_latest_date(doc) if m else ""
+            if m and latest and m.group(0) > latest:
+                self.add_issue("WARNING", "最后修订日期晚于变更记录",
+                               f"{doc.path}:{lineno} `{item.code}`: `最后修订日期` "
+                               f"{m.group(0)} 晚于本文档 `变更记录` 最新日期 {latest}；"
+                               "细项修订必然落在某个文档变更轮次内，MUST 补登变更记录"
+                               "或修正日期")
+
+    def _check_trace_segment(self, doc: DocInfo, item: ItemInfo,
+                             attrs: List[Tuple[str, str, int]]) -> None:
+        """追溯段：`出处` → `来源` MUST 居属性行组末尾，且值形态互斥。
+
+        `来源` 的值 MUST 含标准链接，`出处` 的值 MUST NOT 含链接——值形态是二者的
+        判别依据。追溯段本身非强制（Trace 要素为 SHOULD），故仅当出现时校验。
+        """
+        names = [n for n, _v, _l in attrs]
+        hits = [(i, n) for i, n in enumerate(names) if n in TRACE_SEGMENT]
+        if not hits:
+            return
+        tail = len(names) - len(hits)   # 追溯段应有的起始下标
+        for k, (i, n) in enumerate(hits):
+            if i != tail + k:
+                self.add_issue("ERROR", "追溯段未位于属性行组末尾",
+                               f"{doc.path}:{attrs[i][2]} `{item.code}`: `{n}` 排在第 "
+                               f"{i + 1} 行、其后还有 {len(names) - i - 1} 行（如 "
+                               f"`{names[i + 1]}`）；追溯段 MUST 置于属性行组末尾，"
+                               "MUST NOT 夹在内容段中间")
+                break
+        order = [n for _i, n in hits]
+        expect = [n for n in TRACE_SEGMENT if n in order]
+        if order != expect:
+            self.add_issue("ERROR", "追溯段顺序错乱",
+                           f"{doc.path}:{attrs[hits[0][0]][2]} `{item.code}`: 追溯段为 "
+                           f"{' → '.join(order)}，MUST 为 {' → '.join(expect)}"
+                           "（`出处` 写自然语言、在 `来源` 之前）")
+        for i, n in hits:
+            val, lineno = attrs[i][1], attrs[i][2]
+            blank = (not val) or "{" in val or val.lower() in EMPTY_MARKS
+            if n == "来源" and not blank and not MD_LINK.search(val):
+                self.add_issue("ERROR", "来源值缺链接",
+                               f"{doc.path}:{lineno} `{item.code}`: `来源` 的值 "
+                               f"'{val[:30]}' MUST 含标准链接；编码依据用 `来源`、"
+                               "自然语言依据用 `出处`，MUST NOT 互换")
+            if n == "出处" and val and MD_LINK.search(val):
+                self.add_issue("ERROR", "出处值含链接",
+                               f"{doc.path}:{lineno} `{item.code}`: `出处` 的值 MUST NOT "
+                               "含链接——编码链接 MUST 由 `来源` 承载，`出处` 只写自然语言")
+
+    def _check_replacement_value(self, doc: DocInfo, item: ItemInfo,
+                                 attrs: List[Tuple[str, str, int]]) -> None:
+        """废弃登记字段 `替代方案` 的值 MUST 为标准链接或「无」。
+
+        房规见 `references/item-deprecation.md` ·《标准标记格式》。只写裸编码会让
+        引用方跳不到替代细项的定义位，写散文则侵占了 `废弃原因` 的职责——两者都使
+        该字段不可机检跟随，故与 `来源` 同族按值形态判定。字段缺失已由「废弃细项
+        缺少必需字段」报，本方法只在字段存在时判形态；非废弃细项误写该字段同样校验
+        （值形态与状态无关）。
+        """
+        for name, val, lineno in attrs:
+            if name != "替代方案":
+                continue
+            val = val.strip()
+            if (not val) or "{" in val or val.lower() in EMPTY_MARKS:
+                return                  # 模板占位符与「无」均合规
+            if not MD_LINK.search(val):
+                self.add_issue("ERROR", "替代方案值缺链接",
+                               f"{doc.path}:{lineno} `{item.code}`: `替代方案` 的值 "
+                               f"'{val[:30]}' MUST 为指向替代细项定义位的标准链接"
+                               "（带 `#{编码全小写}` 锚点），无替代时填「无」；MUST NOT "
+                               "只写裸编码，也 MUST NOT 写替代思路一类的散文（思路归 "
+                               "`废弃原因`）")
+            return
 
     def _check_block_contiguity(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
         """定义块三部分 MUST 连续：标题行与属性行组之间不得插入其他内容。
@@ -1541,6 +1804,40 @@ class DesignDocChecker:
                 self.add_issue("INFO", "细项待定稿",
                                f"{doc.path}: 仍为 '初稿'/'草案' 的细项（缺字段按 `变更记录` 判定）：{shown}")
 
+    def check_status_gating(self) -> None:
+        """层级门控：解冻自顶向下、定稿自底向上。
+
+        房规见 `references/status-definitions.md` ·《层级门控》：
+        - 解冻方向：细项解冻（`正式→草案`）MUST 先解冻所在文档，故「细项 `草案`
+          而文档 `正式`」是结构违规（ERROR）。
+        - 定稿方向：文档定稿 MUST 以「全部细项 ∈ {`正式`, `废弃`}」为前置，未满足时
+          MUST 列出并提示用户确认（WARNING，人可确认后放行）。
+
+        只针对**定义位**（`item.defined`）：登记视图 / 索引行不承载定义，重复计会
+        造成同一细项多次报告。缺 `细项状态` 者不参与判定（已由治理段校验报缺行）。
+        """
+        for doc in self.docs:
+            if doc.archived or doc.status != "正式":
+                continue
+            own = [it for it in self._doc_items(doc)
+                   if it.defined and it.path == doc.path]
+            drafts = sorted({it.code for it in own if it.item_status == "草案"})
+            if drafts:
+                shown = ", ".join(drafts[:20]) + (" ..." if len(drafts) > 20 else "")
+                self.add_issue("ERROR", "细项草案而文档正式",
+                               f"{doc.path}: 文档状态为 `正式`，但细项 {shown} 为 `草案`；"
+                               "解冻 MUST 自顶向下——细项 `正式→草案` 前 MUST 先解冻所在"
+                               "文档（文档版本号在此递增），或把细项回退 / 定稿")
+            pending = sorted({it.code for it in own
+                              if it.item_status in ("初稿", "草案")})
+            if pending:
+                shown = ", ".join(pending[:20]) + (" ..." if len(pending) > 20 else "")
+                self.add_issue("WARNING", "文档定稿前置未满足",
+                               f"{doc.path}: 文档状态为 `正式`，但仍有细项未定稿：{shown}；"
+                               "定稿 MUST 自底向上——文档 `→正式` MUST 以全部细项 "
+                               "`细项状态` ∈ {正式, 废弃} 为前置；向已 `正式` 的文档新增细项"
+                               "同受门控，MUST 先解冻文档")
+
     def check_layer_references(self) -> None:
         """层级引用关系：下层文档应引用上层文档编码。"""
         layer_order = ["L0", "L1", "L2", "L3", "L4", "L5", "L6"]
@@ -1709,10 +2006,11 @@ class DesignDocChecker:
         return uniq
 
     def check_pln_closure(self) -> None:
-        """PLN 闭环：未定论者有复审兜底，`正式` 者已落实且被目标细项回指。
+        """PLN 闭环：`落实情况` 与 `落实记录` 一致，未落实者有复审兜底，已落实者被回指。
 
-        `正式` = 已落实（定稿与落实同步）；仍处 `初稿` / `草案` 者 MUST 填
-        `建议复审日期`，到期只提示复核，**不自动改变状态**。
+        `细项状态` 与 `落实情况` **正交**：状态只表达想法记录自身的生命周期
+        （定论即 `正式`，与是否已展开无关），是否已展开由 `落实情况` 表达。
+        房规见 `references/coding-system.md` ·《规划项生命周期》。
         """
         done: Set[str] = set()
         for doc in self.docs:
@@ -1725,18 +2023,45 @@ class DesignDocChecker:
                 if owner is not None and owner is not doc:
                     continue        # 只在定义位判定，避免登记视图重复报告
                 done.add(item.code)
-                if item.item_status in ("初稿", "草案"):
-                    self._check_pln_review(doc, item)
-                elif item.item_status == "正式":
+                if self._pln_landed(doc, item):
                     self._check_pln_landing(doc, item)
+                elif item.item_status != "废弃":
+                    self._check_pln_review(doc, item)
+
+    def _pln_landed(self, doc: DocInfo, item: ItemInfo) -> bool:
+        """判定 PLN 是否已落实。
+
+        `落实情况` 是显式判据（封闭值域 `未落实` / `已落实`）。缺字段、占位符或
+        值非法时退回按 `落实记录` 是否指向目标细项推断，并提示补齐——存量文档
+        迁移期不阻断。
+        """
+        where = f"{doc.path}:{item.line} `{item.code}`"
+        val = self._pln_field(item.code, "落实情况") or ""
+        if val.startswith("已落实"):
+            return True
+        if val.startswith("未落实"):
+            return False
+        targets = self._pln_targets(item.code)
+        inferred = "已落实" if targets else "未落实"
+        if not val or "{" in val or val.strip().lower() in EMPTY_MARKS:
+            self.add_issue("INFO", "PLN 缺落实情况",
+                           f"{where}: MUST 补 `落实情况`（`未落实` / `已落实`）——它是「想法是否"
+                           "已全部展开」的显式终局判据，与 `细项状态` 正交；本轮暂按 `落实记录` "
+                           f"推断为「{inferred}」")
+        else:
+            self.add_issue("WARNING", "PLN 落实情况取值非法",
+                           f"{where}: `落实情况` '{val}' 不在封闭值域 "
+                           f"{' / '.join(PLN_LANDING_VALUES)} 内；本轮暂按 `落实记录` "
+                           f"推断为「{inferred}」")
+        return bool(targets)
 
     def _check_pln_review(self, doc: DocInfo, item: ItemInfo) -> None:
-        """未定论的 PLN：`建议复审日期` 必填；已到期则提示重新评估（INFO，不阻断）。"""
+        """未落实的 PLN：`建议复审日期` 必填；已到期则提示重新评估（INFO，不阻断）。"""
         where = f"{doc.path}:{item.line} `{item.code}`"
         raw = self._pln_field(item.code, "建议复审日期")
         if not raw or "{" in raw or raw.strip().lower() in EMPTY_MARKS:
             self.add_issue("INFO", "PLN 缺建议复审日期",
-                           f"{where}: `细项状态` 为 `{item.item_status}`（尚未定论），"
+                           f"{where}: `落实情况` 为 `未落实` 且 `细项状态` 非 `废弃`，"
                            "MUST 填 `建议复审日期` 作为复审兜底")
             return
         m = re.search(r"(\d{4}-\d{2}-\d{2})", raw)
@@ -1753,16 +2078,18 @@ class DesignDocChecker:
         if due < datetime.now().date():
             self.add_issue("INFO", "PLN 待复审",
                            f"{where}: 建议复审日期 {m.group(1)} 已过，请重新评估——"
-                           "展开为具体细项（同步定稿为 `正式`）、延后（更新日期）或 `废弃`")
+                           "展开为具体细项（置 `落实情况：已落实` 并写 `落实记录`）、"
+                           "延后（更新日期）或 `废弃`")
 
     def _check_pln_landing(self, doc: DocInfo, item: ItemInfo) -> None:
-        """`正式` 的 PLN：落实记录非空，且每个目标细项的定义块回指本 PLN。"""
+        """`已落实` 的 PLN：`落实记录` 非空，且每个目标细项的定义块回指本 PLN。"""
         where = f"{doc.path}:{item.line} `{item.code}`"
         targets = self._pln_targets(item.code)
         if not targets:
-            self.add_issue("WARNING", "正式 PLN 未落实",
-                           f"{where}: `正式` 表示已落实，但未见 `落实记录` 指向目标细项；"
-                           "尚未落实者应停在 `初稿` 并填 `建议复审日期`")
+            self.add_issue("ERROR", "已落实但无落实记录",
+                           f"{where}: `落实情况` 为 `已落实`，但 `落实记录` 未指向任何目标"
+                           "细项——`已落实` MUST 有非空 `落实记录`；尚在分批展开者应为"
+                           " `未落实`（`落实记录` MAY 先记过程条目）")
             return
         for t in targets:
             tdoc = self.item_def_doc.get(t)
@@ -1817,6 +2144,7 @@ class DesignDocChecker:
         self.check_dec_layer()
         self.check_deprecation()
         self.check_draft_finalization()
+        self.check_status_gating()
         self.check_layer_references()
         self.check_legacy_statuses()
         self.check_title_lock()
