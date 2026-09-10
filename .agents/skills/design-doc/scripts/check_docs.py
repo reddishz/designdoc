@@ -103,18 +103,25 @@ UNFREEZE_KW = re.compile(r"解冻|正式\s*(?:→|->)\s*(?:草稿|草案)|转(?:
 ROLLBACK_KW = re.compile(r"回退|放弃本轮修订|放弃修订|撤回修订")
 INIT_KW = re.compile(r"初始|新建|创建|初稿")
 
+# 项目编码前缀（可选段）：2-5 位、MUST 以大写字母开头、其余各位 MAY 为大写字母或数字。
+# 房规见 references/coding-system.md ·《项目编码规则》；本文件所有编码正则共用本常量，
+# 字符集放宽或收紧只改这一处。
+PROJECT_PREFIX = r"(?:[A-Z][A-Z0-9]{1,4}-)?"
+
 CODE_TOKEN = re.compile(
-    r"(?<![A-Za-z0-9_-])((?:[A-Z]{2,4}-)?([A-Z]{1,5}[0-9]?)-(\d{2,4}))(?![0-9A-Za-z])"
+    r"(?<![A-Za-z0-9_-])(" + PROJECT_PREFIX + r"([A-Z]{1,5}[0-9]?)-(\d{2,4}))(?![0-9A-Za-z])"
 )
-ITEM_BOLD_DEF = re.compile(r"^\s*[-*+]\s+\*\*((?:[A-Z]{2,4}-)?[A-Z]{1,5}[0-9]?-\d{2,4})\*\*\s*[:：]")
+ITEM_BOLD_DEF = re.compile(
+    r"^\s*[-*+]\s+\*\*(" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4})\*\*\s*[:：]")
 FENCE = re.compile(r"^\s*(`{3,}|~{3,})")
 FENCE_CLOSE = re.compile(r"^\s*(`{3,}|~{3,})\s*$")
 SEP_CELL = re.compile(r"^:?-{2,}:?$")
 VERSION_RE = re.compile(r"^v\d+\.\d+$")
-CODE_CELL = re.compile(r"(?:[A-Z]{2,4}-)?([A-Z]{1,5}[0-9]?)-(\d{2,4})(?=$|[ \uff1a:\uff08(\-\u2014\u3001,])")
+CODE_CELL = re.compile(
+    PROJECT_PREFIX + r"([A-Z]{1,5}[0-9]?)-(\d{2,4})(?=$|[ \uff1a:\uff08(\-\u2014\u3001,])")
 BOLD_ATTR = re.compile(r"^\s*(?:[-*+]\s*)?\*\*(细项状态|状态)\*\*\s*[:\uff1a]\s*(.*)$")
 TITLE_LINK = re.compile(
-    r"\[((?:[A-Z]{2,4}-)?[A-Z]{1,5}[0-9]?-\d{2,4})\uff08([^\uff09]+)\uff09\]")
+    r"\[(" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4})\uff08([^\uff09]+)\uff09\]")
 REF_TIME_FIELDS = ("来源版本", "获取日期", "最近核验日期", "复查周期", "失效风险")
 REF_FIELD = re.compile(
     r"^\s*(?:[-*+]\s*)?\*\*(" + "|".join(REF_TIME_FIELDS) + r")\*\*\s*[:\uff1a]\s*(.*)$")
@@ -550,7 +557,11 @@ class DesignDocChecker:
                            f"{path}: 字段 `文档编号` 应用 `文档编码`（与索引表列名、编码体系术语一致）")
 
         if doc.doc_code:
-            first = doc.doc_code.split("-")[0]
+            # 文档编码 = `{项目编码}-{类型}-{序号}` 或 `{类型}-{序号}`；类型段是序号前那
+            # 一段。取首段会把项目编码当成文档类型（如 `W3G-ADR-001` 得到 `W3G`），
+            # 使层级与文档形态双双丢失、后续按形态分支的校验全部失效。
+            parts = doc.doc_code.split("-")
+            first = parts[-2] if len(parts) >= 2 else parts[0]
             if first in DOC_CODE_PREFIXES:
                 doc.status_category = first
                 doc.layer = first if first.startswith("L") else ""
@@ -726,7 +737,7 @@ class DesignDocChecker:
             if not bm:
                 return ""
             head = bm.group(1)
-        m = re.match(r"((?:[A-Z]{2,4}-)?[A-Z]{1,5}[0-9]?-\d{2,4})(?![0-9A-Za-z])", head)
+        m = re.match(r"(" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4})(?![0-9A-Za-z])", head)
         if not m:
             return ""
         code = m.group(1)
@@ -784,9 +795,10 @@ class DesignDocChecker:
                                f"{doc.path}: 未找到元信息表 `文档编码`；"
                                "若属词汇表等辅助文件可忽略")
                 continue
-            if not re.fullmatch(r"(?:L[0-6]|ADR|REF)-\d{3}", doc.doc_code):
+            if not re.fullmatch(PROJECT_PREFIX + r"(?:L[0-6]|ADR|REF)-\d{3}", doc.doc_code):
                 self.add_issue("ERROR", "文档编码格式错误",
-                               f"{doc.path}: {doc.doc_code}（应为 L{{层级}}-三位序号 / ADR-三位序号 / REF-三位序号）")
+                               f"{doc.path}: {doc.doc_code}（应为 L{{层级}}-三位序号 / ADR-三位序号 / "
+                               "REF-三位序号；启用项目编码时前缀加在其前，如 `ERP-L2-003`）")
             if not name.startswith(doc.doc_code + "-"):
                 self.add_issue("WARNING", "文件名与文档编码不一致",
                                f"{doc.path}: 文件名应以 `{doc.doc_code}-` 开头")
@@ -1956,7 +1968,7 @@ class DesignDocChecker:
             else:
                 bm = ITEM_BOLD_DEF.match(line)
                 text = line[bm.end():] if bm else ""
-            text = re.sub(r"^(?:[A-Z]{2,4}-)?[A-Z]{1,5}[0-9]?-\d{2,4}\s*[:\uff1a\-\u2014]?\s*", "", text)
+            text = re.sub(r"^" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4}\s*[:\uff1a\-\u2014]?\s*", "", text)
             return norm(text)
         return ""
 
@@ -2034,7 +2046,7 @@ class DesignDocChecker:
         """从一段文本里取出全部已知的**细项**编码（不含文档编码）。"""
         out: List[str] = []
         for m in re.finditer(
-                r"((?:[A-Z]{2,4}-)?[A-Z]{1,5}[0-9]?-\d{2,4})(?![0-9A-Za-z])", text):
+                r"(" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4})(?![0-9A-Za-z])", text):
             code, t, _n = self._split_code(m.group(1))
             if code and t in self.type_codes and code not in out:
                 out.append(code)

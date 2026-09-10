@@ -23,7 +23,9 @@ CHECKER = ROOT.parent / "check_docs.py"
 
 SECTION = re.compile(r"^###\s+(?:ERROR|WARNING|INFO)")
 ITEM = re.compile(r"^\d+\.\s+(.+?)\s*$")
-FIXTURE = re.compile(r"(L\d+-\d+-[a-z0-9\-]+)\.md")
+# 夹具名 MAY 带项目编码前缀（如 `W3T-L2-929-prefix-digit.md`），前缀字符集与
+# check_docs.py 的 PROJECT_PREFIX 同口径。
+FIXTURE = re.compile(r"((?:[A-Z][A-Z0-9]{1,4}-)?L\d+-\d+-[a-z0-9\-]+)\.md")
 
 # 夹具极简（无变更记录表、无清单表、无完整章节、编码从 9xx 起跳）必然触发的
 # 结构性问题，与本回归集要验证的规则无关，一律不计入断言。
@@ -69,6 +71,10 @@ EXPECT = {
     # 反例覆盖三类野属性名：散文槽位、规范关键字 / 写作提要词、跨类型码误用
     "L2-926-attr-wild":           {"属性名未在定义集内"},
     "L2-927-attr-prose-ok":       set(),
+    # —— 项目编码前缀（字符集见 coding-system.md ·《项目编码规则》）——
+    # 带前缀时：文档编码的层级段 MUST 取自序号前一段，细项编码 MUST 切为
+    # 项目编码 + 类型码（前缀含数字时不得被当成类型码的一部分）
+    "W3T-L2-929-prefix-digit":    set(),
     # —— 全合规正例：仅余「目标细项未回指 PLN」，因夹具内 FR 刻意不回指 ——
     "L2-901-ok-full":             {"落实目标未回指 PLN"},
 }

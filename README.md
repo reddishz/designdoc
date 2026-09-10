@@ -46,11 +46,11 @@ AI 会自动：
 |------|------|
 | `doc_mode` | `single-app` 或 `multi-app` |
 | `project_name` | 项目 / 应用名称 |
-| `project_code` | 2-4 位大写字母的项目编码；留空即不启用前缀 |
+| `project_code` | 2-5 位、大写字母开头（其余位可数字）的项目编码；留空即不启用前缀 |
 | `scope` | 应用范围说明 |
 | `author` / `maintainer` | 文档默认作者 |
 
-多应用模式下，顶层 `ued/README.md` 只维护总入口与应用注册表，各 `ued/{app-name}/README.md` 维护自己的元信息、编码计数器与全局索引。区块写法见 [README 模板](./.agents/skills/design-doc/assets/templates/readme-template.md)。
+多应用模式下，顶层 `ued/README.md` 只维护总入口与应用注册表，各 `ued/{app-name}/README.md` 维护自己的元信息、编码计数器与全局索引。区块写法见 [README 模板](./.agents/skills/design-doc/assets/templates/readme-template.md)；项目编码的字符集与消歧约束见 [coding-system.md · 项目编码规则](./.agents/skills/design-doc/references/coding-system.md#项目编码规则)。
 
 若 `README.md` 不存在或未声明相应字段，skill 先按默认值继续工作，再提醒补齐：
 - `author` = `[designdoc](https://github.com/reddishz/designdoc)`（本技能标识）

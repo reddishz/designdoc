@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "3.7"
+  version: "3.8"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -61,10 +61,7 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 
 随后 AI **SHOULD** 提醒补充或编辑对应作用域的 `README.md` 元信息区块，特别是当检测到目录中存在多个应用或新增独立应用迹象时。
 
-**项目编码规则（高级模式下）**：
-- 长度：2-4位大写字母
-- 只能包含字母 A-Z
-- 有效示例：`CRM`、`ERP`、`CMS`、`COM`、`HRS`
+**项目编码规则（高级模式下）**：2-5 位、大写字母开头，其余各位可为大写字母或数字（如 `CRM`、`ERP`、`W3T`）；MUST NOT 与类型码同形，也 MUST NOT 形如 `L` 加数字。完整字符集与消歧约束见 [coding-system.md · 项目编码规则](references/coding-system.md#项目编码规则)。
 
 **README 元信息最小字段（RECOMMENDED）**：
 - `project_name`
@@ -387,7 +384,7 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 - **引用反查**：`python3 scripts/check_docs.py -p <ued 路径> --refs {编码}`，列出该编码的全部定义 / 登记 / 引用位置；`初稿` 期改标题或删除前 **MUST** 先执行。
 - **模板哨兵自检**：`python3 scripts/check_docs.py --check-templates`，校验 `assets/templates/` 的哨兵成对、整篇型模板唯一 H1、无残留外层围栏、使用说明未混入待复制正文。
 - **模板实例化预览**：`python3 scripts/check_docs.py --instantiate {模板文件名} [--segment {段名}]`，剥除哨兵输出实例化后的正文，用于评估渲染效果；多段模板（`ref.md`、`readme-template.md`）用 `--segment` 取单段。
-- **规则回归集**：`python3 scripts/tests/run_fixtures.py`，用 [scripts/tests/fixtures/](scripts/tests/fixtures/) 下 26 条最小文档夹具断言 20 条校验规则的命中与不命中（每条夹具只验证一条规则，跑台只断言目标问题名、忽略夹具极简结构带来的噪声）。修改 `check_docs.py` 后 **MUST** 跑一遍，退出码非 0 即规则退化；新增校验规则 **MUST** 同时补正反夹具并登记入跑台的期望表。
+- **规则回归集**：`python3 scripts/tests/run_fixtures.py`，用 [scripts/tests/fixtures/](scripts/tests/fixtures/) 下 27 条最小文档夹具断言 20 条校验规则的命中与不命中（每条夹具只验证一条规则，跑台只断言目标问题名、忽略夹具极简结构带来的噪声）。修改 `check_docs.py` 后 **MUST** 跑一遍，退出码非 0 即规则退化；新增校验规则 **MUST** 同时补正反夹具并登记入跑台的期望表。
 - 该脚本只输出**静态提示**，不代替人工内容审查，也不代替使用者对未冻结对象（`初稿` / `草案`）的定稿确认。
 
 ## 使用场景
