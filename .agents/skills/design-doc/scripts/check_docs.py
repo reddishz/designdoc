@@ -13,13 +13,14 @@ DesignDoc 文档检查工具
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
-- README 全局索引升序、编码缺口、计数器一致性
+- README 全局索引升序、编码缺口（ERROR：作废项原地保留仍占编号，不存在合法缺口）、
+  计数器恒等式（`下一可用编号` = 已用最大编号 + 1）
 - 零章节编号引用门禁、文件名与结构合规
 - 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、属性名白名单
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
 - 属性行组三段：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、追溯段（`出处` → `来源`）居末且值形态互斥
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期
-- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）
+- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）、依据方向（`正式`/`草案` 细项依据 `初稿` 细项 → 提示确认）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
@@ -172,6 +173,15 @@ TRACE_SEGMENT = ("出处", "来源")          # 追溯段固定序：`出处` �
 REV_VALUE = re.compile(r"^\d+$")
 DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATE_IN_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")   # 表格单元格内提取日期（可带后缀说明）
+# 《依据方向门控》的豁免字段 = 追溯段（`出处` / `来源`）+ 记录型字段 `落实记录`。
+# 豁免名单的房规单点见 status-definitions.md ·《层级门控》；本处只做匹配、不另立名单。
+DEP_EXEMPT_ATTR = re.compile(
+    r"^\s*(?:[-*+]\s*)?\*\*(" + "|".join(TRACE_SEGMENT + ("落实记录",)) + r")\*\*"
+    r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
+
+# 《首要约束》第 3 条：审查 / 校验的定稿提示 MUST 含「不得作为实现依据」这一句。
+# 房规单点见 SKILL.md ·《首要约束（MANDATORY）》；本处只做落地、不改口径。
+NOT_IMPL_BASIS = "；未冻结对象不得作为实现依据（约束本体见 SKILL.md · 首要约束）"
 
 CHANGELOG_HEADINGS = ("变更记录", "变更历史", "版本历史", "修订记录")
 ITEM_LIST_HEADINGS = ("细项编码清单", "细项清单", "全局编码索引", "编码索引")
@@ -189,6 +199,15 @@ TPL_USAGE_HEAD = re.compile(r"^#{1,6}\s+使用说明\s*$")
 TPL_FRAGMENT_FILES = {"project-registry.md"}
 # 目录内的索引文件，不是模板，不含哨兵
 TPL_NON_FILES = {"index.md"}
+
+
+def _series_of(code: str) -> str:
+    """编码的序列键 = 去掉序号后的前段（**含**项目前缀）。
+
+    编号序列 MUST 按序列键分组，不能只按类型码：`W3T-FR-001` 与 `FR-001` 是两条
+    独立序列，合并会把 `{1,2,3}` 与 `{10..15}` 拼成一条而误报缺口与乱序。
+    """
+    return code.rsplit("-", 1)[0]
 
 
 def load_type_codes() -> Set[str]:
@@ -1004,42 +1023,55 @@ class DesignDocChecker:
                                    "全局编码索引中")
 
     def check_index_order_and_gaps(self) -> None:
-        """编码升序与缺口：清单/索引表内同类型码必须升序；`正式` 基线序列不得有缺口。"""
+        """编码升序与缺口：清单/索引表内同序列必须升序；已分配序列不得有缺口。
+
+        缺口是 **ERROR**：编号一经分配即永久占用，作废项原地保留、仍占编号，因此
+        不存在「合法缺口」（房规见 references/coding-system.md ·《编码生命周期》）。
+        """
         for doc in self.docs:
             for section, entries in doc.code_sections:
-                by_type: Dict[str, List[Tuple[int, int, str]]] = defaultdict(list)
+                by_series: Dict[str, List[Tuple[int, int, str]]] = defaultdict(list)
                 for lineno, code, num in entries:
-                    m = CODE_TOKEN.match(code)
-                    if not m:
+                    if not CODE_TOKEN.match(code):
                         continue
-                    by_type[m.group(2)].append((lineno, num, code))
-                for type_code, rows in sorted(by_type.items()):
+                    by_series[_series_of(code)].append((lineno, num, code))
+                for series, rows in sorted(by_series.items()):
                     nums = [r[1] for r in rows]
                     if any(b < a for a, b in zip(nums, nums[1:])):
                         detail = ", ".join(c for _, _, c in rows)
                         self.add_issue("WARNING", "编码未按升序排列",
-                                       f"{doc.path}（{section}）: {type_code} 序列乱序 -> {detail}")
+                                       f"{doc.path}（{section}）: {series} 序列乱序 -> {detail}")
                     dup = sorted({c for _, _, c in rows if [c2 for _, _, c2 in rows].count(c) > 1})
                     if dup:
                         self.add_issue("WARNING", "清单内重复编码",
                                        f"{doc.path}（{section}）: {', '.join(dup)}")
 
-        scope_codes: Dict[str, Dict[str, Set[int]]] = defaultdict(lambda: defaultdict(set))
+        scope_series: Dict[str, Dict[str, Set[int]]] = defaultdict(lambda: defaultdict(set))
+        series_type: Dict[str, str] = {}
         for doc in self.docs:
             scope = self._scope_of(doc.path)
             for item in doc.items:
-                scope_codes[scope][item.type_code].add(item.number)
-        for scope, by_type in sorted(scope_codes.items()):
-            for type_code, filled in sorted(by_type.items()):
-                if type_code in DOC_CODE_PREFIXES or not filled:
+                series = _series_of(item.code)
+                scope_series[scope][series].add(item.number)
+                series_type[series] = item.type_code
+        for scope, by_series in sorted(scope_series.items()):
+            for series, filled in sorted(by_series.items()):
+                if not filled:
+                    continue
+                # 文档编码（L0-L6 / ADR / REF）不参与细项编号连续性判定；判定用真实
+                # 类型码而非序列键——带项目前缀时序列键形如 `ERP-L2`，不在该集合内
+                if series_type.get(series, series) in DOC_CODE_PREFIXES:
                     continue
                 upper = max(filled)
                 missing = [n for n in range(1, upper + 1) if n not in filled]
                 if missing:
-                    shown = ", ".join(f"{type_code}-{n:03d}" for n in missing[:12])
-                    self.add_issue("INFO", "编码序列存在缺口",
-                                   f"{scope or '.'}: {type_code} 缺少 {shown}"
-                                   "（若为 `初稿` 期删除后可回收编号则无需处理，否则须补索引或废弃记录）")
+                    shown = ", ".join(f"{series}-{n:03d}" for n in missing[:12])
+                    self.add_issue("ERROR", "编码序列存在缺口",
+                                   f"{scope or '.'}: {series} 缺少 {shown}；编号一经分配即永久"
+                                   "占用、作废项原地保留仍占编号，因此不存在合法缺口——"
+                                   "MUST 补齐索引条目或废弃记录（存量库的补法见 "
+                                   "status-definitions.md ·《存量文档迁移》），"
+                                   "MUST NOT 让后续分配跳过")
 
     def _scope_of(self, path: str) -> str:
         """作用域 = `ued/` 下的顶层目录；多应用模式为应用目录，单应用模式归并为根（`""`）。"""
@@ -1054,7 +1086,13 @@ class DesignDocChecker:
         return "" if re.fullmatch(r"L[0-6](-.*)?", top) else top
 
     def check_counters(self) -> None:
-        """README 编码计数器与已用编号的一致性。"""
+        """README 编码计数器恒等式：`下一可用编号` MUST = 已用最大编号 + 1。
+
+        两端都是 **ERROR**：计数器落后会让新项撞上已分配编号（编号永不复用），超前则
+        意味着序列有缺口，而缺口不存在合法形态（房规见 references/coding-system.md
+        ·《编码生命周期》）。已用编号按序列键（含项目前缀）归集，与计数器表的
+        `类型码` 列（不含前缀）做后缀匹配。
+        """
         for doc in self.docs:
             for _idx, header, rows in iter_tables(doc.lines):
                 type_col = col_index(header, "类型码")
@@ -1068,7 +1106,8 @@ class DesignDocChecker:
                         continue
                     for item in other.items:
                         if item.type_code in self.type_codes:
-                            max_used[item.type_code] = max(max_used[item.type_code], item.number)
+                            series = _series_of(item.code)
+                            max_used[series] = max(max_used[series], item.number)
                 for _row_idx, cells in rows:
                     if max(type_col, next_col) >= len(cells):
                         continue
@@ -1080,14 +1119,26 @@ class DesignDocChecker:
                         self.add_issue("INFO", "计数器未填写",
                                        f"{doc.path}: {type_code} 的 `下一可用编号` 为 '{raw}'")
                         continue
+                    matched = sorted(s for s in max_used
+                                     if s == type_code or s.endswith("-" + type_code))
+                    if len(matched) > 1:
+                        self.add_issue("ERROR", "同一类型码混用项目前缀",
+                                       f"{doc.path}: {type_code} 在本作用域内同时出现 "
+                                       f"{', '.join(matched)}，计数器无法确定指向哪条序列；"
+                                       "同一作用域同一类型码 MUST 只用一种前缀形态")
+                        continue
                     counter = int(raw)
-                    top = max_used.get(type_code, 0)
-                    if top and counter <= top:
-                        self.add_issue("WARNING", "计数器落后于实际编号",
-                                       f"{doc.path}: {type_code} 下一可用编号 {raw} <= 已用最大编号 {top:03d}")
-                    elif top and counter > top + 1:
-                        self.add_issue("INFO", "计数器提示存在缺口",
-                                       f"{doc.path}: {type_code} 下一可用编号 {raw} > 已用最大编号 {top:03d} + 1")
+                    top = max_used.get(matched[0], 0) if matched else 0
+                    if counter <= top:
+                        self.add_issue("ERROR", "计数器落后于实际编号",
+                                       f"{doc.path}: {type_code} 下一可用编号 {raw} <= 已用最大编号 {top:03d}；"
+                                       "编号永不复用，按此计数器分配会撞上已占用编号")
+                    elif counter > top + 1:
+                        self.add_issue("ERROR", "计数器提示存在缺口",
+                                       f"{doc.path}: {type_code} 下一可用编号 {raw} > 已用最大编号 {top:03d} + 1；"
+                                       "作废项原地保留仍占编号，恒等式 MUST 成立；存量库的缺口"
+                                       "补法见 status-definitions.md ·《存量文档迁移》，"
+                                       "MUST NOT 调低计数器去迁就缺口")
 
     def _changelog_start(self, doc: DocInfo) -> Optional[int]:
         """定位 `变更记录` 小节标题行下标，无则返回 None。
@@ -1863,7 +1914,10 @@ class DesignDocChecker:
                                        f"{'、'.join(missing)}")
                 if item.item_status and item.item_status != "废弃":
                     for i, line in enumerate(doc.lines):
-                        if line.lstrip().startswith("#") and item.code in line and "~~已废弃~~" in line:
+                        # 用定义位取码而非子串包含：`FR-930` 是 `NFR-930` 的子串
+                        if line.lstrip().startswith("#") \
+                                and self._heading_code(line) == item.code \
+                                and "~~已废弃~~" in line:
                             self.add_issue("WARNING", "细项废弃标记与状态不一致",
                                            f"{doc.path}: {item.code} 标题带 `~~已废弃~~` "
                                            f"但 `细项状态` 为 '{item.item_status}'")
@@ -1871,7 +1925,8 @@ class DesignDocChecker:
 
         # 引用完整性：活跃文档引用已废弃对象却未标注
         targets = deprecated_doc_codes | deprecated_item_codes
-        patterns = {code: re.compile(re.escape(code) + r"(?![0-9A-Za-z-])") for code in targets}
+        patterns = {code: re.compile(r"(?<![0-9A-Za-z_-])" + re.escape(code)
+                                     + r"(?![0-9A-Za-z-])") for code in targets}
         for doc in self.docs:
             if doc.archived or doc.status == "废弃":
                 continue
@@ -1881,7 +1936,11 @@ class DesignDocChecker:
                 for code, pat in sorted(patterns.items()):
                     if code == doc.doc_code or code in reported or not pat.search(line):
                         continue
-                    if lineno in own[code] or "~~" in line or "废弃" in line:
+                    if lineno in own[code] or "~~" in line:
+                        continue
+                    # 行内已标注废弃 / 作废（如 `变更记录` 里的登记行，规范本就要求记入）
+                    # 不算「把已废弃对象当活对象引用」
+                    if "废弃" in line or "作废" in line:
                         continue
                     reported.add(code)
                     self.add_issue("WARNING", "活跃文档引用已废弃对象",
@@ -1896,18 +1955,19 @@ class DesignDocChecker:
             if doc.status == "初稿":
                 self.add_issue("INFO", "文档待定稿",
                                f"{doc.path}: 状态为 '初稿'，稳定后请经确认定稿"
-                               "（初稿→正式，不递增版本号）")
+                               "（初稿→正式，不递增版本号）" + NOT_IMPL_BASIS)
             elif doc.status == "草案":
                 self.add_issue("INFO", "草案待定稿",
                                f"{doc.path}: 状态为 '草案'（已从 `正式` 解冻），修订完成后请定稿"
                                "（草案→正式，沿用当前版本号）；放弃本轮修订可回退，"
-                               "变更记录 MUST 完整保留被弃版本号条目")
+                               "变更记录 MUST 完整保留被弃版本号条目" + NOT_IMPL_BASIS)
             pending = sorted({item.code for item in doc.items
                               if item.item_status in ("", "初稿", "草案")})
             if pending:
                 shown = ", ".join(pending[:30]) + (" ..." if len(pending) > 30 else "")
                 self.add_issue("INFO", "细项待定稿",
-                               f"{doc.path}: 仍为 '初稿'/'草案' 的细项（缺字段按 `变更记录` 判定）：{shown}")
+                               f"{doc.path}: 仍为 '初稿'/'草案' 的细项（缺字段按 `变更记录` "
+                               f"判定）：{shown}" + NOT_IMPL_BASIS)
 
     def check_status_gating(self) -> None:
         """层级门控：解冻自顶向下、定稿自底向上。
@@ -1942,6 +2002,73 @@ class DesignDocChecker:
                                "定稿 MUST 自底向上——文档 `→正式` MUST 以全部细项 "
                                "`细项状态` ∈ {正式, 废弃} 为前置；向已 `正式` 的文档新增细项"
                                "同受门控，MUST 先解冻文档")
+
+    def check_dependency_direction(self) -> None:
+        """依据方向门控：`正式` / `草案` 细项 MUST NOT 依据 `初稿` 细项。
+
+        房规见 `references/status-definitions.md` ·《层级门控》。`初稿` 的标题与业务
+        含义仍可改，据它定稿等于把基线建在流沙上（WARNING，与「文档定稿前置未满足」
+        同级，人可确认后放行）。
+
+        排除三类行：
+        - 定义位标题行（本项自身，不是依据）；
+        - **追溯段与记录型字段的值**（`DEP_EXEMPT_ATTR`）：`PLN-001 落实记录 → FR-033` 与
+          `FR-033 来源 → PLN-001` 若同受约束，互相回指的两项会谁都定不了稿。豁免只覆盖
+          该属性行及其**缩进续行**（值 MAY 换行写成嵌套列表）；缩进回落即视为已进入正文
+          段、照常判——追溯段固定在属性行组末尾、正文段在其后，按「段」豁免会把正文段
+          整段吞掉，使常态定义块完全不受检；
+        - 表格中以本项编码为首列的登记行（本项的登记视图，不是依据）。
+
+        只针对**定义位**（`item.defined`），与 `check_status_gating` 同口径。
+        """
+        status_of: Dict[str, str] = {}
+        for doc in self.docs:
+            for it in self._doc_items(doc):
+                if it.defined and it.item_status:
+                    status_of[it.code] = it.item_status
+
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            for it in self._doc_items(doc):
+                if not (it.defined and it.path == doc.path):
+                    continue
+                if it.item_status not in ("正式", "草案"):
+                    continue
+                hits: Dict[str, int] = {}
+                exempt = -1               # >=0：正处在豁免字段的缩进续行中，值 = 该属性行的缩进
+                prev = 0
+                for lineno in sorted(self._own_lines(doc, it.code, block=True)):
+                    line = doc.lines[lineno - 1]
+                    if lineno != prev + 1:
+                        exempt = -1       # 行号不连续（如别处的登记行），不继承段状态
+                    prev = lineno
+                    if self._heading_code(line) == it.code:
+                        exempt = -1
+                        continue
+                    if DEP_EXEMPT_ATTR.match(line):
+                        exempt = len(line) - len(line.lstrip())
+                        continue
+                    if exempt >= 0:
+                        if not line.strip():
+                            continue      # 空行不断定，等下一个非空行再判归属
+                        if len(line) - len(line.lstrip()) > exempt:
+                            continue      # 缩进更深的续行（嵌套列表 / 折行值），仍属该字段
+                        exempt = -1       # 缩进回落：已进入正文段，本行照常判
+                    if line.lstrip().startswith("|"):
+                        cells = split_row(line)
+                        if any(self._split_code(c)[0] == it.code for c in cells[:2]):
+                            continue
+                    for m in CODE_TOKEN.finditer(line):
+                        ref = m.group(1)
+                        if ref != it.code and status_of.get(ref) == "初稿":
+                            hits.setdefault(ref, lineno)
+                if hits:
+                    shown = ", ".join(f"{c}（:{ln}）" for c, ln in sorted(hits.items())[:8])
+                    self.add_issue("WARNING", "正式或草案细项依据初稿细项",
+                                   f"{doc.path}: `{it.code}`（{it.item_status}）依据仍为 `初稿` 的 "
+                                   f"{shown}；`初稿` 的标题与业务含义仍可改，据它定稿等于把基线"
+                                   "建在流沙上——MUST 先把被依据项定稿，或移除该依据")
 
     def check_layer_references(self) -> None:
         """层级引用关系：下层文档应引用上层文档编码。"""
@@ -2210,7 +2337,7 @@ class DesignDocChecker:
     def find_references(self, code: str) -> List[Tuple[str, int, str, str]]:
         """反查某编码的全部出现位置：[(文件, 行号, 定义/登记|引用, 原文)]。
 
-        改标题与 `初稿` 期删除前 MUST 先执行本反查，并一并修改全部引用处。
+        改标题与作废前 MUST 先执行本反查，并一并修改全部引用处。
         """
         pat = re.compile(r"(?<![0-9A-Za-z_-])" + re.escape(code) + r"(?![0-9A-Za-z])")
         out: List[Tuple[str, int, str, str]] = []
@@ -2250,6 +2377,7 @@ class DesignDocChecker:
         self.check_deprecation()
         self.check_draft_finalization()
         self.check_status_gating()
+        self.check_dependency_direction()
         self.check_layer_references()
         self.check_legacy_statuses()
         self.check_title_lock()
@@ -2494,7 +2622,7 @@ def main() -> int:
     parser.add_argument("-o", "--output", help="输出报告到文件")
     parser.add_argument("-v", "--verbose", action="store_true", help="显示详细信息")
     parser.add_argument("--refs", metavar="CODE",
-                        help="反查指定编码的全部出现位置（改标题 / `初稿` 期删除前 MUST 先执行）")
+                        help="反查指定编码的全部出现位置（改标题 / 任何状态作废前 MUST 先执行）")
     parser.add_argument("--check-templates", action="store_true",
                         help="校验 assets/templates/ 的哨兵房规（成对、唯一 H1、无残留外层围栏）")
     parser.add_argument("--instantiate", metavar="TPL",
@@ -2519,7 +2647,7 @@ def main() -> int:
         if not hits:
             print(f"未找到编码 {args.refs} 的任何出现位置（请确认编码与 --path 范围）")
             return 1
-        print(f"🔎 {args.refs} 共出现 {len(hits)} 处（改标题 / 删除前需一并处理）：")
+        print(f"🔎 {args.refs} 共出现 {len(hits)} 处（改标题 / 作废前需一并处理）：")
         for path, lineno, kind, text in hits:
             print(f"  [{kind}] {path}:{lineno}  {text[:120]}")
         return 0
