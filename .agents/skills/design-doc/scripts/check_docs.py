@@ -15,7 +15,8 @@ DesignDoc 文档检查工具
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
 - README 全局索引升序、编码缺口、计数器一致性
 - 零章节编号引用门禁、文件名与结构合规
-- 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、三部分连续
+- 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、属性名白名单
+  （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
 - 属性行组三段：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、追溯段（`出处` → `来源`）居末且值形态互斥
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期
 - 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）
@@ -51,6 +52,24 @@ FALLBACK_TYPE_CODES = {
 }
 DOC_CODE_PREFIXES = {"L0", "L1", "L2", "L3", "L4", "L5", "L6", "ADR", "REF"}
 LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
+
+# 回退快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
+# 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
+FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "最后修订日期",
+                        "废弃时间", "废弃原因", "替代方案", "出处", "来源")
+FALLBACK_TYPE_ATTRS: Dict[str, Tuple[str, ...]] = {
+    "GOL": (), "STK": ("目标",), "SCN": ("参与者",),
+    "FR": ("优先级", "处理规则"), "NFR": ("类别", "度量标准"),
+    "UC": ("参与者",), "PRN": (), "DEC": (), "CMP": ("满足需求",),
+    "IF": ("类型", "所属组件"), "FLW": (), "ALG": ("复杂度",),
+    "DOM": ("所属组件",), "ACT": (), "ASM": (), "RSK": ("概率",),
+    "MET": (), "TC": ("测试类型", "测试优先级", "验收标准"),
+    "AC": ("验证方式",), "CON": ("取值范围",), "RUL": ("验证方式",),
+    "PLN": ("优先级", "预期落点", "落实情况", "登记日期", "建议复审日期",
+            "落实记录"),
+    "REF": ("类型", "链接", "原始链接", "本地副本", "来源版本", "获取日期",
+            "最近核验日期", "复查周期", "失效风险"),
+}
 
 # 标准四态：唯一生命周期状态集合（L0-L6 / ADR / REF / PLN 共用，不设专属枚举）
 DOC_STATUSES = ["初稿", "正式", "草案", "废弃"]
@@ -115,7 +134,7 @@ EMPTY_MARKS = ("无", "暂无", "-", "—", "n/a")
 # ---- 定义块形态与锚点（房规：coding-system.md ·《细项定义块形态》《锚点定义位》）----
 ANCHOR_TAG = re.compile(r"""^\s*<a\s+(?:id|name)\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
 HEADING_LINE = re.compile(r"^\s{0,3}(#{1,6})\s+(.*)$")
-# 合规属性行：列表项 + 要素名加粗（允许字段名后带括号说明）
+# 合规属性行：列表项 + 属性名加粗（允许字段名后带括号说明）
 ATTR_LINE_OK = re.compile(
     r"^\s*[-*+]\s+\*\*[^*\n]{1,24}\*\*"
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
@@ -123,19 +142,23 @@ ATTR_LINE_OK = re.compile(
 ATTR_LINE_NO_BULLET = re.compile(
     r"^\s{0,3}\*\*[^*\n]{1,24}\*\*"
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
-# 禁止形态二：列表项但要素名未加粗
+# 禁止形态二：列表项但属性名未加粗
 ATTR_LINE_NO_BOLD = re.compile(r"^\s*[-*+]\s+([^*\n\[\]#]{1,16})\s*[:\uff1a]")
-# 禁止形态三：裸段落且要素名未加粗（如 `所属组件：…`）。限定短要素名、
+# 禁止形态三：裸段落且属性名未加粗（如 `所属组件：…`）。限定短属性名、
 # 不以数字开头（避开 `1. 想法内容：` 类续行）、不含句读（避开散文段落）。
 ATTR_LINE_BARE_PLAIN = re.compile(
     r"^\s{0,3}([^*\s>#\-|{\d][^*\n|]{0,11})\s*[:\uff1a]\s*\S")
 ATTR_NAME_PROSE = re.compile(r"[\u3002\uff0c\uff1b\uff1f\uff01,;?!]")
 MD_LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 INLINE_CODE = re.compile(r"`[^`]*`")
-# 属性行拆分：与 ATTR_LINE_OK 同口径，另捕获要素名与值（供三段校验取用）
+# 属性行拆分：与 ATTR_LINE_OK 同口径，另捕获属性名与值（供三段校验取用）
 ATTR_NAME_VALUE = re.compile(
     r"^\s*[-*+]\s+\*\*([^*\n]{1,24})\*\*"
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]\s*(.*)$")
+# 《属性行定义集（封闭）》表格解析：固定属性表整格是一个 code span，
+# 自有属性表按「`名` → 值形态」的书写式抽名（`—` 即无自有属性，自然抽不到）。
+CODE_SPAN_ONLY = re.compile(r"`([^`]+)`")
+ATTR_NAME_ARROW = re.compile(r"`([^`]+)`\s*\u2192")
 # 属性行组三段（房规：coding-system.md ·《细项定义块形态》）
 GOV_SEGMENT = ("细项状态", "修订版本号", "最后修订日期")
 TRACE_SEGMENT = ("出处", "来源")          # 追溯段固定序：`出处` 在 `来源` 之前
@@ -190,6 +213,50 @@ def load_type_codes() -> Set[str]:
         if re.fullmatch(r"[A-Z]{1,5}[0-9]?", head):
             codes.add(head)
     return codes or set(FALLBACK_TYPE_CODES)
+
+
+def load_attr_whitelist() -> Tuple[Tuple[str, ...], Dict[str, Tuple[str, ...]]]:
+    """读《属性行定义集（封闭）》的属性名白名单；失败时回退内置快照。
+
+    返回 `(固定属性名, {类型码: 自有属性名})`。只读属性名，不解析值形态——值形态由
+    各项专用校验执行（如 `_check_trace_segment` 判 `来源` / `出处` 的链接互斥）。
+    """
+    try:
+        text = CODING_SYSTEM_MD.read_text(encoding="utf-8")
+    except OSError:
+        return FALLBACK_FIXED_ATTRS, FALLBACK_TYPE_ATTRS
+    fixed: List[str] = []
+    typed: Dict[str, Tuple[str, ...]] = {}
+    sub = ""
+    in_scope = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            in_scope = stripped.startswith("### 属性行定义集")
+            sub = ""
+            continue
+        if not in_scope:
+            continue
+        if stripped.startswith("#### "):
+            sub = stripped
+            continue
+        cells = split_row(line)
+        if len(cells) < 2 or is_sep_row(cells):
+            continue
+        head = cells[0].replace("*", "")
+        if head in ("段位", "类型码"):
+            continue
+        if sub.startswith("#### 固定属性"):
+            m = CODE_SPAN_ONLY.fullmatch(cells[1])
+            if m and m.group(1) not in fixed:
+                fixed.append(m.group(1))
+        elif sub.startswith("#### 类型码自有属性"):
+            if re.fullmatch(r"[A-Z]{1,5}[0-9]?", head):
+                names = ATTR_NAME_ARROW.findall(cells[1])
+                typed[head] = tuple(dict.fromkeys(names))
+    if not fixed or not typed:
+        return FALLBACK_FIXED_ATTRS, FALLBACK_TYPE_ATTRS
+    return tuple(fixed), typed
 
 
 def split_row(line: str) -> List[str]:
@@ -397,6 +464,7 @@ class DesignDocChecker:
         self.ued_path = Path(ued_path)
         self.type_codes = load_type_codes()
         self.known_types = self.type_codes | DOC_CODE_PREFIXES | LEGACY_TYPE_CODES
+        self.fixed_attrs, self.type_attrs = load_attr_whitelist()
         self.docs: List[DocInfo] = []
         self.codes: Set[str] = set()
         self.code_to_doc: Dict[str, DocInfo] = {}
@@ -1258,9 +1326,10 @@ class DesignDocChecker:
                     self.add_issue(
                         "ERROR", "细项定义块形态不合规",
                         f"{doc.path}:{item.line} `{item.code}`: 以 `- **{item.code}**：…` "
-                        "粗体列表项充当定义位——编码不进文档大纲、无具名属性行可承载五要素、"
-                        "不产生任何锚点；MUST 改为「`<a id>` 锚点行 + 标题行（`{编码}：{标题}`，"
-                        "全角冒号）+ `- **{要素名}**：{值}` 属性行」")
+                        "粗体列表项充当定义位——编码不进文档大纲、无属性行组与正文段可"
+                        "承载五要素、不产生任何锚点；MUST 改为四部分：「`<a id>` 锚点行 + "
+                        "标题行（`{编码}：{标题}`，全角冒号）+ `- **{属性名}**：{值}` 属性行组 "
+                        "+ 正文段」")
                     continue        # 形态整体不合规，锚点与属性行不再重复报
                 self._check_def_anchor(doc, item, idx)
                 self._check_attr_lines(doc, item, idx)
@@ -1291,7 +1360,7 @@ class DesignDocChecker:
                            "cmark-gfm 渲染器下不生效）")
 
     def _check_attr_lines(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
-        """属性行形态：MUST 为 `- **{要素名}**：{值}`；禁裸段落、禁要素名未加粗。
+        """属性行形态：MUST 为 `- **{属性名}**：{值}`；禁裸段落、禁属性名未加粗。
 
         只判定标题行下方**紧邻的连续非空行**（即属性行组）；组内缩进更深的行是
         多条目值的续行（如 `落实记录` / `业务流程` 的分条），不属属性行，跳过。
@@ -1320,13 +1389,13 @@ class DesignDocChecker:
                 self.add_issue("ERROR", "属性行写成裸段落",
                                f"{doc.path}:{k + 1} `{item.code}` 定义块的属性行 "
                                f"`{line.strip()[:40]}` 缺列表符；MUST 为列表项 "
-                               "`- **{要素名}**：{值}`（一个要素独占一行）")
+                               "`- **{属性名}**：{值}`（一个属性独占一行）")
                 continue
             m = ATTR_LINE_NO_BOLD.match(line)
             if m and "{" not in m.group(1):
-                self.add_issue("WARNING", "属性行要素名未加粗",
+                self.add_issue("WARNING", "属性名未加粗",
                                f"{doc.path}:{k + 1} `{item.code}` 定义块的属性行 "
-                               f"`{line.strip()[:40]}` 要素名未加粗；MUST 写成 "
+                               f"`{line.strip()[:40]}` 属性名未加粗；MUST 写成 "
                                f"`- **{m.group(1).strip()}**：…`")
                 continue
             bm = ATTR_LINE_BARE_PLAIN.match(line)
@@ -1338,7 +1407,7 @@ class DesignDocChecker:
                                f"`- **{bm.group(1).strip()}**：…`")
 
     def _attr_group(self, doc: DocInfo, idx: int) -> List[Tuple[str, str, int]]:
-        """取标题行下方属性行组的 `(要素名, 值, 行号)`。
+        """取标题行下方属性行组的 `(属性名, 值, 行号)`。
 
         与 `_check_attr_lines` 同口径：组 = 标题行下方紧邻的连续非空行，缩进更深
         者是多条目值的续行（如 `落实记录` 的分条），不计入属性行。
@@ -1376,6 +1445,28 @@ class DesignDocChecker:
         self._check_gov_segment(doc, item, attrs)
         self._check_trace_segment(doc, item, attrs)
         self._check_replacement_value(doc, item, attrs)
+        self._check_attr_whitelist(doc, item, attrs)
+
+    def _check_attr_whitelist(self, doc: DocInfo, item: ItemInfo,
+                              attrs: List[Tuple[str, str, int]]) -> None:
+        """属性名 MUST 取自《属性行定义集（封闭）》：固定属性 + 本类型码自有属性。
+
+        白名单外的属性名一律 ERROR：未登记的语义 MUST 改写进正文段（属性行组后空一行，
+        形态自由），MUST NOT 自造属性名承载——自造名使该要素脱离机检与跨文档比对。
+        """
+        own = self.type_attrs.get(item.type_code, ())
+        allowed = set(self.fixed_attrs) | set(own)
+        hint = "、".join(f"`{n}`" for n in own) if own else "无自有属性"
+        for name, _value, lineno in attrs:
+            if name in allowed:
+                continue
+            self.add_issue(
+                "ERROR", "属性名未在定义集内",
+                f"{doc.path}:{lineno} `{item.code}` 定义块的属性行 `{name}` 未在"
+                "《属性行定义集（封闭）》登记；该类型码允许的自有属性为 "
+                f"{hint}（固定属性为治理段 / 废弃登记段 / 追溯段八项）。"
+                "未登记的语义 MUST 改写进正文段（属性行组后空一行，形态自由），"
+                "MUST NOT 自造属性名")
 
     def _check_gov_segment(self, doc: DocInfo, item: ItemInfo,
                            attrs: List[Tuple[str, str, int]]) -> None:
@@ -1492,7 +1583,10 @@ class DesignDocChecker:
                                "MUST NOT 夹在内容段中间")
                 break
         order = [n for _i, n in hits]
-        expect = [n for n in TRACE_SEGMENT if n in order]
+        # `来源` MAY 多行（每行一个来源对象），故期望序按实际出现次数展开同名项
+        expect: List[str] = []
+        for seg_name in TRACE_SEGMENT:
+            expect.extend([seg_name] * order.count(seg_name))
         if order != expect:
             self.add_issue("ERROR", "追溯段顺序错乱",
                            f"{doc.path}:{attrs[hits[0][0]][2]} `{item.code}`: 追溯段为 "
@@ -1537,7 +1631,7 @@ class DesignDocChecker:
             return
 
     def _check_block_contiguity(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
-        """定义块三部分 MUST 连续：标题行与属性行组之间不得插入其他内容。
+        """定义块前三部分 MUST 连续：标题行与属性行组之间不得插入其他内容。
 
         房规见 `references/coding-system.md` ·《细项定义块形态》。MUST 读
         `raw_lines`——`doc.lines` 已把围栏抹成空行，插在标题与属性行之间的
@@ -1580,10 +1674,9 @@ class DesignDocChecker:
                     self.add_issue(
                         "ERROR", "定义块顺序被打断",
                         f"{doc.path}:{item.line} `{item.code}`: 标题行与属性行组之间插入了"
-                        f"{insert_kind}（第 {insert_at} 行起）；定义块三部分 MUST 连续，其间"
-                        "只允许空行——图表、表格、子标题与散文段落无具名要素可承载，夹在"
-                        "中间会使五要素不可机检。MUST 把叙述与图示移到属性行组之后，或作为"
-                        "某个属性行的值")
+                        f"{insert_kind}（第 {insert_at} 行起）；定义块前三部分 MUST 连续，"
+                        "其间只允许空行——夹在中间会使属性行组的边界不可机检。MUST 把叙述"
+                        "与图示移到属性行组之后的正文段")
                 return
             sub = HEADING_LINE.match(line)
             if ANCHOR_TAG.match(line) or (sub and level and len(sub.group(1)) <= level):

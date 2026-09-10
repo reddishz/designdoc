@@ -6,7 +6,7 @@
 
 | 文件 | 内容 |
 |------|------|
-| [coding-system.md](coding-system.md) | 文档编码、细项编码、默认/扩展前缀、编码锁定与修改操作矩阵、引用规则 |
+| [coding-system.md](coding-system.md) | 文档编码、细项编码、默认/扩展前缀、属性行定义集（封闭）与定义块形态、编码锁定与修改操作矩阵、引用规则 |
 | [layer-system.md](layer-system.md) | L0–L6 层级定义、目录结构与命名规则 |
 | [status-definitions.md](status-definitions.md) | 状态即基线、标准四态（初稿/正式/草案/废弃）、字段按写入者分类、锁定矩阵（要素 × 状态）、记录型字段与流转伴随字段、流转与变更流程/版本号、存量文档迁移映射 |
 | [item-deprecation.md](item-deprecation.md) | 细项废弃：原地标注、标记与引用追溯 |

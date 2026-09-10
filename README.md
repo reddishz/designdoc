@@ -53,8 +53,10 @@ AI 会自动：
 多应用模式下，顶层 `ued/README.md` 只维护总入口与应用注册表，各 `ued/{app-name}/README.md` 维护自己的元信息、编码计数器与全局索引。区块写法见 [README 模板](./.agents/skills/design-doc/assets/templates/readme-template.md)。
 
 若 `README.md` 不存在或未声明相应字段，skill 先按默认值继续工作，再提醒补齐：
-- `author` = `产品架构组`
+- `author` = `[designdoc](https://github.com/reddishz/designdoc)`（本技能标识）
 - `project_code` = `(空)`（默认不启用项目编码前缀，采用简洁编码格式，如 `FR-001`）
+
+默认值以 [SKILL.md · AI 运行时配置解析规则](./.agents/skills/design-doc/SKILL.md#ai-运行时配置解析规则) 为准。
 
 ## 文档层级
 
@@ -86,7 +88,7 @@ AI 会自动：
 
 - [SKILL.md](./.agents/skills/design-doc/SKILL.md) — 完整规范说明（入口）
 - [规范索引](./.agents/skills/design-doc/references/README.md) — `references/` 总览
-- [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档与细项编码规则
+- [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档与细项编码规则、属性行定义集与定义块形态
 - [层级体系](./.agents/skills/design-doc/references/layer-system.md) — L0-L6 层级与目录结构
 - [状态定义](./.agents/skills/design-doc/references/status-definitions.md) — 标准四态（初稿/正式/草案/废弃）、锁定矩阵、版本号递增与回退
 - [术语与概念](./.agents/skills/design-doc/references/glossary-conventions.md) — 词汇表与细项编码分工
