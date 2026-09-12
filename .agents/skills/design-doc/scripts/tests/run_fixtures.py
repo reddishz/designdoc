@@ -2,7 +2,9 @@
 """`check_docs.py` 的规则回归集跑台。
 
 `fixtures/` 下每条夹具是一个最小 L2 文档，刻意触发（或刻意不触发）某一条校验
-规则。改动 `check_docs.py` 后跑一遍，可确认既有规则没有静默退化。
+规则。`skill_link_fixtures/` 验证技能包内部 `#锚点` 可达性（正例零命中、反例必报）。
+跑台末尾对本包执行 `--check-templates` 冒烟。改动 `check_docs.py` 后跑一遍，可确认
+既有规则没有静默退化。
 
 跑台只断言**目标问题名**（见 `EXPECT`），忽略夹具因极简结构必然产生的结构性
 噪声（见 `NOISE`）——夹具只为验证单条规则，不追求自身是一份合规文档。
@@ -19,6 +21,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 FIXTURES = ROOT / "fixtures"
+LINK_FIXTURES = ROOT / "skill_link_fixtures"
 CHECKER = ROOT.parent / "check_docs.py"
 
 SECTION = re.compile(r"^###\s+(?:ERROR|WARNING|INFO)")
@@ -26,6 +29,14 @@ ITEM = re.compile(r"^\d+\.\s+(.+?)\s*$")
 # 夹具名 MAY 带项目编码前缀（如 `W3T-L2-929-prefix-digit.md`），前缀字符集与
 # check_docs.py 的 PROJECT_PREFIX 同口径。
 FIXTURE = re.compile(r"((?:[A-Z][A-Z0-9]{1,4}-)?L\d+-\d+-[a-z0-9\-]+)\.md")
+LINK_FILE = re.compile(r"([^/\\]+\.md):")
+
+# 技能包锚点夹具 → 期望命中的目标问题名（空集 = 正例，MUST 零命中）。
+LINK_EXPECT = {
+    "ok-link.md": set(),
+    "target.md": set(),
+    "broken-link.md": {"技能包锚点不可达", "技能包链目标不存在"},
+}
 
 # 夹具极简（无变更记录表、无清单表、无完整章节、编码从 9xx 起跳）必然触发的
 # 结构性问题，与本回归集要验证的规则无关，一律不计入断言。
@@ -114,6 +125,76 @@ def parse(report):
     return {k: v - NOISE for k, v in got.items()}
 
 
+def _load_checker():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("check_docs", CHECKER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def parse_skill_links(issues):
+    """把技能包锚点问题归到夹具文件名。"""
+    got = defaultdict(set)
+    for issue in issues:
+        m = LINK_FILE.search(issue["description"])
+        if m:
+            got[m.group(1)].add(issue["title"])
+    return dict(got)
+
+
+def run_skill_link_fixtures(verbose):
+    """正反夹具：ok-link 零命中；broken-link 必报不可达与缺文件。"""
+    check_docs = _load_checker()
+    issues = []
+    check_docs.check_package_internal_links(
+        LINK_FIXTURES, lambda lv, title, desc: issues.append(
+            {"level": lv, "title": title, "description": desc}),
+        exclude_tests=False)
+    got = parse_skill_links(issues)
+    on_disk = {p.name for p in LINK_FIXTURES.glob("*.md")}
+    fails = []
+    for name in sorted(LINK_EXPECT):
+        want, have = LINK_EXPECT[name], got.get(name, set())
+        missing, unexpected = want - have, have - want
+        if missing or unexpected:
+            fails.append((name, missing, unexpected))
+        if verbose:
+            mark = "FAIL" if (missing or unexpected) else "ok  "
+            print(f"  [{mark}] {name}")
+    orphan = sorted(on_disk - set(LINK_EXPECT))
+    stale = sorted(set(LINK_EXPECT) - on_disk)
+    print(f"技能包锚点夹具 {len(LINK_EXPECT)} 条，通过 "
+          f"{len(LINK_EXPECT) - len(fails)} 条")
+    for name, missing, unexpected in fails:
+        print(f"  FAIL {name}")
+        if missing:
+            print(f"       漏报：{'、'.join(sorted(missing))}")
+        if unexpected:
+            print(f"       误报：{'、'.join(sorted(unexpected))}")
+    for name in orphan:
+        print(f"  FAIL {name}：夹具存在但未在 LINK_EXPECT 登记期望")
+        fails.append((name, set(), set()))
+    for name in stale:
+        print(f"  FAIL {name}：LINK_EXPECT 登记的夹具已不在 skill_link_fixtures/")
+        fails.append((name, set(), set()))
+    return 1 if (fails or orphan or stale) else 0
+
+
+def run_check_templates_smoke():
+    """本包 `--check-templates` 必须通过（哨兵 + 技能包内部锚点）。"""
+    proc = subprocess.run(
+        [sys.executable, str(CHECKER), "--check-templates"],
+        capture_output=True, text=True, timeout=120)
+    if proc.returncode != 0:
+        sys.stdout.write(proc.stdout)
+        sys.stderr.write(proc.stderr)
+        print("FAIL --check-templates 冒烟未通过")
+        return 1
+    print("--check-templates 冒烟通过")
+    return 0
+
+
 def main():
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
     proc = subprocess.run(
@@ -152,7 +233,10 @@ def main():
         print(f"  FAIL {stem}：夹具存在但未在 EXPECT 登记期望")
     for stem in stale:
         print(f"  FAIL {stem}：EXPECT 登记的夹具已不在 fixtures/")
-    return 1 if (fails or orphan or stale) else 0
+    rc = 1 if (fails or orphan or stale) else 0
+    rc |= run_skill_link_fixtures(verbose)
+    rc |= run_check_templates_smoke()
+    return 1 if rc else 0
 
 
 if __name__ == "__main__":

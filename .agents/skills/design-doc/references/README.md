@@ -6,7 +6,7 @@
 
 | 文件 | 内容 |
 |------|------|
-| [object-model.md](object-model.md) | 对象与字段写入者、锁定矩阵、编码含义锁定、修改操作矩阵、动作 |
+| [object-model.md](object-model.md) | 对象与字段写入者、锁定矩阵、动作 |
 | [coding-system.md](coding-system.md) | 文档/细项编码形态、类型码表、属性行定义集（封闭）、定义块形态、引用与分配 |
 | [type-profiles.md](type-profiles.md) | `IF` / `ACT` / `PLN` 专论，ADR 与 DEC 分界 |
 | [layer-system.md](layer-system.md) | L0–L6 层级定义、目录结构与命名规则 |
@@ -27,4 +27,4 @@
 | 资源 | 说明 |
 |------|------|
 | [flowchart-guide.md](../assets/guides/flowchart-guide.md) | 流程图：箭头 / 表格 / Mermaid 选用规则 |
-| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（`--refs {编码}` 引用反查、`--check-templates` 模板哨兵、`--instantiate [--segment]` 实例化预览）；只执行规则，不定义规则 |
+| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（`--refs {编码}` 引用反查、`--check-templates` 模板哨兵与技能包内部锚点、`--instantiate [--segment]` 实例化预览）；只执行规则，不定义规则 |

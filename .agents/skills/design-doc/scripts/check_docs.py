@@ -24,7 +24,7 @@ DesignDoc 文档检查工具
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
-- `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏）
+- `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏），以及技能包内部 `文件.md#锚点` 可达性
 - `--instantiate TPL`：剥除哨兵输出模板实例化后的正文，供预览评估
 
 规则本体的唯一完整表述在 `references/` 专项文件内，本脚本只执行校验、不重复定义
@@ -40,7 +40,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
+from urllib.parse import unquote
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 CODING_SYSTEM_MD = SKILL_ROOT / "references" / "coding-system.md"
@@ -333,6 +334,124 @@ def heading_slug(text: str) -> str:
     s = s.replace("`", "").replace("*", "")
     s = re.sub(r"[^\w\u4e00-\u9fff\- ]", "", s)
     return s.replace(" ", "-")
+
+
+def collect_md_anchors(text: str) -> Set[str]:
+    """显式 `<a id>` / `<a name>` ∪ 标题 GFM slug（重复标题加 `-1`、`-2` 后缀）。"""
+    out: Set[str] = set()
+    seen: Dict[str, int] = {}
+    for line in mask_fences(text):
+        for m in ANCHOR_TAG.finditer(line):
+            out.add(m.group(1).strip().lower())
+        hm = HEADING_LINE.match(line)
+        if not hm:
+            continue
+        base = heading_slug(hm.group(2))
+        n = seen.get(base, 0)
+        out.add(base if n == 0 else f"{base}-{n}")
+        seen[base] = n + 1
+    return out
+
+
+def iter_skill_markdown(root: Path, *, exclude_tests: bool = True) -> List[Path]:
+    """技能包内待扫的 Markdown。默认跳过 `scripts/tests` 与夹具目录。"""
+    root = root.resolve()
+    out: List[Path] = []
+    for path in sorted(root.rglob("*.md")):
+        try:
+            rel = path.resolve().relative_to(root)
+        except ValueError:
+            continue
+        if exclude_tests and any(
+                part in {"tests", "fixtures", "__pycache__"} for part in rel.parts):
+            continue
+        out.append(path.resolve())
+    return out
+
+
+def check_package_internal_links(
+    root: Path,
+    add_issue: Callable[[str, str, str], None],
+    *,
+    exclude_tests: bool = True,
+) -> int:
+    """扫描技能包 Markdown 的内部 `file.md#锚点` / 同文档 `#锚点`。
+
+    跳过：外部 URL、`{占位符}`、解析后落在 `root` 之外的路径（示例 ued 文档）、
+    代码围栏与行内代码、以及 `assets/templates/` 复制源模板中的同文档锚点
+    （那些是实例化后的细项示例，模板自身没有对应标题）。
+    """
+    root = root.resolve()
+    files = iter_skill_markdown(root, exclude_tests=exclude_tests)
+    texts: Dict[Path, str] = {}
+    anchors: Dict[Path, Set[str]] = {}
+    for path in files:
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as exc:
+            add_issue("ERROR", "读取技能包文档失败", f"{path}: {exc}")
+            continue
+        texts[path] = text
+        anchors[path] = collect_md_anchors(text)
+
+    tpl_dir = (root / "assets" / "templates").resolve()
+    for path, text in texts.items():
+        is_copy_tpl = False
+        try:
+            path.relative_to(tpl_dir)
+            is_copy_tpl = path.name not in TPL_NON_FILES
+        except ValueError:
+            pass
+        for lineno, line in enumerate(mask_fences(text), 1):
+            if not line:
+                continue
+            for m in MD_LINK.finditer(INLINE_CODE.sub("", line)):
+                target = m.group(1)
+                if target.startswith(("http://", "https://", "mailto:", "//")):
+                    continue
+                if "{" in target or "}" in target:
+                    continue
+                path_part, _, frag = target.partition("#")
+                if not frag:
+                    continue
+                frag = unquote(frag).strip().lower()
+                if not frag:
+                    continue
+                if path_part:
+                    rel = path_part.split("?")[0]
+                    dest = (path.parent / rel).resolve()
+                    try:
+                        dest.relative_to(root)
+                    except ValueError:
+                        continue
+                    if dest.suffix.lower() != ".md":
+                        if not dest.exists():
+                            add_issue(
+                                "ERROR", "技能包链目标不存在",
+                                f"{path}:{lineno}: 链接 `{target}` 指向的文件不存在")
+                        continue
+                    if not dest.exists():
+                        add_issue(
+                            "ERROR", "技能包链目标不存在",
+                            f"{path}:{lineno}: 链接 `{target}` 指向的文件不存在")
+                        continue
+                    if dest not in anchors:
+                        continue
+                else:
+                    if is_copy_tpl:
+                        continue
+                    dest = path
+                if frag in anchors.get(dest, set()):
+                    continue
+                try:
+                    rel_dest = str(dest.relative_to(root))
+                except ValueError:
+                    rel_dest = dest.name
+                add_issue(
+                    "ERROR", "技能包锚点不可达",
+                    f"{path}:{lineno}: 链接 `{target}` 的锚点 `#{frag}` 在 "
+                    f"{rel_dest} 中无对应目标（既无 `<a id>`，也无同名标题 slug）")
+    return len(files)
 
 
 def template_segments(lines: List[str]) -> Tuple[List[Dict], List[str]]:
@@ -1026,7 +1145,7 @@ class DesignDocChecker:
         """编码升序与缺口：清单/索引表内同序列必须升序；已分配序列不得有缺口。
 
         缺口是 **ERROR**：编号一经分配即永久占用，作废项原地保留、仍占编号，因此
-        不存在「合法缺口」（房规见 references/object-model.md ·《编码含义锁定》）。
+        不存在「合法缺口」（房规见 references/object-model.md ·《锁定矩阵》）。
         """
         for doc in self.docs:
             for section, entries in doc.code_sections:
@@ -1090,7 +1209,7 @@ class DesignDocChecker:
 
         两端都是 **ERROR**：计数器落后会让新项撞上已分配编号（编号永不复用），超前则
         意味着序列有缺口，而缺口不存在合法形态（房规见 references/object-model.md
-        ·《编码含义锁定》）。已用编号按序列键（含项目前缀）归集，与计数器表的
+        ·《锁定矩阵》）。已用编号按序列键（含项目前缀）归集，与计数器表的
         `类型码` 列（不含前缀）做后缀匹配。
         """
         for doc in self.docs:
@@ -2496,6 +2615,7 @@ class TemplateChecker:
         self.tpl_dir = Path(tpl_dir) if tpl_dir else TEMPLATE_DIR
         self.issues: List[Dict] = []
         self.checked = 0
+        self.link_files = 0
 
     def add_issue(self, level: str, title: str, description: str) -> None:
         self.issues.append({"level": level, "title": title, "description": description})
@@ -2512,6 +2632,7 @@ class TemplateChecker:
                 self._check_one(path, path.read_text(encoding="utf-8"))
             except Exception as exc:  # noqa: BLE001
                 self.add_issue("ERROR", "读取模板失败", f"{path.name}: {exc}")
+        self.link_files = check_package_internal_links(SKILL_ROOT, self.add_issue)
         return self.issues
 
     def _check_one(self, path: Path, text: str) -> None:
@@ -2578,16 +2699,18 @@ class TemplateChecker:
         return ""
 
     def print_summary(self) -> int:
-        """打印模板校验结果并返回退出码（CRITICAL/ERROR 存在时为 1）。"""
+        """打印模板与技能包锚点校验结果并返回退出码（CRITICAL/ERROR 存在时为 1）。"""
         if not self.issues:
-            print(f"✅ 模板哨兵校验通过：{self.checked} 个模板（{self.tpl_dir}）")
+            print(f"✅ 模板哨兵与技能包锚点校验通过："
+                  f"{self.checked} 个模板，{self.link_files} 个 Markdown（{self.tpl_dir}）")
             return 0
         order = {level: n for n, level in enumerate(self.LEVELS)}
         for issue in sorted(self.issues, key=lambda x: order.get(x["level"], 9)):
             print(f"[{issue['level']}] {issue['title']}")
             print(f"    {issue['description']}")
         bad = any(i["level"] in ("CRITICAL", "ERROR") for i in self.issues)
-        print(f"\n{'❌' if bad else '⚠️'} {self.checked} 个模板共 {len(self.issues)} 个问题")
+        print(f"\n{'❌' if bad else '⚠️'} {self.checked} 个模板 / {self.link_files} 个 Markdown "
+              f"共 {len(self.issues)} 个问题")
         return 1 if bad else 0
 
 
@@ -2624,7 +2747,7 @@ def main() -> int:
     parser.add_argument("--refs", metavar="CODE",
                         help="反查指定编码的全部出现位置（改标题 / 任何状态作废前 MUST 先执行）")
     parser.add_argument("--check-templates", action="store_true",
-                        help="校验 assets/templates/ 的哨兵房规（成对、唯一 H1、无残留外层围栏）")
+                        help="校验模板哨兵房规，以及技能包内部 Markdown 的 #锚点可达性")
     parser.add_argument("--instantiate", metavar="TPL",
                         help="剥除哨兵输出模板实例化后的正文（文件名或路径），供预览评估")
     parser.add_argument("--segment", metavar="NAME",
