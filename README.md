@@ -88,9 +88,11 @@ AI 会自动：
 
 - [SKILL.md](./.agents/skills/design-doc/SKILL.md) — 完整规范说明（入口）
 - [规范索引](./.agents/skills/design-doc/references/README.md) — `references/` 总览
+- [对象模型](./.agents/skills/design-doc/references/object-model.md) — 对象与字段写入者、四态锁定矩阵、作废与解冻通道
 - [编码体系](./.agents/skills/design-doc/references/coding-system.md) — 文档与细项编码规则、属性行定义集与定义块形态
+- [类型专论](./.agents/skills/design-doc/references/type-profiles.md) — IF / ACT / PLN，ADR 与 DEC
 - [层级体系](./.agents/skills/design-doc/references/layer-system.md) — L0-L6 层级与目录结构
-- [状态定义](./.agents/skills/design-doc/references/status-definitions.md) — 标准四态（初稿/正式/草案/废弃）、锁定矩阵、版本号递增与回退
+- [状态定义](./.agents/skills/design-doc/references/status-definitions.md) — 标准四态、门控、版本号递增与回退
 - [术语与概念](./.agents/skills/design-doc/references/glossary-conventions.md) — 词汇表与细项编码分工
 - [审核指南](./.agents/skills/design-doc/references/review-guidelines.md) — 文档检查清单
 - [废弃细项处理](./.agents/skills/design-doc/references/item-deprecation.md) — 细项废弃与引用更新

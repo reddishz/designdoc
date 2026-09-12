@@ -179,9 +179,9 @@ DEP_EXEMPT_ATTR = re.compile(
     r"^\s*(?:[-*+]\s*)?\*\*(" + "|".join(TRACE_SEGMENT + ("落实记录",)) + r")\*\*"
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
 
-# 《首要约束》第 3 条：审查 / 校验的定稿提示 MUST 含「不得作为实现依据」这一句。
-# 房规单点见 SKILL.md ·《首要约束（MANDATORY）》；本处只做落地、不改口径。
-NOT_IMPL_BASIS = "；未冻结对象不得作为实现依据（约束本体见 SKILL.md · 首要约束）"
+# 《据文档实现》第 3 条：审查 / 校验的定稿提示 MUST 含「不得作为实现依据」这一句。
+# 房规单点见 SKILL.md ·《据文档实现（消费侧，MANDATORY）》；本处只做落地、不改口径。
+NOT_IMPL_BASIS = "；未冻结对象不得作为实现依据（约束本体见 SKILL.md · 据文档实现）"
 
 CHANGELOG_HEADINGS = ("变更记录", "变更历史", "版本历史", "修订记录")
 ITEM_LIST_HEADINGS = ("细项编码清单", "细项清单", "全局编码索引", "编码索引")
@@ -1026,7 +1026,7 @@ class DesignDocChecker:
         """编码升序与缺口：清单/索引表内同序列必须升序；已分配序列不得有缺口。
 
         缺口是 **ERROR**：编号一经分配即永久占用，作废项原地保留、仍占编号，因此
-        不存在「合法缺口」（房规见 references/coding-system.md ·《编码生命周期》）。
+        不存在「合法缺口」（房规见 references/object-model.md ·《编码含义锁定》）。
         """
         for doc in self.docs:
             for section, entries in doc.code_sections:
@@ -1089,8 +1089,8 @@ class DesignDocChecker:
         """README 编码计数器恒等式：`下一可用编号` MUST = 已用最大编号 + 1。
 
         两端都是 **ERROR**：计数器落后会让新项撞上已分配编号（编号永不复用），超前则
-        意味着序列有缺口，而缺口不存在合法形态（房规见 references/coding-system.md
-        ·《编码生命周期》）。已用编号按序列键（含项目前缀）归集，与计数器表的
+        意味着序列有缺口，而缺口不存在合法形态（房规见 references/object-model.md
+        ·《编码含义锁定》）。已用编号按序列键（含项目前缀）归集，与计数器表的
         `类型码` 列（不含前缀）做后缀匹配。
         """
         for doc in self.docs:
@@ -2242,7 +2242,7 @@ class DesignDocChecker:
 
         `细项状态` 与 `落实情况` **正交**：状态只表达想法记录自身的生命周期
         （定论即 `正式`，与是否已展开无关），是否已展开由 `落实情况` 表达。
-        房规见 `references/coding-system.md` ·《规划项生命周期》。
+        房规见 `references/type-profiles.md` ·《规划项生命周期》。
         """
         done: Set[str] = set()
         for doc in self.docs:

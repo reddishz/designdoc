@@ -1,6 +1,6 @@
 > **模板：ADR - 架构决策记录**
 >
-> **定位**：ADR 是宏观架构级决策的**一事一档**，承载「为什么这么选」；具体事项级决策用 `DEC` 细项。二者的切分轴与判别口诀见 [coding-system.md · ADR 与 DEC 的定位](../../references/coding-system.md#adr-与-dec-的定位)；存放位置见 [layer-system.md · 层级定义](../../references/layer-system.md#层级定义)（与所属层级文档同目录平放，**不设** `adr/` 子目录）。
+> **定位**：ADR 是宏观架构级决策的**一事一档**，承载「为什么这么选」；具体事项级决策用 `DEC` 细项。二者的切分轴与判别口诀见 [type-profiles.md · ADR 与 DEC 的定位](../../references/type-profiles.md#adr-与-dec-的定位)；存放位置见 [layer-system.md · 层级定义](../../references/layer-system.md#层级定义)（与所属层级文档同目录平放，**不设** `adr/` 子目录）。
 >
 > **使用说明**
 >
@@ -10,7 +10,7 @@
 > 4. **编码形式与项目前缀**：见文首说明
 > 5. **本文档细项编码清单**：仅本文档范围；分配前检索当前作用域 `README.md` 全局索引，分配后同步更新
 > 6. **DEC 分配为可选**：《决策》小节默认只写叙述性文字；仅当该决策需被其他文档以编码引用为契约时才分配 `DEC`。不分配时 MUST 删除《决策》内的定义块与清单中的 DEC 行
-> 7. **定义块形态与锚点**：若分配 DEC，MUST 按「`<a id>` 锚点行 + 标题行（全角冒号分隔）+ 属性行组 + 正文段」书写，前三部分连续、正文段紧随属性行组并与它空一行；属性名 MUST 取自《属性行定义集（封闭）》，需成句表达的内容一律归正文段（房规见 [coding-system.md · 细项定义块形态](../../references/coding-system.md#细项定义块形态mandatory)、[属性行定义集（封闭）](../../references/coding-system.md#属性行定义集封闭)）
+> 7. **定义块形态与锚点**：若分配 DEC，按 [coding-system.md · 细项定义块形态](../../references/coding-system.md#细项定义块形态mandatory) 书写；属性名取自同文件 [属性行定义集（封闭）](../../references/coding-system.md#属性行定义集封闭)
 > 8. 关联文档引用对应的 L3 文档编码
 > 9. 维护细项编码清单和变更记录
 >
@@ -54,7 +54,7 @@
 
 ## 决策
 
-> **本节形态**：默认用叙述性文字写明选定方案。**仅当**该决策需被其他文档以编码引用为契约时，才在下方按标准定义块分配一个 `DEC` 细项；不分配时 MUST 删除该定义块与《本文档细项编码清单》中的 DEC 行。ADR 与 DEC 的分工见 `references/coding-system.md` · 《ADR 与 DEC 的定位》。
+> **本节形态**：默认用叙述性文字写明选定方案。**仅当**该决策需被其他文档以编码引用为契约时，才在下方按标准定义块分配一个 `DEC` 细项；不分配时 MUST 删除该定义块与《本文档细项编码清单》中的 DEC 行。ADR 与 DEC 的分工见 [type-profiles.md · ADR 与 DEC 的定位](../../references/type-profiles.md#adr-与-dec-的定位)。
 
 {用一到两句话写明最终选定的方案，以及必须遵守的边界}
 

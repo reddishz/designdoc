@@ -6,9 +6,9 @@
 > 2. 状态值从 `初稿/正式/草案/废弃` 中选择；**新建默认 `初稿`**（缺字段时按 `变更记录` 判定：有定稿条目 → `草案`，从未定稿 → `初稿`，无法判定 → `草案`）
 > 3. **编码形式与项目前缀**：见文首说明
 > 4. **本文档细项编码清单**：仅本文档范围；分配前检索当前作用域 `README.md` 全局索引，分配后同步更新
-> 5. **细项定义块形态（MANDATORY）**：每个编码的定义位 MUST 写成四部分——`<a id="{编码全小写}"></a>` 锚点行 + `#### {编码}：{标题}` 标题行（全角冒号，层级比父小节深一级）+ 属性行组 + 正文段；前三部分连续，正文段紧随属性行组并与它空一行；属性名 MUST 取自《属性行定义集（封闭）》，需成句表达的内容一律归正文段；MUST NOT 写成 `- **{编码}**：{描述}`；同类多项逐项重复完整块（房规见 [coding-system.md · 细项定义块形态](../../references/coding-system.md#细项定义块形态mandatory)、[属性行定义集（封闭）](../../references/coding-system.md#属性行定义集封闭)）
+> 5. **细项定义块形态**：按 [coding-system.md · 细项定义块形态](../../references/coding-system.md#细项定义块形态mandatory) 书写；属性名取自同文件 [属性行定义集（封闭）](../../references/coding-system.md#属性行定义集封闭)。本模板标题行用 `####`（比父小节深一级）
 > 6. **链接类属性每行一个链接**：`满足需求` / `来源` MUST NOT 用「或」「、」在一行内串多个链接，同名属性 MAY 重复多行、按实际对象保留；值里 MUST NOT 夹叙述或填写说明（房规见 [coding-system.md · 属性行定义集（封闭）](../../references/coding-system.md#属性行定义集封闭)）
-> 7. **宏观决策走 ADR**：技术栈选型、子系统划分等架构级决策另开 `ADR-{编号}-*.md`（与本层级文档同目录平放）；《关键技术决策》表只做登记视图。ADR 与 DEC 的分工见 [coding-system.md · ADR 与 DEC 的定位](../../references/coding-system.md#adr-与-dec-的定位)
+> 7. **宏观决策走 ADR**：技术栈选型、子系统划分等架构级决策另开 `ADR-{编号}-*.md`（与本层级文档同目录平放）；《关键技术决策》表只做登记视图。ADR 与 DEC 的分工见 [type-profiles.md · ADR 与 DEC 的定位](../../references/type-profiles.md#adr-与-dec-的定位)
 > 8. 关联文档引用对应的 L2 文档编码
 > 9. 维护细项编码清单和变更记录
 > 10. Mermaid 图表可根据实际架构调整
@@ -74,7 +74,7 @@
 - 判定方式：{如何判定设计是否遵循本原则}
 
 > **逐项重复本块**：每个 `PRN` 独立成一个完整定义块，MUST NOT 用连续列表项罗列多个编码。
-> **PRN 与 DEC 的区分**：`PRN` 是无备选的一贯取向，`DEC` 是多个可行备选中的自主选定（见 [coding-system.md · DEC vs PRN vs CON](../../references/coding-system.md#dec-vs-prn-vs-con)）。
+> **PRN 与 DEC 的区分**：`PRN` 是无备选的一贯取向，`DEC` 是多个可行备选中的自主选定（见 [type-profiles.md · DEC vs PRN vs CON](../../references/type-profiles.md#dec-vs-prn-vs-con)）。
 
 ### 1.4 术语与概念（可选）
 
