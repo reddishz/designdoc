@@ -27,4 +27,4 @@
 | 资源 | 说明 |
 |------|------|
 | [flowchart-guide.md](../assets/guides/flowchart-guide.md) | 流程图：箭头 / 表格 / Mermaid 选用规则 |
-| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（`--refs {编码}` 引用反查、`--check-templates` 模板哨兵与技能包内部锚点、`--instantiate [--segment]` 实例化预览）；只执行规则，不定义规则 |
+| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（`--refs {编码}` 引用反查、`--check-templates` 模板哨兵 / 待复制正文禁区与技能包内部锚点、`--instantiate [--segment]` 实例化预览）；只执行规则，不定义规则 |

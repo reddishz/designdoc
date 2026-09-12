@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "4.1"
+  version: "4.2"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -43,13 +43,13 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 检查项 | [review-guidelines.md](references/review-guidelines.md) |
 | 层级与目录 | [layer-system.md](references/layer-system.md) |
 | 词汇表 | [glossary-conventions.md](references/glossary-conventions.md) |
-| 模板边界 | [assets/templates/index.md](assets/templates/index.md) |
+| 模板边界与整篇型共用 | [assets/templates/index.md](assets/templates/index.md) |
 
 - **引用锚点**：细项编码与文档编码是 `ued/` 内唯一允许的语义引用锚点；**MUST NOT** 用章节编号（`§x.y`、`第 x 章`、`见上文`）。可独立成立的规则 MUST 先落码再被引用。规范条文本身不纳入细项编码，指向条款用 `文件#标题锚点`。
 - **存在性锁定**：编号一经分配永久占用，任何状态 **MUST NOT** 删除或复用；放弃走作废。权限切片见 [object-model.md · 锁定矩阵](references/object-model.md#锁定矩阵mandatory)。
 - **`ued/` 不得含可执行代码**（算法、契约、状态机可以）。REF 可收录外部资料中的代码示例。
 - **层级按最小必要**：未指定时默认 L2 或 L4，**MUST NOT** 无指令一次生成 L0–L6。补齐信号见 [layer-system.md · 按需启用原则](references/layer-system.md#按需启用原则)。
-- **模板即复制源**：`assets/templates/` 违例等同规范违例。哨兵机制见 [模板边界](assets/templates/index.md#模板边界哨兵)。
+- **模板即复制源**：`assets/templates/` 违例等同规范违例。哨兵见 [模板边界](assets/templates/index.md#模板边界哨兵)，共用填写规则见 [整篇型模板共用](assets/templates/index.md#整篇型模板共用)。
 
 ## AI 运行时配置解析规则
 
@@ -193,7 +193,7 @@ AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUS
 
 - `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、版本递增时机与回退记录完整性、废弃字段与建议归档日期、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。
 - `--refs {编码}`：反查定义 / 登记 / 引用；`初稿` 改标题前与任何状态作废前 **MUST** 先执行。
-- `--check-templates`：模板哨兵（成对、唯一 H1、无残留外层围栏、使用说明未混入待复制正文）与技能包内部 `文件.md#锚点` 可达性。
+- `--check-templates`：模板哨兵（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文）与技能包内部 `文件.md#锚点` 可达性。
 - `--instantiate {模板文件名} [--segment {段名}]`：剥除哨兵输出实例化后的正文；多段模板（`ref.md`、`readme-template.md`）用 `--segment` 取单段。
 - `python3 scripts/tests/run_fixtures.py`：夹具回归（含 `ued/` 规则夹具、技能包锚点正反夹具，以及对本包 `--check-templates` 的冒烟）。每条夹具只验证一条规则；跑台只断言目标问题名，忽略夹具极简结构带来的噪声。改 `check_docs.py` 后 **MUST** 跑通；新增校验规则 **MUST** 同时补正反夹具并登记入跑台的期望表。脚本只出静态提示，不代替人工审查与定稿确认。
 

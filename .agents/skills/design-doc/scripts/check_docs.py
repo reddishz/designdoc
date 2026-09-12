@@ -24,7 +24,7 @@ DesignDoc 文档检查工具
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
-- `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏），以及技能包内部 `文件.md#锚点` 可达性
+- `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文），以及技能包内部 `文件.md#锚点` 可达性
 - `--instantiate TPL`：剥除哨兵输出模板实例化后的正文，供预览评估
 
 规则本体的唯一完整表述在 `references/` 专项文件内，本脚本只执行校验、不重复定义
@@ -196,6 +196,27 @@ TPL_END = re.compile(r"^<!--\s*TEMPLATE:END\s*-->$")
 TPL_LABEL = re.compile(r"^>\s+\*\*(.+?)\*\*\s*$")
 TPL_FENCE_WRAP = re.compile(r"^\s*(?:`{3,}|~{3,})\s*markdown\s*$")
 TPL_USAGE_HEAD = re.compile(r"^#{1,6}\s+使用说明\s*$")
+# 哨兵内禁止出现的写作约束标签（曾漏进 ued/ 文档）。房规见
+# assets/templates/index.md · 模板边界（哨兵）· 待复制正文禁区。
+TPL_AUTHORING_LABELS = (
+    "编码形式", "项目前缀", "表达强制约束", "逐项重复本块",
+    "清单范围", "分配流程", "状态列", "标题列", "维护规则",
+    "图放正文段内", "图不代替定义块", "本节可选",
+    "状态与落实正交", "本节形态", "时效字段属记录型",
+    "闭环约束", "通常为空", "登记视图", "分组依据",
+    "无路线图关联", "PRN 与 DEC 的区分",
+)
+TPL_AUTHORING_LABEL = re.compile(
+    r"\*\*(?:" + "|".join(sorted((re.escape(x) for x in TPL_AUTHORING_LABELS),
+                                 key=len, reverse=True)) + r")\*\*")
+TPL_RFC_WORD = re.compile(r"\b(?:MUST(?:\s+NOT)?|SHALL(?:\s+NOT)?|MAY)\b")
+TPL_SKILL_PATH = re.compile(
+    r"(?:\.\./)+references/"
+    r"|references/[A-Za-z0-9_.-]+\.md"
+    r"|assets/(?:templates|guides)/"
+    r"|SKILL\.md"
+    r"|scripts/check_docs\.py")
+TPL_PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 # 片段型模板：正文是嵌入宿主文档的片段，容器保留自身标题结构
 TPL_FRAGMENT_FILES = {"project-registry.md"}
 # 目录内的索引文件，不是模板，不含哨兵
@@ -2673,10 +2694,7 @@ class TemplateChecker:
                 self.add_issue("ERROR", "哨兵段 H1 数不合规",
                                f"{where}: 整篇型模板每段 MUST 恰有一个 H1，实得 {len(h1)}")
             for off, ln in enumerate(body, seg["begin"] + 1):
-                if TPL_USAGE_HEAD.match(ln):
-                    self.add_issue("ERROR", "使用说明混入待复制正文",
-                                   f"{name}:{off}: `使用说明` MUST 置于哨兵之外（前置），"
-                                   "否则会被复制进目标文档")
+                self._check_body_line(name, off, ln)
             if len(segs) > 1 and seg["name"]:
                 label = self._label_above(lines, seg["begin"])
                 if label and label.replace("`", "") != seg["name"]:
@@ -2686,6 +2704,26 @@ class TemplateChecker:
         if "正文边界" not in text:
             self.add_issue("WARNING", "模板缺正文边界指针",
                            f"{name}: 未见「正文边界」说明行，AI 可能连带复制哨兵外的元信息")
+
+    def _check_body_line(self, name: str, lineno: int, line: str) -> None:
+        """拦截会随实例化漏进目标文档的写作约束与技能包路径。"""
+        if TPL_USAGE_HEAD.match(line):
+            self.add_issue("ERROR", "使用说明混入待复制正文",
+                           f"{name}:{lineno}: `使用说明` MUST 置于哨兵之外（前置），"
+                           "否则会被复制进目标文档")
+        if TPL_AUTHORING_LABEL.search(line):
+            self.add_issue("ERROR", "写作约束混入待复制正文",
+                           f"{name}:{lineno}: 写作约束标签 MUST 置于哨兵之外，"
+                           "否则会被复制进目标文档")
+        stripped = TPL_PLACEHOLDER.sub("", line)
+        if TPL_RFC_WORD.search(stripped):
+            self.add_issue("ERROR", "写作约束混入待复制正文",
+                           f"{name}:{lineno}: RFC 约束词（MUST / MUST NOT / MAY）"
+                           " MUST 置于哨兵之外")
+        if TPL_SKILL_PATH.search(stripped):
+            self.add_issue("ERROR", "技能包路径混入待复制正文",
+                           f"{name}:{lineno}: 技能包路径 MUST 置于哨兵之外，"
+                           "不得随正文复制进目标文档")
 
     @staticmethod
     def _label_above(lines: List[str], begin: int) -> str:
@@ -2747,7 +2785,8 @@ def main() -> int:
     parser.add_argument("--refs", metavar="CODE",
                         help="反查指定编码的全部出现位置（改标题 / 任何状态作废前 MUST 先执行）")
     parser.add_argument("--check-templates", action="store_true",
-                        help="校验模板哨兵房规，以及技能包内部 Markdown 的 #锚点可达性")
+                        help="校验模板哨兵房规（含写作约束/技能包路径未混入待复制正文），"
+                             "以及技能包内部 Markdown 的 #锚点可达性")
     parser.add_argument("--instantiate", metavar="TPL",
                         help="剥除哨兵输出模板实例化后的正文（文件名或路径），供预览评估")
     parser.add_argument("--segment", metavar="NAME",

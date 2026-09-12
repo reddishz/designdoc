@@ -3,7 +3,7 @@
 
 `fixtures/` 下每条夹具是一个最小 L2 文档，刻意触发（或刻意不触发）某一条校验
 规则。`skill_link_fixtures/` 验证技能包内部 `#锚点` 可达性（正例零命中、反例必报）。
-跑台末尾对本包执行 `--check-templates` 冒烟。改动 `check_docs.py` 后跑一遍，可确认
+跑台末尾对本包执行 `--check-templates` 冒烟，并跑哨兵内写作约束 / 技能包路径的正反例。改动 `check_docs.py` 后跑一遍，可确认
 既有规则没有静默退化。
 
 跑台只断言**目标问题名**（见 `EXPECT`），忽略夹具因极简结构必然产生的结构性
@@ -181,6 +181,67 @@ def run_skill_link_fixtures(verbose):
     return 1 if (fails or orphan or stale) else 0
 
 
+def run_template_body_hygiene_cases():
+    """哨兵内写作约束 / 技能包路径 MUST 报；干净正文 MUST 不报。"""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("check_docs", CHECKER)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    cases = [
+        ("leak-label", """> **模板：x**
+>
+> **正文边界**：TEMPLATE:BEGIN
+
+<!-- TEMPLATE:BEGIN -->
+# L2-001-x
+
+> **编码形式**：默认使用简洁编码（{类型码}-{三位序号}）
+<!-- TEMPLATE:END -->
+""", {"写作约束混入待复制正文"}),
+        ("leak-path", """> **模板：x**
+>
+> **正文边界**：TEMPLATE:BEGIN
+
+<!-- TEMPLATE:BEGIN -->
+# L2-001-x
+
+口径见 references/coding-system.md
+<!-- TEMPLATE:END -->
+""", {"技能包路径混入待复制正文"}),
+        ("ok-body", """> **模板：x**
+>
+> **正文边界**：TEMPLATE:BEGIN
+
+<!-- TEMPLATE:BEGIN -->
+# L2-001-x
+
+见 {文档相对路径}
+<!-- TEMPLATE:END -->
+""", set()),
+    ]
+    fails = []
+    for name, text, want in cases:
+        checker = mod.TemplateChecker()
+        checker._check_one(Path(f"{name}.md"), text)
+        have = {i["title"] for i in checker.issues}
+        missing = want - have
+        unexpected = (have & {"写作约束混入待复制正文", "技能包路径混入待复制正文",
+                              "使用说明混入待复制正文"}) - want
+        if missing or unexpected:
+            fails.append((name, missing, unexpected, have))
+            print(f"  FAIL {name}")
+            if missing:
+                print(f"       漏报：{'、'.join(sorted(missing))}")
+            if unexpected:
+                print(f"       误报：{'、'.join(sorted(unexpected))}")
+    if fails:
+        print("FAIL 模板正文禁区正反例未通过")
+        return 1
+    print("模板正文禁区正反例通过")
+    return 0
+
+
 def run_check_templates_smoke():
     """本包 `--check-templates` 必须通过（哨兵 + 技能包内部锚点）。"""
     proc = subprocess.run(
@@ -235,6 +296,7 @@ def main():
         print(f"  FAIL {stem}：EXPECT 登记的夹具已不在 fixtures/")
     rc = 1 if (fails or orphan or stale) else 0
     rc |= run_skill_link_fixtures(verbose)
+    rc |= run_template_body_hygiene_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
 
