@@ -18,9 +18,11 @@ DesignDoc 文档检查工具
 - 零章节编号引用门禁、文件名与结构合规
 - 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、属性名白名单
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
-- 属性行组三段：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、追溯段（`出处` → `来源`）居末且值形态互斥
+- 属性行组三段：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、追溯段（`出处` → `来源` → `依赖`）居末且值形态互斥
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期
-- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）、依据方向（`正式`/`草案` 细项依据 `初稿` 细项 → 提示确认）
+- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）、依据方向（`正式`/`草案` 细项依据 `初稿` 细项 → 提示确认；`依赖` 指向 `初稿` → ERROR）
+- 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
+- `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
@@ -58,10 +60,11 @@ LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 # 回退快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
 # 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
 FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "最后修订日期",
-                        "废弃时间", "废弃原因", "替代方案", "出处", "来源")
+                        "废弃时间", "废弃原因", "替代方案", "出处", "来源", "依赖")
 FALLBACK_TYPE_ATTRS: Dict[str, Tuple[str, ...]] = {
     "GOL": (), "STK": ("目标",), "SCN": ("参与者",),
-    "FR": ("优先级", "处理规则"), "NFR": ("类别", "度量标准"),
+    "FR": ("优先级", "处理规则", "验证方式"),
+    "NFR": ("类别", "优先级", "度量标准", "验证方式"),
     "UC": ("参与者",), "PRN": (), "DEC": (), "CMP": ("满足需求",),
     "IF": ("类型", "所属组件"), "FLW": (), "ALG": ("复杂度",),
     "DOM": ("所属组件",), "ACT": (), "ASM": (), "RSK": ("概率",),
@@ -170,15 +173,28 @@ CODE_SPAN_ONLY = re.compile(r"`([^`]+)`")
 ATTR_NAME_ARROW = re.compile(r"`([^`]+)`\s*\u2192")
 # 属性行组三段（房规：coding-system.md ·《细项定义块形态》）
 GOV_SEGMENT = ("细项状态", "修订版本号", "最后修订日期")
-TRACE_SEGMENT = ("出处", "来源")          # 追溯段固定序：`出处` 在 `来源` 之前
+TRACE_SEGMENT = ("出处", "来源", "依赖")  # 追溯段固定序；`依赖` 不豁免依据方向
 REV_VALUE = re.compile(r"^\d+$")
 DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATE_IN_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")   # 表格单元格内提取日期（可带后缀说明）
-# 《依据方向门控》的豁免字段 = 追溯段（`出处` / `来源`）+ 记录型字段 `落实记录`。
-# 豁免名单的房规单点见 status-definitions.md ·《层级门控》；本处只做匹配、不另立名单。
+# 《依据方向门控》的豁免字段 = `出处` / `来源` + 记录型字段 `落实记录`。
+# `依赖` 是生效前提，不在豁免名单。房规单点见 status-definitions.md ·《层级门控》。
+TRACE_DIRECTION_EXEMPT = ("出处", "来源")
 DEP_EXEMPT_ATTR = re.compile(
-    r"^\s*(?:[-*+]\s*)?\*\*(" + "|".join(TRACE_SEGMENT + ("落实记录",)) + r")\*\*"
+    r"^\s*(?:[-*+]\s*)?\*\*(" + "|".join(TRACE_DIRECTION_EXEMPT + ("落实记录",)) + r")\*\*"
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
+# `依赖` 行由 `_check_dep_item` 专检（指向初稿 = ERROR），依据方向扫描跳过以免 WARNING 重复。
+DEP_OWN_ATTR = re.compile(
+    r"^\s*(?:[-*+]\s*)?\*\*依赖\*\*"
+    r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
+NFR_CATEGORIES = (
+    "性能", "安全", "可用性", "兼容性", "可靠性", "可维护性", "可移植性", "易用性",
+)
+FR_NFR_PRIORITY = ("P0", "P1", "P2")
+DEP_EXCLUSIVE_ATTRS = (
+    "来源", "处理规则", "所属组件", "参与者", "验证方式", "满足需求",
+)
+TBD_MARK = re.compile(r"\b(?:TBD|TBS|TBR)\b|待定(?!稿)|待补充|待填写")
 
 # 《据文档实现》第 3 条：审查 / 校验的定稿提示 MUST 含「不得作为实现依据」这一句。
 # 房规单点见 SKILL.md ·《据文档实现（消费侧，MANDATORY）》；本处只做落地、不改口径。
@@ -640,6 +656,7 @@ class DesignDocChecker:
         self.chg_date_cache: Dict[str, str] = {}     # 路径 → 变更记录最新日期
         self.issues: List[Dict] = []
         self.legacy_hits: Set[Tuple[str, str]] = set()   # (文件, 旧值 → 新值)
+        self.dep_forward: Dict[str, List[str]] = {}      # A `依赖` B 的正向边
 
     # ------------------------------------------------------------------ 扫描
 
@@ -1530,7 +1547,7 @@ class DesignDocChecker:
                         "ERROR", "细项定义块形态不合规",
                         f"{doc.path}:{item.line} `{item.code}`: 以 `- **{item.code}**：…` "
                         "粗体列表项充当定义位——编码不进文档大纲、无属性行组与正文段可"
-                        "承载五要素、不产生任何锚点；MUST 改为四部分：「`<a id>` 锚点行 + "
+                        "承载最小要素、不产生任何锚点；MUST 改为四部分：「`<a id>` 锚点行 + "
                         "标题行（`{编码}：{标题}`，全角冒号）+ `- **{属性名}**：{值}` 属性行组 "
                         "+ 正文段」")
                     continue        # 形态整体不合规，锚点与属性行不再重复报
@@ -1647,8 +1664,10 @@ class DesignDocChecker:
             return                      # 整组缺失属「缺属性行」，不在本方法职责内
         self._check_gov_segment(doc, item, attrs)
         self._check_trace_segment(doc, item, attrs)
+        self._check_dep_item(doc, item, attrs)
         self._check_replacement_value(doc, item, attrs)
         self._check_attr_whitelist(doc, item, attrs)
+        self._check_typed_enums(doc, item, attrs)
 
     def _check_attr_whitelist(self, doc: DocInfo, item: ItemInfo,
                               attrs: List[Tuple[str, str, int]]) -> None:
@@ -1667,7 +1686,7 @@ class DesignDocChecker:
                 "ERROR", "属性名未在定义集内",
                 f"{doc.path}:{lineno} `{item.code}` 定义块的属性行 `{name}` 未在"
                 "《属性行定义集（封闭）》登记；该类型码允许的自有属性为 "
-                f"{hint}（固定属性为治理段 / 废弃登记段 / 追溯段八项）。"
+                f"{hint}（固定属性为治理段 / 废弃登记段 / 追溯段）。"
                 "未登记的语义 MUST 改写进正文段（属性行组后空一行，形态自由），"
                 "MUST NOT 自造属性名")
 
@@ -1767,10 +1786,10 @@ class DesignDocChecker:
 
     def _check_trace_segment(self, doc: DocInfo, item: ItemInfo,
                              attrs: List[Tuple[str, str, int]]) -> None:
-        """追溯段：`出处` → `来源` MUST 居属性行组末尾，且值形态互斥。
+        """追溯段：`出处` → `来源` → `依赖` MUST 居属性行组末尾，且值形态互斥。
 
-        `来源` 的值 MUST 含标准链接，`出处` 的值 MUST NOT 含链接——值形态是二者的
-        判别依据。追溯段本身非强制（Trace 要素为 SHOULD），故仅当出现时校验。
+        `来源` / `依赖` 的值 MUST 含标准链接，`出处` 的值 MUST NOT 含链接。
+        追溯段本身非强制（Trace 要素为 SHOULD，`依赖` 为 MAY），故仅当出现时校验。
         """
         names = [n for n, _v, _l in attrs]
         hits = [(i, n) for i, n in enumerate(names) if n in TRACE_SEGMENT]
@@ -1786,7 +1805,7 @@ class DesignDocChecker:
                                "MUST NOT 夹在内容段中间")
                 break
         order = [n for _i, n in hits]
-        # `来源` MAY 多行（每行一个来源对象），故期望序按实际出现次数展开同名项
+        # `来源` / `依赖` MAY 多行，故期望序按实际出现次数展开同名项
         expect: List[str] = []
         for seg_name in TRACE_SEGMENT:
             expect.extend([seg_name] * order.count(seg_name))
@@ -1794,19 +1813,133 @@ class DesignDocChecker:
             self.add_issue("ERROR", "追溯段顺序错乱",
                            f"{doc.path}:{attrs[hits[0][0]][2]} `{item.code}`: 追溯段为 "
                            f"{' → '.join(order)}，MUST 为 {' → '.join(expect)}"
-                           "（`出处` 写自然语言、在 `来源` 之前）")
+                           "（`出处` → `来源` → `依赖`，无则省略）")
         for i, n in hits:
             val, lineno = attrs[i][1], attrs[i][2]
             blank = (not val) or "{" in val or val.lower() in EMPTY_MARKS
-            if n == "来源" and not blank and not MD_LINK.search(val):
-                self.add_issue("ERROR", "来源值缺链接",
-                               f"{doc.path}:{lineno} `{item.code}`: `来源` 的值 "
+            if n in ("来源", "依赖") and not blank and not MD_LINK.search(val):
+                self.add_issue("ERROR", f"{n}值缺链接",
+                               f"{doc.path}:{lineno} `{item.code}`: `{n}` 的值 "
                                f"'{val[:30]}' MUST 含标准链接；编码依据用 `来源`、"
-                               "自然语言依据用 `出处`，MUST NOT 互换")
+                               "前提耦合用 `依赖`、自然语言依据用 `出处`，MUST NOT 互换")
             if n == "出处" and val and MD_LINK.search(val):
                 self.add_issue("ERROR", "出处值含链接",
                                f"{doc.path}:{lineno} `{item.code}`: `出处` 的值 MUST NOT "
-                               "含链接——编码链接 MUST 由 `来源` 承载，`出处` 只写自然语言")
+                               "含链接——编码链接 MUST 由 `来源` 或 `依赖` 承载，"
+                               "`出处` 只写自然语言")
+
+    def _attr_codes(self, val: str) -> List[str]:
+        """从属性行值取出编码 token（含文档编码），去重保序。"""
+        out: List[str] = []
+        for m in CODE_TOKEN.finditer(val):
+            if m.group(1) not in out:
+                out.append(m.group(1))
+        return out
+
+    def _check_dep_item(self, doc: DocInfo, item: ItemInfo,
+                        attrs: List[Tuple[str, str, int]]) -> None:
+        """`依赖` 语义：与 `来源`/专名互斥、禁自指、目标须存在、不得指向初稿。
+
+        房规见 coding-system.md ·《追溯类属性行命名》。`依赖` 不豁免依据方向。
+        """
+        status_of: Dict[str, str] = {}
+        defined: Set[str] = set()
+        for d in self.docs:
+            for it in self._doc_items(d):
+                if it.defined and it.item_status:
+                    status_of[it.code] = it.item_status
+                if it.defined:
+                    defined.add(it.code)
+
+        dep_codes: List[Tuple[str, int]] = []
+        named_codes: Dict[str, Set[str]] = {n: set() for n in DEP_EXCLUSIVE_ATTRS}
+        has_verify = False
+        for name, val, lineno in attrs:
+            blank = (not val) or "{" in val or val.lower() in EMPTY_MARKS
+            if name == "验证方式" and not blank:
+                has_verify = True
+            if blank:
+                continue
+            codes = self._attr_codes(val)
+            if name == "依赖":
+                for c in codes:
+                    dep_codes.append((c, lineno))
+            elif name in named_codes:
+                named_codes[name].update(codes)
+
+        if (item.type_code in ("FR", "NFR") and item.item_status == "正式"
+                and not has_verify):
+            self.add_issue("WARNING", "正式需求缺验证方式",
+                           f"{doc.path}:{item.line} `{item.code}`: `细项状态` 为 `正式` "
+                           "的 FR / NFR SHOULD 有 `验证方式` 指向 AC；缺行不阻断定稿")
+
+        seen_dep: Set[str] = set()
+        for c, lineno in dep_codes:
+            if c == item.code:
+                self.add_issue("ERROR", "依赖自指",
+                               f"{doc.path}:{lineno} `{item.code}`: `依赖` MUST NOT "
+                               "指向本细项")
+            if c in seen_dep:
+                continue
+            seen_dep.add(c)
+            if c in named_codes.get("来源", set()):
+                self.add_issue("ERROR", "依赖与来源指向同一对象",
+                               f"{doc.path}:{lineno} `{item.code}`: `{c}` 同时出现在 "
+                               "`来源` 与 `依赖`；派生用 `来源`，前提用 `依赖`，"
+                               "MUST NOT 混写")
+            for attr_name in DEP_EXCLUSIVE_ATTRS:
+                if attr_name == "来源":
+                    continue
+                if c in named_codes.get(attr_name, set()):
+                    self.add_issue("ERROR", "依赖与专名重复",
+                                   f"{doc.path}:{lineno} `{item.code}`: `{c}` 已由 "
+                                   f"`{attr_name}` 表达，MUST NOT 再写入 `依赖`")
+            if c not in defined and c not in self.codes:
+                self.add_issue("ERROR", "依赖目标不存在",
+                               f"{doc.path}:{lineno} `{item.code}`: `依赖` 指向 `{c}`，"
+                               "但该编码无定义位")
+            elif status_of.get(c) == "初稿" and item.item_status in ("正式", "草案"):
+                self.add_issue("ERROR", "依赖指向初稿",
+                               f"{doc.path}:{lineno} `{item.code}`（{item.item_status}）"
+                               f"`依赖` 指向仍为 `初稿` 的 `{c}`；`依赖` 是生效前提，"
+                               "MUST 先把被依赖项定稿")
+            elif status_of.get(c) == "废弃":
+                self.add_issue("WARNING", "依赖指向废弃细项",
+                               f"{doc.path}:{lineno} `{item.code}`: `依赖` 指向已 `废弃` "
+                               f"的 `{c}`；作废流程未收口")
+
+        if seen_dep:
+            prev = self.dep_forward.get(item.code, [])
+            merged = list(prev)
+            for c in seen_dep:
+                if c not in merged:
+                    merged.append(c)
+            self.dep_forward[item.code] = merged
+
+    def _check_typed_enums(self, doc: DocInfo, item: ItemInfo,
+                           attrs: List[Tuple[str, str, int]]) -> None:
+        """NFR `类别`、FR/NFR `优先级` 的封闭枚举。"""
+        for name, val, lineno in attrs:
+            val = val.strip()
+            if (not val) or "{" in val:
+                continue
+            if item.type_code == "NFR" and name == "类别":
+                parts = [p.strip() for p in val.split("/") if p.strip()]
+                if parts and all(p in NFR_CATEGORIES for p in parts) and "/" in val:
+                    continue            # 模板枚举罗列，尚未选定
+                if val not in NFR_CATEGORIES:
+                    self.add_issue("ERROR", "类别取值非法",
+                                   f"{doc.path}:{lineno} `{item.code}`: `类别` '{val}' "
+                                   "不在封闭枚举 "
+                                   f"{' / '.join(NFR_CATEGORIES)} 内")
+            if item.type_code in ("FR", "NFR") and name == "优先级":
+                parts = [p.strip() for p in val.split("/") if p.strip()]
+                if parts and all(p in FR_NFR_PRIORITY for p in parts) and "/" in val:
+                    continue
+                if val not in FR_NFR_PRIORITY:
+                    self.add_issue("ERROR", "优先级取值非法",
+                                   f"{doc.path}:{lineno} `{item.code}`: `优先级` '{val}' "
+                                   "MUST 为 " + " / ".join(FR_NFR_PRIORITY))
 
     def _check_replacement_value(self, doc: DocInfo, item: ItemInfo,
                                  attrs: List[Tuple[str, str, int]]) -> None:
@@ -2152,11 +2285,10 @@ class DesignDocChecker:
 
         排除三类行：
         - 定义位标题行（本项自身，不是依据）；
-        - **追溯段与记录型字段的值**（`DEP_EXEMPT_ATTR`）：`PLN-001 落实记录 → FR-033` 与
+        - **`出处` / `来源` 与记录型字段的值**（`DEP_EXEMPT_ATTR`）：`PLN-001 落实记录 → FR-033` 与
           `FR-033 来源 → PLN-001` 若同受约束，互相回指的两项会谁都定不了稿。豁免只覆盖
-          该属性行及其**缩进续行**（值 MAY 换行写成嵌套列表）；缩进回落即视为已进入正文
-          段、照常判——追溯段固定在属性行组末尾、正文段在其后，按「段」豁免会把正文段
-          整段吞掉，使常态定义块完全不受检；
+          该属性行及其**缩进续行**；`依赖` 不在豁免名单，由 `_check_dep_item` 以 ERROR
+          专检指向初稿（本扫描跳过 `依赖` 行以免 WARNING 重复）；
         - 表格中以本项编码为首列的登记行（本项的登记视图，不是依据）。
 
         只针对**定义位**（`item.defined`），与 `check_status_gating` 同口径。
@@ -2186,7 +2318,7 @@ class DesignDocChecker:
                     if self._heading_code(line) == it.code:
                         exempt = -1
                         continue
-                    if DEP_EXEMPT_ATTR.match(line):
+                    if DEP_EXEMPT_ATTR.match(line) or DEP_OWN_ATTR.match(line):
                         exempt = len(line) - len(line.lstrip())
                         continue
                     if exempt >= 0:
@@ -2492,6 +2624,75 @@ class DesignDocChecker:
                     out.append((doc.path, lineno, kind, line.strip()))
         return out
 
+    def collect_dep_graph(self) -> None:
+        """从定义块 `依赖` 行重建正向边（`--refs` 与环检测共用）。"""
+        self.dep_forward = {}
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            for it in self._doc_items(doc):
+                if not (it.defined and it.path == doc.path):
+                    continue
+                attrs = self._attr_group(doc, it.line - 1)
+                targets: List[str] = []
+                for name, val, _ln in attrs:
+                    if name != "依赖":
+                        continue
+                    if (not val) or "{" in val or val.lower() in EMPTY_MARKS:
+                        continue
+                    for c in self._attr_codes(val):
+                        if c != it.code and c not in targets:
+                            targets.append(c)
+                if targets:
+                    self.dep_forward[it.code] = targets
+
+    def check_dep_cycles(self) -> None:
+        """`依赖` 成环 → WARNING（作废时仍须同时处理，禁止只废一端）。"""
+        color: Dict[str, int] = {}
+        reported: Set[frozenset] = set()
+
+        def dfs(node: str, stack: List[str]) -> None:
+            color[node] = 1
+            stack.append(node)
+            for nxt in self.dep_forward.get(node, []):
+                state = color.get(nxt, 0)
+                if state == 1 and nxt in stack:
+                    cyc = stack[stack.index(nxt):] + [nxt]
+                    key = frozenset(cyc[:-1])
+                    if key not in reported:
+                        reported.add(key)
+                        self.add_issue("WARNING", "依赖成环",
+                                       f"`{' → '.join(cyc)}`：循环 `依赖` 作废时 MUST "
+                                       "同时标记，禁止只废一端")
+                elif state == 0:
+                    dfs(nxt, stack)
+            stack.pop()
+            color[node] = 2
+
+        for src in list(self.dep_forward):
+            if color.get(src, 0) == 0:
+                dfs(src, [])
+
+    def check_tbd_in_formal(self) -> None:
+        """文档 `状态` 为 `正式` 时，定义块与概述 MUST NOT 残留 TBD / 待定。
+
+        REF 原文副本豁免。`待定稿` 不命中（否定后顾）。初稿 / 草案文档不报。
+        """
+        for doc in self.docs:
+            if doc.archived or doc.is_index or doc.doc_type == "REF":
+                continue
+            if doc.status != "正式":
+                continue
+            for lineno, line in enumerate(doc.lines, 1):
+                if not line.strip() or line.lstrip().startswith("|"):
+                    continue
+                m = TBD_MARK.search(line)
+                if m:
+                    self.add_issue("ERROR", "正式文档含待定",
+                                   f"{doc.path}:{lineno} 命中未决标记 '{m.group(0)}'；"
+                                   "文档 `状态` 为 `正式` 时 MUST NOT 残留 TBD / TBS / "
+                                   "TBR / 待定 / 待补充 / 待填写")
+
     # ------------------------------------------------------------------ 执行
 
     def run_checks(self) -> List[Dict]:
@@ -2518,6 +2719,8 @@ class DesignDocChecker:
         self.check_draft_finalization()
         self.check_status_gating()
         self.check_dependency_direction()
+        self.check_dep_cycles()
+        self.check_tbd_in_formal()
         self.check_layer_references()
         self.check_legacy_statuses()
         self.check_title_lock()
@@ -2783,7 +2986,7 @@ def main() -> int:
     parser.add_argument("-o", "--output", help="输出报告到文件")
     parser.add_argument("-v", "--verbose", action="store_true", help="显示详细信息")
     parser.add_argument("--refs", metavar="CODE",
-                        help="反查指定编码的全部出现位置（改标题 / 任何状态作废前 MUST 先执行）")
+                        help="反查指定编码的全部出现位置，并列出依赖两表（改标题 / 解冻改内容 / 作废前 MUST 先执行）")
     parser.add_argument("--check-templates", action="store_true",
                         help="校验模板哨兵房规（含写作约束/技能包路径未混入待复制正文），"
                              "以及技能包内部 Markdown 的 #锚点可达性")
@@ -2806,12 +3009,20 @@ def main() -> int:
     if args.refs:
         checker.scan_docs()
         hits = checker.find_references(args.refs)
+        checker.collect_dep_graph()
         if not hits:
             print(f"未找到编码 {args.refs} 的任何出现位置（请确认编码与 --path 范围）")
             return 1
         print(f"🔎 {args.refs} 共出现 {len(hits)} 处（改标题 / 作废前需一并处理）：")
         for path, lineno, kind, text in hits:
             print(f"  [{kind}] {path}:{lineno}  {text[:120]}")
+        code = args.refs
+        dependents = sorted(a for a, bs in checker.dep_forward.items() if code in bs)
+        prereqs = checker.dep_forward.get(code, [])
+        print(f"📎 谁依赖我（{len(dependents)}）："
+              + ("、".join(dependents) if dependents else "无"))
+        print(f"📎 我依赖谁（{len(prereqs)}）："
+              + ("、".join(prereqs) if prereqs else "无"))
         return 0
 
     checker.run_checks()
