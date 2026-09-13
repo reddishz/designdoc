@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯，定稿之后可以放心作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/skill-v4.5-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/skill-v4.6-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。

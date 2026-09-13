@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "4.5"
+  version: "4.6"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -37,7 +37,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 |------|------|
 | 对象 × 字段 × 状态、锁定与动作 | [object-model.md](references/object-model.md) |
 | 编码形态、类型码表、属性封闭集、定义块、引用、分配 | [coding-system.md](references/coding-system.md) |
-| `IF` / `ACT` / `PLN`、ADR 与 DEC | [type-profiles.md](references/type-profiles.md) |
+| `IF` / `ACT` / `PLN`、UC / FR / FLW、ADR 与 DEC | [type-profiles.md](references/type-profiles.md) |
 | 四态、门控、版本号、流转伴随 / 记录型含义 | [status-definitions.md](references/status-definitions.md) |
 | 细项 / 文档作废步骤 | [item-deprecation.md](references/item-deprecation.md) / [doc-deprecation.md](references/doc-deprecation.md) |
 | 检查项 | [review-guidelines.md](references/review-guidelines.md) |
@@ -109,7 +109,7 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 4. **Checkpoint 1**：暂停，等确认大纲与核心细项。
 5. 确认后按「分配新编码」分配 ID。
 6. 立即更新当前作用域 `README.md` 与文档末尾清单（状态列默认 `初稿`）。单应用改 `ued/README.md`；多应用改 `ued/{app-name}/README.md`，仅应用注册或跨应用导航时再改顶层。
-7. 自检：与上层目标无冲突；标题适度宽泛（[标题命名规范](references/coding-system.md#标题命名规范适度宽泛)）；按 [review-guidelines.md](references/review-guidelines.md) 过一遍锁定、措辞与流程。
+7. 自检：与上层目标无冲突；标题适度宽泛（[标题命名规范](references/coding-system.md#标题命名规范适度宽泛)）；类型码只在定义层写定义块（[细项定义层级](references/coding-system.md#细项定义层级mandatory)）——详细设计里的「系统应当」先落到 L2 的 FR / NFR；按 [review-guidelines.md](references/review-guidelines.md) 过一遍锁定、措辞与流程。
 
 ### 分配新编码
 

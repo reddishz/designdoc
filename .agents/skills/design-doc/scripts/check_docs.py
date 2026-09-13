@@ -2081,9 +2081,8 @@ class DesignDocChecker:
     def check_dec_layer(self) -> None:
         """`DEC` 量级提示：定义位落在 L2/L3 文档时提示评估是否升格为 ADR。
 
-        仅 INFO、**不报违规**：`DEC` MAY 被任何层级文档收录（类型码表的「典型层级」
-        是语义归属建议、不是物理存放限制）。ADR 文档自身豁免：ADR 就是「已升格」
-        的形态，其《决策》小节收录 DEC 是房规明确允许的做法。
+        仅 INFO、**不报违规**：`DEC` 未锁定单层，MAY 出现在 L4/L5 或 ADR。ADR 文档
+        自身豁免：ADR 就是「已升格」的形态，其《决策》小节收录 DEC 是房规允许的做法。
         """
         for doc in self.docs:
             if doc.archived or doc.doc_type == "ADR" or doc.layer not in ("L2", "L3"):
@@ -2093,7 +2092,7 @@ class DesignDocChecker:
                     continue
                 self.add_issue(
                     "INFO", "DEC 量级可能偏大",
-                    f"{doc.path}:{item.line} `{item.code}`: `DEC` 的典型层级为 L4/L5，"
+                    f"{doc.path}:{item.line} `{item.code}`: `DEC` 定义在 L4/L5 或 ADR，"
                     f"本定义位落在 {doc.layer} 文档；若该决策属技术栈选型、子系统划分、"
                     "数据一致性策略等宏观架构级，SHOULD 评估升格为 ADR 文档（一事一档）")
 
