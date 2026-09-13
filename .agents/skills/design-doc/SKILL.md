@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "4.3"
+  version: "4.4"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
