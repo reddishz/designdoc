@@ -45,7 +45,7 @@
 - **可选小节**（标题含「可选」）无内容时删除该节，不要写「无」占位。
 - **可选属性行**（`处理规则`、`依赖`、`取值范围`、第二条及以后的 `来源`）无对象时删除该行，不要留空链接。一条定义块先写一个主 `来源`；确有多个派生依据再追加行。
 - **FR / NFR 正文首段**按 [需求陈述](../../references/coding-system.md#需求陈述should) 的「系统应当」句式填写。
-- **L2《系统上下文》**写产品边界（谁用、连谁）；**L3 同名小节**写架构边界（信任、集成、部署）。二者都要时各自落在本层，不要互相复制。
+- **L2《系统上下文》**写产品边界（谁用、连谁）；**L3 同名小节**写架构边界（信任、集成、部署）。二者都要时各自落在本层，不要互相复制。各层回答哪一句见 [layer-system.md · 分层问题](../../references/layer-system.md#分层问题对层判据)。
 
 ## 快速模板选择
 
@@ -63,8 +63,8 @@
 | L0 | 战略与愿景 | 初稿/正式/草案/废弃 | 愿景、目标、成功标准（MET） | [l0-strategy.md](l0-strategy.md) ✅ |
 | L0 | 产品路线图 | 初稿/正式/草案/废弃 | 阶段与主题演进（Timeline / Journey 视图） | [l0-roadmap.md](l0-roadmap.md) ✅ |
 | L1 | 利益相关者需求 | 初稿/正式/草案/废弃 | 利益相关者、场景需求 | [l1-stakeholder.md](l1-stakeholder.md) ✅ |
-| L2 | 系统/产品需求 | 初稿/正式/草案/废弃 | 功能需求、非功能需求 | [l2-requirements.md](l2-requirements.md) ✅ |
-| L3 | 概念架构 | 初稿/正式/草案/废弃 | 架构原则、组件设计 | [l3-concept-architecture.md](l3-concept-architecture.md) ✅ |
+| L2 | 系统/产品需求 | 初稿/正式/草案/废弃 | 功能需求、非功能需求（约束，非实现） | [l2-requirements.md](l2-requirements.md) ✅ |
+| L3 | 概念架构 | 初稿/正式/草案/废弃 | 原则、组件、宏观决策（非特性清单） | [l3-concept-architecture.md](l3-concept-architecture.md) ✅ |
 | L4 | 逻辑/系统设计 | 初稿/正式/草案/废弃 | 系统设计、接口契约、动作 | [l4-system-design.md](l4-system-design.md) ✅ |
 | L5 | 详细设计 | 初稿/正式/草案/废弃 | 算法、流程逻辑、状态与配置约束 | [l5-detailed-design.md](l5-detailed-design.md) ✅ |
 | L6 | 验证与确认 | 初稿/正式/草案/废弃 | 验证策略、测试场景、需求追溯 | [l6-verification.md](l6-verification.md) ✅ |

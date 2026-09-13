@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯，定稿之后可以放心作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/skill-v4.4-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/skill-v4.5-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。
@@ -67,15 +67,17 @@ python3 .agents/skills/design-doc/scripts/check_docs.py -p ued
 
 ## 文档层级
 
-| 层级 | 名称 | 写什么 |
-|-----|------|------|
-| L0 | 战略与愿景 | 愿景、目标、成功标准（MET）；另有产品路线图 |
-| L1 | 利益相关者需求 | 用户、场景；另有规划总览（先记下、本轮不做的想法） |
-| L2 | 系统 / 产品需求 | 功能与非功能需求、规则、验收标准 |
-| L3 | 概念架构 | 原则与子系统；重要技术决策写成 ADR |
-| L4 | 逻辑 / 系统设计 | 接口、动作、领域对象、数据流转 |
-| L5 | 详细设计 | 算法、流程和约束（组件引用 L3，不写可执行代码） |
-| L6 | 验证与确认 | 验证策略、需求是否被覆盖到 |
+各层回答哪一句、写什么，以 [层级定义](./.agents/skills/design-doc/references/layer-system.md#层级定义) 为准。摘要：
+
+| 层级 | 名称 | 核心问题 |
+|-----|------|----------|
+| L0 | 战略与愿景 | 为什么做 |
+| L1 | 利益相关者需求 | 谁需要什么 |
+| L2 | 系统 / 产品需求 | 必须满足什么 |
+| L3 | 概念架构 | 准备用怎样的系统组织来满足 |
+| L4 | 逻辑 / 系统设计 | 这个组织如何落成契约与结构 |
+| L5 | 详细设计 | 局部机制如何算、如何转、如何配 |
+| L6 | 验证与确认 | 如何证明满足要求 |
 
 多数项目先写 L2 和 L4，其他层用到再补。
 
