@@ -20,7 +20,7 @@ DesignDoc 文档检查工具
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
 - 属性行组三段：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、追溯段（`出处` → `来源` → `依赖`）居末且值形态互斥
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期
-- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）、依据方向（`正式`/`草案` 细项依据 `初稿` 细项 → 提示确认；`依赖` 指向 `初稿` → ERROR）
+- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）、整份废止自底向上（文档 `废弃` 而仍有未废弃细项 → ERROR）、依据方向（`正式`/`草案` 细项依据 `初稿` 细项 → 提示确认；`依赖` 指向 `初稿` → ERROR）
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
@@ -2125,7 +2125,11 @@ class DesignDocChecker:
         return out
 
     def check_deprecation(self) -> None:
-        """废弃处理规范性：细项废弃（原地）与文档废弃（两阶段）。"""
+        """废弃处理规范性：细项废弃（原地）与文档废弃（两阶段）。
+
+        整份 `废弃` MUST 以全部细项已 `废弃` 为前置（缺状态视为未废弃）；
+        否则 ERROR「废弃文档仍含未废弃细项」。非细项正文本版不 ERROR。
+        """
         deprecated_doc_codes: Set[str] = set()
         deprecated_item_codes: Set[str] = set()
 
@@ -2144,6 +2148,20 @@ class DesignDocChecker:
                     self.add_issue("INFO", "废弃字段名待迁移",
                                    f"{doc.path}: `建议移除日期` 应改名为 `建议归档日期`"
                                    "（到期只归档入 deprecated/，不删除）")
+                live = []
+                for item in self._doc_items(doc):
+                    if item.path != doc.path:
+                        continue
+                    st = item.item_status or ""
+                    if st != "废弃":
+                        live.append(f"{item.code}（{st or '缺细项状态'}）")
+                if live:
+                    shown = ", ".join(live[:8]) + ("…" if len(live) > 8 else "")
+                    self.add_issue("ERROR", "废弃文档仍含未废弃细项",
+                                   f"{doc.path}: 文档 `状态` 为 `废弃`，但细项尚未全部 "
+                                   f"`废弃`：{shown}。整份废弃 MUST 自底向上——"
+                                   "先按细项流程作废或把仍生效内容迁出；"
+                                   "误标时 MUST 恢复文档状态，MUST NOT 为废文档而批量改细项状态")
                 if missing_doc_fields:
                     self.add_issue("ERROR", "废弃文档缺少必需字段",
                                    f"{doc.path}: 缺少 {'、'.join(missing_doc_fields)}")
@@ -2251,6 +2269,8 @@ class DesignDocChecker:
           而文档 `正式`」是结构违规（ERROR）。
         - 定稿方向：文档定稿 MUST 以「全部细项 ∈ {`正式`, `废弃`}」为前置，未满足时
           MUST 列出并提示用户确认（WARNING，人可确认后放行）。
+        - 整份废止：文档 `→废弃` MUST 以全部细项已 `废弃` 为前置；实现在
+          `check_deprecation`（ERROR「废弃文档仍含未废弃细项」）。非细项正文本版不 ERROR。
 
         只针对**定义位**（`item.defined`）：登记视图 / 索引行不承载定义，重复计会
         造成同一细项多次报告。缺 `细项状态` 者不参与判定（已由治理段校验报缺行）。

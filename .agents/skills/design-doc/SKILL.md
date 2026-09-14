@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "5.0"
+  version: "5.1"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -142,11 +142,11 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 
 ### 废弃细项处理
 
-**Checkpoint 4**：标注 `废弃` 前 **MUST** 暂停并确认原因与替代方案。`草案` 可直接废弃（最后版本号即该草案号）；`初稿→废弃` 时 `修订版本号` 保持 `1`、`废弃原因` 记「初稿期作废」。**MUST NOT** 以删除代替作废。标记后 **MUST** 按 [须人审](references/coding-system.md#须人审不能靠号) 列出「废弃后引用方是否仍成立」，等人确认后再改指或级联作废。标记格式、依赖图与引用追溯见 [item-deprecation.md](references/item-deprecation.md)。
+**Checkpoint 4**：标注细项或整份文档 `废弃` 前 **MUST** 暂停并确认原因与替代方案。`草案` 可直接废弃（最后版本号即该草案号）；`初稿→废弃` 时 `修订版本号` 保持 `1`、`废弃原因` 记「初稿期作废」。**MUST NOT** 以删除代替作废。标记后 **MUST** 按 [须人审](references/coding-system.md#须人审不能靠号) 列出「废弃后引用方是否仍成立」，等人确认后再改指或级联作废。整份文档另须满足 [整份废弃的前置](references/doc-deprecation.md#整份废弃的前置mandatory)：仍有未废弃细项或仍当依据的非细项正文时 **MUST NOT** 改文档 `状态`，也 **MUST NOT** 为过门批量改细项状态。标记格式、依赖图与引用追溯见 [item-deprecation.md](references/item-deprecation.md)。
 
 ### 废弃整份文档处理
 
-两阶段：先原地标 `废弃` 并给**建议归档日期**；到期归档入本作用域 `deprecated/`（只归档不删除，各子项目独立，无 `active/`）。标注前 **MUST** 排查各文档「本文引用」并按 [须人审](references/coding-system.md#须人审不能靠号) 列出引用方是否仍成立。流程见 [doc-deprecation.md](references/doc-deprecation.md)。
+两阶段：先原地标 `废弃` 并给**建议归档日期**；到期归档入本作用域 `deprecated/`（只归档不删除，各子项目独立，无 `active/`）。标注前 **MUST** 确认全部细项已 `废弃`（缺状态视为未废弃），列出仍当依据的非细项正文标题等人审，并排查各文档「本文引用」。用户要求整份废弃但活内容仍在时 **MUST** 停下并列出缺口。误标存量 **MUST** 先恢复文档状态，**MUST NOT** 杀掉活细项来迁就封面。流程见 [doc-deprecation.md](references/doc-deprecation.md)。
 
 ### 修改完毕：定稿确认与提交提示
 
@@ -191,7 +191,7 @@ AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUS
 
 模板选型见 [assets/templates/index.md](assets/templates/index.md)。检查工具：
 
-- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、版本递增时机、废弃字段与建议归档日期、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。
+- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、版本递增时机、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
 - `--refs {编码}`：反查定义 / 登记 / 引用，并列出依赖两表（谁依赖我 / 我依赖谁）；`初稿` 改标题前、解冻改内容前与任何状态作废前 **MUST** 先执行。
 - `--check-templates`：模板哨兵（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文）与技能包内部 `文件.md#锚点` 可达性。
 - `--instantiate {模板文件名} [--segment {段名}]`：剥除哨兵输出实例化后的正文；多段模板（`ref.md`、`readme-template.md`）用 `--segment` 取单段。
