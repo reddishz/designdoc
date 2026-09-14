@@ -1,0 +1,13 @@
+---
+description: 本仓库提交须同时走 GitHub 与 SVN，缺一不可
+alwaysApply: true
+---
+
+# 双仓库提交
+
+本项目由 **SVN + GitHub** 双管理。用户说「提交」时，**MUST** 两边都做完再结束，不得只 git 或只 svn。
+
+- **Git**：`git commit`（仅用户要求提交时）；需要让远程看到则 `git push origin HEAD`。远程为 GitHub。
+- **SVN**：在 `/data/mworks/works.my/designdoc` 对同一批文件 `svn commit`。说明单行、200 字内、署名 `(Cursor)`，**不得换行**。
+- 不要提交 `__pycache__/`、`.codex/`。
+- 任一边失败则停下并说明，不要假装两边都已完成。
