@@ -7,7 +7,7 @@
 | 文件 | 内容 |
 |------|------|
 | [object-model.md](object-model.md) | 对象与字段写入者、锁定矩阵、动作 |
-| [coding-system.md](coding-system.md) | 文档/细项编码形态、类型码表、属性行定义集（封闭）、定义块形态、引用与分配 |
+| [coding-system.md](coding-system.md) | 文档/细项编码形态、类型码表、属性行定义集（封闭）、定义块形态、引用、本文引用与分配 |
 | [type-profiles.md](type-profiles.md) | `IF` / `ACT` / `PLN`、UC / FR / FLW 分界，ADR 与 DEC 分界 |
 | [layer-system.md](layer-system.md) | L0–L6 层级定义、目录结构与命名规则 |
 | [status-definitions.md](status-definitions.md) | 状态即基线、标准四态、门控、记录型与流转伴随含义、版本号、存量迁移 |
