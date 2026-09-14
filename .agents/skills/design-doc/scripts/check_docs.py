@@ -9,7 +9,7 @@ DesignDoc 文档检查工具
 - 旧状态值（`草稿` / `提议` / `采纳` / `登记中` / `使用中` / `验证状态` 等）的迁移提示
 - 正文定义 / 本文档清单 / 作用域 README 全局索引三方的编码与状态一致
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
-- 版本号递增时机（仅 `正式→草案` 解冻时递增）、回退记录完整性、版本号不复用
+- 版本号递增时机（仅 `正式→草案` 解冻时递增）、版本号不得改小、变更记录倒序
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
@@ -31,7 +31,7 @@ DesignDoc 文档检查工具
 
 规则本体的唯一完整表述在 `references/` 专项文件内，本脚本只执行校验、不重复定义
 规则；类型码清单优先从 `references/coding-system.md` 的类型码表读取，读取失败时
-回退到内置快照。
+改用内置快照。
 """
 
 import os
@@ -48,7 +48,7 @@ from urllib.parse import unquote
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 CODING_SYSTEM_MD = SKILL_ROOT / "references" / "coding-system.md"
 
-# 回退快照：与 references/coding-system.md 的类型码表保持一致
+# 缺省快照：与 references/coding-system.md 的类型码表保持一致
 FALLBACK_TYPE_CODES = {
     "GOL", "STK", "SCN", "FR", "NFR", "UC", "PRN", "DEC", "CMP", "IF", "FLW",
     "ALG", "DOM", "ASM", "RSK", "MET", "TC", "AC", "CON", "RUL", "ACT", "PLN",
@@ -57,7 +57,7 @@ FALLBACK_TYPE_CODES = {
 DOC_CODE_PREFIXES = {"L0", "L1", "L2", "L3", "L4", "L5", "L6", "ADR", "REF"}
 LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 
-# 回退快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
+# 缺省快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
 # 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
 FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "最后修订日期",
                         "废弃时间", "废弃原因", "替代方案", "出处", "来源", "依赖")
@@ -105,8 +105,18 @@ TRACE_COLUMN = "追溯状态"
 FINALIZE_KW = re.compile(
     r"定稿|转为正式|升为正式|评审通过|正式发布|(?:草稿|初稿|草案)\s*(?:→|->)\s*正式")
 UNFREEZE_KW = re.compile(r"解冻|正式\s*(?:→|->)\s*(?:草稿|草案)|转(?:草稿|草案)")
-ROLLBACK_KW = re.compile(r"回退|放弃本轮修订|放弃修订|撤回修订")
+# 变更记录里把已取消的状态机动作写成「回退」时告警；业务「回退路径 / 回退策略」除外。
+LEGACY_ROLLBACK_KW = re.compile(r"回退|撤回修订")
+BUSINESS_ROLLBACK_KW = re.compile(
+    r"回退路径|回退策略|失败或回退|如何回退|异常处理与回退|有跳转或回退")
 INIT_KW = re.compile(r"初始|新建|创建|初稿")
+
+
+def is_legacy_rollback_action(desc: str) -> bool:
+    """变更记录是否把已取消的状态机「回退」写成了变更动作。"""
+    if BUSINESS_ROLLBACK_KW.search(desc):
+        return False
+    return bool(LEGACY_ROLLBACK_KW.search(desc))
 
 # 项目编码前缀（可选段）：2-5 位、MUST 以大写字母开头、其余各位 MAY 为大写字母或数字。
 # 房规见 references/coding-system.md ·《项目编码规则》；本文件所有编码正则共用本常量，
@@ -249,7 +259,7 @@ def _series_of(code: str) -> str:
 
 
 def load_type_codes() -> Set[str]:
-    """从规范文件读取类型码表首列；失败时回退内置快照。"""
+    """从规范文件读取类型码表首列；失败时改用内置快照。"""
     try:
         text = CODING_SYSTEM_MD.read_text(encoding="utf-8")
     except OSError:
@@ -280,7 +290,7 @@ def load_type_codes() -> Set[str]:
 
 
 def load_attr_whitelist() -> Tuple[Tuple[str, ...], Dict[str, Tuple[str, ...]]]:
-    """读《属性行定义集（封闭）》的属性名白名单；失败时回退内置快照。
+    """读《属性行定义集（封闭）》的属性名白名单；失败时改用内置快照。
 
     返回 `(固定属性名, {类型码: 自有属性名})`。只读属性名，不解析值形态——值形态由
     各项专用校验执行（如 `_check_trace_segment` 判 `来源` / `出处` 的链接互斥）。
@@ -885,7 +895,7 @@ class DesignDocChecker:
             if entries:
                 doc.code_sections.append((section, entries))
 
-        # 定义块的粗体属性行与清单列共用 `item_status`：清单未填时回退到定义位
+        # 定义块的粗体属性行与清单列共用 `item_status`：清单未填时改用定义位
         for item in doc.items:
             if not item.item_status and item.def_status:
                 item.item_status = item.def_status
@@ -1369,8 +1379,8 @@ class DesignDocChecker:
         return ""
 
     def check_version_flow(self) -> None:
-        """版本机制：起始 v1.0、初稿期与定稿不变号、解冻才递增且基于历史最大号、
-        回退记录完整、版本号不复用、变更记录倒序。"""
+        """版本机制：起始 v1.0、初稿期与定稿不变号、解冻才递增、版本号不得改小、
+        变更记录倒序。状态机已无回退动作，变更记录若声明回退则告警。"""
 
         def key(ver: str) -> Optional[Tuple[int, int]]:
             m = re.fullmatch(r"v(\d+)\.(\d+)", ver)
@@ -1387,17 +1397,12 @@ class DesignDocChecker:
                     self.add_issue("WARNING", "文档版本与变更记录不一致",
                                    f"{doc.path}: 元信息 `版本` {doc.version} != 变更记录最新行 {rows[0][0]}")
 
-            # 版本号不复用：不得出现“解冻递增到不大于历史最大号”的情形（定稿不变号、
-            # 回退回到旧号均为合法重复，具体校验见下方逐行判定）
             prev = None
             for idx, ver in enumerate(versions):
                 if ver is None:
                     if not rows[idx][0].startswith("{"):
                         self.add_issue("WARNING", "版本号格式错误",
                                        f"{doc.path}: 变更记录版本 '{rows[idx][0]}' 应为 v主.次")
-                    continue
-                # 回退行的版本号合法地低于其下方被弃行，不参与倒序校验
-                if ROLLBACK_KW.search(rows[idx][1]):
                     continue
                 if prev and ver > prev:
                     self.add_issue("WARNING", "变更记录未按版本倒序",
@@ -1406,6 +1411,10 @@ class DesignDocChecker:
 
             for idx in range(len(rows)):
                 ver, desc = rows[idx]
+                if is_legacy_rollback_action(desc):
+                    self.add_issue("WARNING", "变更记录声明回退",
+                                   f"{doc.path}: '{desc[:28]}' 状态机已取消回退；放弃本轮须在"
+                                   "草案期内改正文再定稿，或走 `草案→废弃`。版本号不得改回解冻前")
                 older = rows[idx + 1] if idx + 1 < len(rows) else None
                 if older is None:
                     if INIT_KW.search(desc) and ver and not ver.startswith("v1.0"):
@@ -1414,13 +1423,6 @@ class DesignDocChecker:
                     continue
                 cur_key, old_key = key(ver), key(older[0])
                 history_max = max((k for k in versions[idx + 1:] if k), default=None)
-                if ROLLBACK_KW.search(desc):
-                    # 回退：版本号与内容回到上一 `正式` 基线，被弃号条目 MUST 完整保留
-                    if cur_key and history_max and cur_key >= history_max:
-                        self.add_issue("WARNING", "回退记录不完整",
-                                       f"{doc.path}: '{desc[:28]}' 声明回退，但变更记录中没有高于"
-                                       "当前版本号的被弃条目（被回退弃用的版本号 MUST 保留且不复用）")
-                    continue
                 if FINALIZE_KW.search(desc) and cur_key and old_key and cur_key != old_key:
                     self.add_issue("WARNING", "定稿时递增了版本号",
                                    f"{doc.path}: '{desc[:28]}' 定稿不应变号"
@@ -1433,7 +1435,7 @@ class DesignDocChecker:
                     elif history_max and cur_key <= history_max:
                         self.add_issue("WARNING", "递增未基于历史最大版本号",
                                        f"{doc.path}: 解冻递增到 {ver}，但历史已出现过不低于它的版本号；"
-                                       "递增基准 = 该对象历史上出现过的最大版本号（含被回退弃用的号）")
+                                       "递增基准 = 该对象当前版本号（单调、不得改小）")
 
     CHAPTER_REF_PATTERNS = [
         (re.compile(r"§\s*\d"), "§ 编号引用"),
@@ -1464,7 +1466,7 @@ class DesignDocChecker:
         """结构完整性：必备小节、细项清单存在。
 
         key 优先用层级（`L0`-`L6`）；ADR / REF 的文档编码不含层级（`doc.layer`
-        为空），回退到 `doc.doc_type`，否则两类文档的结构校验会整体静默失效。
+        为空），改用 `doc.doc_type`，否则两类文档的结构校验会整体静默失效。
 
         同一层级 MAY 有**多种文档形态**（与 `assets/templates/` 的官方模板一一对应：
         L0 分产品战略 / 产品路线图，L1 分利益相关者需求 / 产品规划总览），命中任一
@@ -1731,7 +1733,7 @@ class DesignDocChecker:
                                f"`{want}` 排在第 {pos[want] + 1} 行，MUST 排在第 "
                                f"{slot + 1} 行（治理段固定序：{' / '.join(GOV_SEGMENT)}）")
         for field, pat, msg in (("修订版本号", REV_VALUE,
-                                 "MUST 是单个正整数（新建为 1、每轮解冻 +1、单调不回退）"),
+                                 "MUST 是单个正整数（新建为 1、每轮解冻 +1、单调不得改小）"),
                                 ("最后修订日期", DATE_VALUE,
                                  "MUST 为 YYYY-MM-DD")):
             if field not in pos:
@@ -2231,8 +2233,8 @@ class DesignDocChecker:
             elif doc.status == "草案":
                 self.add_issue("INFO", "草案待定稿",
                                f"{doc.path}: 状态为 '草案'（已从 `正式` 解冻），修订完成后请定稿"
-                               "（草案→正式，沿用当前版本号）；放弃本轮修订可回退，"
-                               "变更记录 MUST 完整保留被弃版本号条目" + NOT_IMPL_BASIS)
+                               "（草案→正式，沿用当前版本号）；放弃本轮须在草案期内改正文再定稿，"
+                               "或走 `草案→废弃`，版本号不得改回解冻前" + NOT_IMPL_BASIS)
             pending = sorted({item.code for item in doc.items
                               if item.item_status in ("", "初稿", "草案")})
             if pending:
@@ -2264,7 +2266,7 @@ class DesignDocChecker:
                 self.add_issue("ERROR", "细项草案而文档正式",
                                f"{doc.path}: 文档状态为 `正式`，但细项 {shown} 为 `草案`；"
                                "解冻 MUST 自顶向下——细项 `正式→草案` 前 MUST 先解冻所在"
-                               "文档（文档版本号在此递增），或把细项回退 / 定稿")
+                               "文档（文档版本号在此递增），或把细项定稿 / 作废")
             pending = sorted({it.code for it in own
                               if it.item_status in ("初稿", "草案")})
             if pending:
