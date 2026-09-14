@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "4.6"
+  version: "4.7"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -45,7 +45,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 词汇表 | [glossary-conventions.md](references/glossary-conventions.md) |
 | 模板边界与整篇型共用 | [assets/templates/index.md](assets/templates/index.md) |
 
-- **引用锚点**：细项编码与文档编码是 `ued/` 内唯一允许的语义引用锚点；**MUST NOT** 用章节编号（`§x.y`、`第 x 章`、`见上文`）。可独立成立的规则 MUST 先落码再被引用。规范条文本身不纳入细项编码，指向条款用 `文件#标题锚点`。
+- **引用锚点**：细项编码与文档编码是 `ued/` 内唯一允许的语义引用锚点；**MUST NOT** 用章节编号（`§x.y`、`第 x 章`、`见上文`）。跨文件链接路径 MUST 以 `./` 或 `../` 开头（见 [交叉引用规则 · 链接路径](references/coding-system.md#链接路径mandatory)）。可独立成立的规则 MUST 先落码再被引用。规范条文本身不纳入细项编码，指向条款用 `文件#标题锚点`。
 - **存在性锁定**：编号一经分配永久占用，任何状态 **MUST NOT** 删除或复用；放弃走作废。权限切片见 [object-model.md · 锁定矩阵](references/object-model.md#锁定矩阵mandatory)。
 - **`ued/` 不得含可执行代码**（算法、契约、状态机可以）。REF 可收录外部资料中的代码示例。
 - **层级按最小必要**：未指定时默认 L2 或 L4，**MUST NOT** 无指令一次生成 L0–L6。对层判据与补齐信号见 [layer-system.md · 分层问题](references/layer-system.md#分层问题对层判据) / [按需启用原则](references/layer-system.md#按需启用原则)。
