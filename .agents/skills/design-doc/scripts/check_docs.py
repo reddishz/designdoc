@@ -10,7 +10,8 @@ DesignDoc 文档检查工具
 - 正文定义 / 本文档清单 / 作用域 README 全局索引三方的编码与状态一致
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
 - 修订号递增时机（仅 `正式→草案` 解冻时 +1）、修订号不得改小、变更记录倒序
-- 发版谱系：`引入版本` / `退出版本` 若出现则取值须为产品版本 `vX.Y`；`初稿` / 初稿期作废不得带谱系；`退出版本` 须已 `废弃`。缺盖章不报 ERROR
+- 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项且可重算 added/removed/changed
+- 遗留谱系：`引入版本` / `退出版本` 若出现则取值须为 `vX.Y`；`初稿` / 初稿期作废不得带；`退出版本` 须已 `废弃`（升版不再盖章）
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
@@ -45,9 +46,29 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, Iterable, List, Optional, Set, Tuple
 from urllib.parse import unquote
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None  # type: ignore
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
 CODING_SYSTEM_MD = SKILL_ROOT / "references" / "coding-system.md"
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+
+from baseline_ops import (  # noqa: E402
+    VERSION_RE as BASELINE_VER_RE,
+    build_snapshot,
+    collect_formal_items,
+    compute_delta,
+    dump_baseline,
+    find_baseline_dir,
+    latest_baseline,
+    list_baseline_files,
+    load_baseline,
+    next_version,
+)
 
 # 缺省快照：与 references/coding-system.md 的类型码表保持一致
 FALLBACK_TYPE_CODES = {
@@ -1438,6 +1459,302 @@ class DesignDocChecker:
             elif not VERSION_RE.match(pv):
                 self.add_issue("WARNING", "产品版本格式错误",
                                f"{doc.path}: `产品版本` '{pv}' 应为 v主.次（如 v1.0）")
+
+    def _scope_dirs_with_product(self) -> List[Tuple[Path, str, str]]:
+        """返回 (作用域目录, 产品版本, README 相对路径)。"""
+        out: List[Tuple[Path, str, str]] = []
+        for doc in self.docs:
+            if not doc.is_index:
+                continue
+            mode = (doc.meta.get("doc_mode") or "").strip()
+            if mode == "multi-app":
+                continue
+            pv = (doc.meta.get("产品版本") or "").strip()
+            if not pv or not VERSION_RE.match(pv):
+                continue
+            scope = Path(doc.path).resolve().parent
+            out.append((scope, pv, doc.path))
+        return out
+
+    def check_product_baselines(self) -> None:
+        """校验 `baselines/vX.Y.yaml`：形态、增量可重算；当前版对照活正式集。"""
+        if yaml is None:
+            for scope, pv, rpath in self._scope_dirs_with_product():
+                if find_baseline_dir(scope).is_dir():
+                    self.add_issue("WARNING", "缺 PyYAML",
+                                   f"{rpath}: 无法校验产品基线（需要 PyYAML）")
+                    return
+            return
+
+        formal = {it["code"]: it for it in collect_formal_items(self.docs)}
+        formal_status: Dict[str, str] = {}
+        for doc in self.docs:
+            for item in doc.items:
+                if item.defined:
+                    formal_status[item.code] = item.item_status or item.def_status
+
+        # README 指针指向的当前基线才对照活状态；历史快照只检形态与增量
+        checked_files: Set[Path] = set()
+        for scope, pv, rpath in self._scope_dirs_with_product():
+            bpath = find_baseline_dir(scope) / f"{pv}.yaml"
+            if not bpath.is_file():
+                self.add_issue("WARNING", "缺产品基线快照",
+                               f"{rpath}: `产品版本` 为 {pv}，但缺少 "
+                               f"`baselines/{pv}.yaml`；用 --bump-product 生成")
+                continue
+            self._validate_baseline_file(
+                bpath, formal, formal_status, live_check=True)
+            checked_files.add(bpath.resolve())
+
+        for scope, _pv, _rpath in self._scope_dirs_with_product():
+            for bpath in list_baseline_files(scope):
+                if bpath.resolve() in checked_files:
+                    continue
+                self._validate_baseline_file(
+                    bpath, formal, formal_status, live_check=False)
+                checked_files.add(bpath.resolve())
+
+        # 无 README 产品版本指针的 baselines/（如夹具）：按当前版严格对照
+        for bdir in sorted(self.ued_path.rglob("baselines")):
+            if not bdir.is_dir():
+                continue
+            for bpath in sorted(bdir.glob("v*.yaml")):
+                if not BASELINE_VER_RE.match(bpath.stem):
+                    continue
+                if bpath.resolve() in checked_files:
+                    continue
+                self._validate_baseline_file(
+                    bpath, formal, formal_status, live_check=True)
+
+    def _validate_baseline_file(
+        self,
+        bpath: Path,
+        formal: Dict[str, Dict],
+        formal_status: Dict[str, str],
+        live_check: bool = True,
+    ) -> None:
+        try:
+            rel = str(bpath.relative_to(self.ued_path.resolve()))
+        except ValueError:
+            rel = str(bpath)
+
+        def loc_for(code: str = "") -> str:
+            """详情行带上定义文档路径，便于夹具归属。"""
+            if code and code in self.item_def_doc:
+                return f"{self.item_def_doc[code].path}: {rel}"
+            return rel
+
+        try:
+            data = load_baseline(bpath)
+        except Exception as exc:  # noqa: BLE001
+            self.add_issue("ERROR", "产品基线无法解析", f"{rel}: {exc}")
+            return
+        pv = str(data.get("product_version") or "")
+        if pv != bpath.stem:
+            self.add_issue("ERROR", "产品基线版本不一致",
+                           f"{rel}: 文件名 {bpath.stem} 与字段 product_version "
+                           f"'{pv}' 不一致")
+        if not VERSION_RE.match(pv):
+            self.add_issue("ERROR", "产品基线版本格式错误",
+                           f"{rel}: product_version '{pv}' 应为 v主.次")
+        items = data.get("items")
+        if not isinstance(items, list):
+            self.add_issue("ERROR", "产品基线缺 items", f"{rel}: 须有 items 列表")
+            return
+        codes: List[str] = []
+        seen: Set[str] = set()
+        for i, it in enumerate(items):
+            if not isinstance(it, dict):
+                self.add_issue("ERROR", "产品基线 items 形态错误",
+                               f"{rel}: items[{i}] 须为 mapping")
+                continue
+            code = str(it.get("code") or "").strip()
+            if not code:
+                self.add_issue("ERROR", "产品基线 items 缺 code",
+                               f"{rel}: items[{i}] 缺 code")
+                continue
+            if code in seen:
+                self.add_issue("ERROR", "产品基线编码重复",
+                               f"{loc_for(code)}: `{code}` 重复")
+            seen.add(code)
+            codes.append(code)
+            if not live_check:
+                # 历史快照不可变：不对照当前细项状态 / revision
+                rev = it.get("revision")
+                if rev is not None and not (
+                    isinstance(rev, int) or (isinstance(rev, str) and str(rev).isdigit())
+                ):
+                    self.add_issue("ERROR", "产品基线 revision 格式错误",
+                                   f"{loc_for(code)}: `{code}` revision 须为正整数")
+                continue
+            st = formal_status.get(code, "")
+            if code not in formal_status:
+                self.add_issue("ERROR", "产品基线成员不存在",
+                               f"{loc_for(code)}: `{code}` 在基线中，但 ued/ 无定义")
+            elif st != "正式":
+                self.add_issue("ERROR", "产品基线成员非正式",
+                               f"{loc_for(code)}: `{code}` 在基线中，但当前细项状态为 "
+                               f"'{st or '（空）'}'（MUST 为正式）")
+            else:
+                live = formal.get(code) or {}
+                try:
+                    file_rev = int(it.get("revision") or 0)
+                except (TypeError, ValueError):
+                    file_rev = -1
+                    self.add_issue("ERROR", "产品基线 revision 格式错误",
+                                   f"{loc_for(code)}: `{code}` revision 须为正整数")
+                if file_rev >= 0 and file_rev != int(live.get("revision") or 0):
+                    self.add_issue("WARNING", "产品基线 revision 落后",
+                                   f"{loc_for(code)}: `{code}` 基线 revision={file_rev}，"
+                                   f"当前正式细项为 {live.get('revision')}；"
+                                   "升产品版本时纳入 changed")
+        if codes != sorted(codes):
+            self.add_issue("WARNING", "产品基线 items 未排序",
+                           f"{rel}: items 应按 code 字典序")
+
+        prev_ver = data.get("prev")
+        if prev_ver in (None, "null", ""):
+            expect_added = codes
+            expect_removed: List[str] = []
+            expect_changed: List[str] = []
+        else:
+            prev_path = bpath.parent / f"{prev_ver}.yaml"
+            if not prev_path.is_file():
+                self.add_issue("ERROR", "产品基线 prev 缺失",
+                               f"{rel}: prev={prev_ver} 但找不到 {prev_path.name}")
+                return
+            try:
+                prev_data = load_baseline(prev_path)
+            except Exception as exc:  # noqa: BLE001
+                self.add_issue("ERROR", "产品基线 prev 无法解析",
+                               f"{rel}: {exc}")
+                return
+            prev_items = list(prev_data.get("items") or [])
+            expect_added, expect_removed, expect_changed = compute_delta(
+                prev_items, items)
+
+        for key, expect in (("added", expect_added),
+                            ("removed", expect_removed),
+                            ("changed", expect_changed)):
+            got = [str(x) for x in (data.get(key) or [])]
+            if got != list(expect):
+                self.add_issue("ERROR", "产品基线增量不一致",
+                               f"{rel}: `{key}` 与相对 prev 的重算不一致")
+
+    def bump_product_version(
+        self,
+        major: bool = False,
+        note: str = "",
+        force_version: str = "",
+    ) -> List[Path]:
+        """升产品版本：各应用作用域各写一份 baselines 并更新 README。返回新文件路径列表。"""
+        if yaml is None:
+            raise RuntimeError("需要 PyYAML（pip install pyyaml）")
+        if not self.docs:
+            self.scan_docs()
+        scopes = self._scope_dirs_with_product()
+        if not scopes:
+            for doc in self.docs:
+                if not doc.is_index:
+                    continue
+                mode = (doc.meta.get("doc_mode") or "").strip()
+                if mode == "multi-app":
+                    continue
+                if mode in ("single-app", "app") or doc.meta.get("project_name"):
+                    scopes.append((Path(doc.path).resolve().parent, "", doc.path))
+                    break
+        if not scopes:
+            raise RuntimeError("未找到应用级 README（doc_mode=app|single-app）")
+
+        outs: List[Path] = []
+        errors: List[str] = []
+        for scope, cur_pv, readme_path in scopes:
+            try:
+                outs.append(self._bump_one_scope(
+                    scope, cur_pv, Path(readme_path),
+                    major=major, note=note, force_version=force_version))
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"{readme_path}: {exc}")
+        if errors and not outs:
+            raise RuntimeError("; ".join(errors))
+        if errors:
+            raise RuntimeError(
+                "部分作用域升版失败（已写入 "
+                + ", ".join(str(p) for p in outs) + "）：" + "; ".join(errors))
+        return outs
+
+    def _bump_one_scope(
+        self,
+        scope: Path,
+        cur_pv: str,
+        readme_path: Path,
+        major: bool = False,
+        note: str = "",
+        force_version: str = "",
+    ) -> Path:
+        prev_path = latest_baseline(scope)
+        prev_data = load_baseline(prev_path) if prev_path else None
+        if force_version:
+            new_pv = force_version
+        elif not cur_pv and not prev_path:
+            new_pv = "v1.0"
+        elif cur_pv and not prev_path:
+            new_pv = cur_pv
+        else:
+            base_pv = cur_pv or (prev_data or {}).get("product_version") or "v1.0"
+            new_pv = next_version(base_pv, major=major)
+        out = find_baseline_dir(scope) / f"{new_pv}.yaml"
+        if out.exists():
+            raise RuntimeError(f"已存在 {out}，拒绝覆盖；请改号或删除后重试")
+        scope_resolved = scope.resolve()
+        scoped_docs = []
+        for d in self.docs:
+            try:
+                p = Path(d.path).resolve()
+            except OSError:
+                continue
+            if p.parent == scope_resolved or scope_resolved in p.parents:
+                scoped_docs.append(d)
+        curr_items = collect_formal_items(scoped_docs or self.docs)
+        snap = build_snapshot(new_pv, curr_items, prev_data=prev_data, note=note)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(dump_baseline(snap), encoding="utf-8")
+        self._update_readme_product_version(readme_path, new_pv, note, out)
+        return out
+
+    def _update_readme_product_version(
+        self, readme: Path, new_pv: str, note: str, baseline_path: Path,
+    ) -> None:
+        from datetime import date as _date
+        text = readme.read_text(encoding="utf-8")
+        if re.search(r"^\|\s*产品版本\s*\|", text, re.M):
+            text = re.sub(
+                r"^(\|\s*产品版本\s*\|\s*)[^|\n]+(\|)\s*$",
+                lambda m: f"{m.group(1)}{new_pv} {m.group(2)}",
+                text, count=1, flags=re.M,
+            )
+        today = _date.today().isoformat()
+        rel = baseline_path.name
+        row = f"| {new_pv} | {today} | {note or '升产品版本'}（`baselines/{rel}`） |"
+        if "## 发版记录" in text:
+            def _insert(m: re.Match) -> str:
+                return m.group(0) + row + "\n"
+            text2, n = re.subn(
+                r"(## 发版记录\s*\n\s*\|[^\n]+\|\s*\n\|[-:| ]+\|\s*\n)",
+                _insert,
+                text,
+                count=1,
+            )
+            if n:
+                text = text2
+            elif f"| {new_pv} |" not in text.split("## 发版记录", 1)[-1][:800]:
+                text = text.replace(
+                    "## 发版记录\n",
+                    "## 发版记录\n\n| 产品版本 | 日期 | 说明 |\n"
+                    "|----------|------|------|\n" + row + "\n",
+                    1,
+                )
+        readme.write_text(text, encoding="utf-8")
 
     def check_version_flow(self) -> None:
         """修订号机制：起始 1、初稿期与定稿不变号、解冻才 +1、不得改小、
@@ -2867,6 +3184,7 @@ class DesignDocChecker:
         self.check_counters()
         self.check_version_flow()
         self.check_readme_product_version()
+        self.check_product_baselines()
         self.check_chapter_references()
         self.check_structure()
         self.check_def_blocks()
@@ -3151,6 +3469,14 @@ def main() -> int:
                         help="剥除哨兵输出模板实例化后的正文（文件名或路径），供预览评估")
     parser.add_argument("--segment", metavar="NAME",
                         help="配合 --instantiate：只输出指定段名的那一段")
+    parser.add_argument("--bump-product", action="store_true",
+                        help="升产品版本：扫描正式细项写入 baselines/vX.Y.yaml 并更新 README")
+    parser.add_argument("--major", action="store_true",
+                        help="配合 --bump-product：升主版本（vX.Y → v(X+1).0）")
+    parser.add_argument("--note", default="",
+                        help="配合 --bump-product：发版说明")
+    parser.add_argument("--force-version", default="",
+                        help="配合 --bump-product：强制使用指定产品版本号（如 v5.17）")
     args = parser.parse_args()
 
     if args.check_templates:
@@ -3162,6 +3488,18 @@ def main() -> int:
         return _print_instantiated(args.instantiate, args.segment)
 
     checker = DesignDocChecker(args.path)
+
+    if args.bump_product:
+        try:
+            outs = checker.bump_product_version(
+                major=args.major, note=args.note,
+                force_version=args.force_version)
+        except Exception as exc:  # noqa: BLE001
+            print(f"❌ --bump-product 失败：{exc}")
+            return 1
+        for out in outs:
+            print(f"✅ 已写入产品基线：{out}")
+        return 0
 
     if args.refs:
         checker.scan_docs()

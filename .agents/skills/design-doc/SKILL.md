@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "6.0"
+  version: "6.1"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -39,7 +39,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 编码形态、类型码表、属性封闭集、定义块、引用、本文引用、分配 | [coding-system.md](references/coding-system.md) |
 | `IF` / `ACT` / `PLN`、UC / FR / FLW、ADR 与 DEC | [type-profiles.md](references/type-profiles.md) |
 | 四态、门控、修订号、流转伴随 / 记录型含义 | [status-definitions.md](references/status-definitions.md) |
-| 产品版本、升产品版本、引入 / 退出版本 | [product-version.md](references/product-version.md) |
+| 产品版本、产品基线、升产品版本 | [product-version.md](references/product-version.md) |
 | 细项 / 文档作废步骤 | [item-deprecation.md](references/item-deprecation.md) / [doc-deprecation.md](references/doc-deprecation.md) |
 | 检查项 | [review-guidelines.md](references/review-guidelines.md) |
 | 层级与目录 | [layer-system.md](references/layer-system.md) |
@@ -157,28 +157,29 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 
 1. **提交提示**：询问是否提交到 git / svn。答「暂不提交」则跳过 2–4，未冻结对象保持不变。
 2. **未冻结扫描**：确认要提交时，**仅扫描本轮 AI 实际改过的文件**（以本轮会话操作清单为准，不依赖版本库差异；无法确定时只提示、不扫描），收集 `初稿` / `草案`：文档元信息 `状态`；细项定义块或清单列；缺字段者按 `变更记录` 判定（有定稿条目 → `草案`；从未定稿 → `初稿`；无法判定 → `草案`）。
-3. **呈现与确认**：紧凑表格列出，支持批量口径。清单 **MUST** 附带「未冻结对象不得作为实现依据」（见 [据文档实现](#据文档实现消费侧mandatory)）。
-4. **执行升格与提交**：明确确认者 → `正式`（定稿不加修订号；缺字段补齐）。**升格 MUST 自底向上**：先细项后文档。细项定稿 **MUST** 审查该细项出边（含同文档）并提示[须人审](references/coding-system.md#须人审不能靠号)；用户只确认文档而未确认其下细项时 **MUST** 回指待定稿细项。文档定稿 **MUST** 按 [本文引用 · 文档定稿](references/coding-system.md#审查与定稿时机) 对齐钉住表并再次列出须人审项。未提及 / 略过 → 保持未冻结。然后按用户指示 `svn commit` / `git commit`（是否 push 另请示）。
-5. **升产品版本（SHOULD）**：若自上次产品版本以来命中 [主版本询问条件](references/product-version.md#升产品版本mandatory)，询问是否同时升。用户说「发版 / 升产品版本」时走下方程序。
+3. **呈现与确认**：紧凑表格列出，支持批量口径。清单 **MUST** 附带「未冻结或未入当前产品基线不得作为实现依据」（见 [据文档实现](#据文档实现消费侧mandatory)）。
+4. **执行升格与提交**：明确确认者 → `正式`（定稿不加修订号；缺字段补齐；**定稿不写** `baselines/`）。**升格 MUST 自底向上**：先细项后文档。细项定稿 **MUST** 审查该细项出边（含同文档）并提示[须人审](references/coding-system.md#须人审不能靠号)；用户只确认文档而未确认其下细项时 **MUST** 回指待定稿细项。文档定稿 **MUST** 按 [本文引用 · 文档定稿](references/coding-system.md#审查与定稿时机) 对齐钉住表并再次列出须人审项。未提及 / 略过 → 保持未冻结。然后按用户指示 `svn commit` / `git commit`（是否 push 另请示）。
+5. **升产品版本（SHOULD）**：若自上次产品版本以来命中 [主版本询问条件](references/product-version.md#升产品版本mandatory)，或本轮有新定稿细项需进入可实现集，询问是否同时升。用户说「发版 / 升产品版本」时走下方程序。
 
 **MUST NOT**：未经确认升格；扫描并提交本轮未改的历史未冻结对象；删除已分配编码或已建档文档（放弃走作废，须 Checkpoint 4；`草案` 放弃走作废，或在草案期内改正文后再定稿，由人决定）。
 
 ### 升产品版本
 
-用户说「发版 / 升产品版本」时按 [product-version.md · 升产品版本](references/product-version.md#升产品版本mandatory) 执行：定号（默认次版本 `+1`；首次纳入基线且仍为 `v1.0`、尚无发版记录时 MAY 以 `v1.0` 盖章）→ 命中则问主版本（用户否决或未答则保持次版本）→ 给未盖章的 `正式` / `草案` 对象写 `引入版本`、给非初稿期作废的 `废弃` 对象写 `退出版本` → 作用域 README 发版记录追加一行（版本 + 日期）。不解冻、不改修订号、不改本文引用、不写 git / svn / 构建号。本技能 **MUST NOT** 维护功能特性清单。
+用户说「发版 / 升产品版本」时按 [product-version.md · 升产品版本](references/product-version.md#升产品版本mandatory) 执行：定号（默认次版本 `+1`；首次建立基线且仍为 `v1.0`、尚无 `baselines/` 快照时 MAY 以 `v1.0` 生成）→ 命中则问主版本（用户否决或未答则保持次版本）→ 扫描全部 `正式` 细项，按「复制上一版再改差额 + 对照正式集」写出 `baselines/vX.Y.yaml` → 更新 README `产品版本` 与发版记录一行。不解冻、不改修订号、不改本文引用、**MUST NOT** 再向对象盖 `引入版本` / `退出版本`、不写 git / svn / 构建号。定稿 **MUST NOT** 写基线文件。优先 `check_docs.py --bump-product`。
 
 ## 据文档实现（消费侧，MANDATORY）
 
-AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUST** 先读本节。文档生产侧的冻结与锁定见 [status-definitions.md](references/status-definitions.md) 与 [object-model.md](references/object-model.md)。
+AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUST** 先读本节。文档生产侧的冻结与锁定见 [status-definitions.md](references/status-definitions.md) 与 [object-model.md](references/object-model.md)；产品基线见 [product-version.md](references/product-version.md)。
 
-1. **未冻结对象 MUST NOT 作为实现依据**：`细项状态` 为 `初稿` / `草案` 的细项，其标题与业务含义**仍可被改**，据它写出的代码会在定稿时静默失效。AI **MUST NOT** 依据此类细项实现、完善或重构代码，也 **MUST NOT** 依据 `状态` 为 `初稿` / `草案` 的整份文档实现（`草案` 的唯一例外通道见第 2 条）。
-2. **被要求实现时 MUST 先判状态、后拒绝**：先取目标细项的 `细项状态`（缺失时按 [status-definitions.md · 缺字段的判定](references/status-definitions.md#状态即基线冻结规则mandatory) 推定）；为未冻结态则 **MUST 拒绝实现**，列出未冻结清单，并按状态给出通道：
-   - `初稿`：**MUST 请用户先行定稿**，不设豁免。它从未进入基线、业务含义可能整体推翻，而定稿只需用户确认、成本极低，没有绕过的理由。
-   - `草案`：请用户先行定稿；解冻轮次内确需据 `草案` 改代码时，**MUST** 由用户**逐项明确豁免**，并在文档 `变更记录` 记「按 `草案` 实现，定稿后 MUST 复核」。
+1. **未入当前产品基线 MUST NOT 作为实现依据**：取作用域 README 的 `产品版本`，打开 `baselines/{该版本}.yaml`；目标细项编码 **MUST** 出现在其 `items` 中（成员均为生成时的 `正式` 细项，含全部类型码）。AI **MUST NOT** 依据未列出的细项实现、完善或重构代码，也 **MUST NOT** 依据 `状态` 为 `初稿` / `草案` / `废弃` 的整份文档实现。
+2. **被要求实现时 MUST 先判状态与基线、后拒绝**：
+   - `初稿` / `草案` / `废弃`，或字段缺失按 [缺字段的判定](references/status-definitions.md#状态即基线冻结规则mandatory) 推定为未冻结 → **MUST 拒绝**；`初稿` 请用户定稿（不设豁免）；`草案` 请用户定稿，解冻轮次内确需据 `草案` 改代码时 **MUST** 由用户**逐项明确豁免**，并在文档 `变更记录` 记「按 `草案` 实现，定稿后 MUST 复核，且 MUST 升产品版本后方可作为基线依据」。
+   - `正式` 但不在当前基线 `items` → **MUST 拒绝**，提示先「升产品版本」纳入基线；**MUST NOT** 对此情形做实现豁免。
+   - 无基线文件或 README 无 `产品版本` → **MUST 拒绝**，提示先建立产品基线。
 
-   豁免只能由用户逐项授予并留痕，**MUST NOT** 由 AI 自行推定，也 **MUST NOT** 以“先按现状实现、后续再对齐”为由绕过。
-3. **审查时一并提示**：[status-definitions.md · 定稿提示](references/status-definitions.md#状态即基线冻结规则mandatory) 的提示 **MUST** 含“不得作为实现依据”这一句。
-4. **提交前一并呈现**：[修改完毕：定稿确认与提交提示](#修改完毕定稿确认与提交提示) 的未冻结清单 **MUST** 附带同一提示。
+   豁免只能由用户对 `草案` 逐项授予并留痕，**MUST NOT** 由 AI 自行推定，也 **MUST NOT** 以“先按现状实现、后续再对齐”为由绕过基线门禁。
+3. **审查时一并提示**：[status-definitions.md · 定稿提示](references/status-definitions.md#状态即基线冻结规则mandatory) 的提示 **MUST** 含“未入当前产品基线不得作为实现依据”。
+4. **提交前一并呈现**：[修改完毕：定稿确认与提交提示](#修改完毕定稿确认与提交提示) 的未冻结清单 **MUST** 附带同一提示；若本轮有新定稿细项，**SHOULD** 提示尚未进入基线、需升产品版本后方可实现。
 
 ## 范围与模板
 
@@ -197,7 +198,8 @@ AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUS
 
 模板选型见 [assets/templates/index.md](assets/templates/index.md)。检查工具：
 
-- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、修订号递增时机、发版谱系取值、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。缺 `引入版本` / `退出版本` 不 ERROR。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
+- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、修订号递增时机、产品基线快照、遗留谱系字段取值、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
+- `--bump-product [--major] [--note TEXT]`：升产品版本——按正式集生成 `baselines/vX.Y.yaml` 并更新 README（见 [product-version.md](references/product-version.md)）。
 - `--refs {编码}`：反查定义 / 登记 / 引用，并列出依赖两表（谁依赖我 / 我依赖谁）；`初稿` 改标题前、解冻改内容前与任何状态作废前 **MUST** 先执行。
 - `--check-templates`：模板哨兵（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文）与技能包内部 `文件.md#锚点` 可达性。
 - `--instantiate {模板文件名} [--segment {段名}]`：剥除哨兵输出实例化后的正文；多段模板（`ref.md`、`readme-template.md`）用 `--segment` 取单段。
@@ -217,7 +219,10 @@ A: 按 [object-model.md · 锁定矩阵](references/object-model.md#锁定矩阵
 A: 区别在是否曾定稿。都不能删，放弃走作废。见 [status-definitions.md · 标准四态](references/status-definitions.md#标准四态唯一生命周期状态集合) 与 [item-deprecation.md](references/item-deprecation.md)。
 
 **Q: 定稿要升修订号或产品版本吗？**  
-A: 都不升。文档 / 细项 `修订版本号` 只在 `正式→草案` 解冻时 `+1`。产品级 `vX.Y` 只在用户说「发版 / 升产品版本」时改，见 [product-version.md](references/product-version.md)。
+A: 都不升。文档 / 细项 `修订版本号` 只在 `正式→草案` 解冻时 `+1`。产品级 `vX.Y` 与 `baselines/vX.Y.yaml` 只在用户说「发版 / 升产品版本」时改，见 [product-version.md](references/product-version.md)。定稿后的细项须进入当前产品基线才可实现。
+
+**Q: `正式` 是否即可实现？**  
+A: 否。须 `正式` **且** 出现在当前 `产品版本` 对应的 `baselines/vX.Y.yaml` 的 `items` 中。
 
 **Q: 存量 `草稿` / `提议` / `规划状态` 怎么处理？**  
 A: 就地映射到四态，不解冻、不加修订号。见 [存量文档迁移](references/status-definitions.md#存量文档迁移)。

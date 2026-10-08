@@ -1,0 +1,22 @@
+product_version: v1.0
+date: 2026-01-15
+note: "夹具：正式成员 + 非正式成员"
+prev: null
+
+added:
+  - FR-952
+  - FR-953
+removed: []
+changed: []
+
+items:
+  - code: FR-952
+    type: FR
+    title: "基线正式成员"
+    revision: 1
+    doc: L2-952
+  - code: FR-953
+    type: FR
+    title: "基线非正式成员"
+    revision: 1
+    doc: L2-953

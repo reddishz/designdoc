@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯，定稿之后可以放心作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/skill-v6.0-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/skill-v6.1-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。
@@ -54,7 +54,7 @@ AI 会选用模板、分配编码，并默认标为「初稿」。提交前会�
 | `author` / `maintainer` | 默认作者 |
 | `project_code` | 可选前缀；留空则用 `FR-001` 这样的简洁编码 |
 | `scope` | 应用范围（可选） |
-| `产品版本` | 产品级标签，初值 `v1.0`；发版时再升，与文档修订号不是一回事 |
+| `产品版本` | 产品级标签，初值 `v1.0`；与 `baselines/vX.Y.yaml` 产品基线对应，与文档修订号不是一回事 |
 
 写法见 [README 模板](./.agents/skills/design-doc/assets/templates/readme-template.md)。缺字段时 skill 会用默认值继续工作，并提醒补齐。
 

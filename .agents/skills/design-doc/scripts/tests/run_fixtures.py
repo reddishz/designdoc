@@ -119,6 +119,9 @@ EXPECT = {
     "L2-949-lineage-exit":        {"退出版本须已废弃"},
     "L2-950-unfreeze-noinc":      {"解冻未递增修订号"},
     "L2-951-void-lineage":        {"初稿期作废带发版谱系"},
+    # —— 产品基线 baselines/vX.Y.yaml ——
+    "L2-952-baseline-ok":         set(),
+    "L2-953-baseline-informal":   {"产品基线成员非正式"},
 }
 
 

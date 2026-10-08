@@ -11,7 +11,7 @@
 | [type-profiles.md](type-profiles.md) | `IF` / `ACT` / `PLN`、UC / FR / FLW 分界，ADR 与 DEC 分界 |
 | [layer-system.md](layer-system.md) | L0–L6 层级定义、目录结构与命名规则 |
 | [status-definitions.md](status-definitions.md) | 状态即基线、标准四态、门控、记录型与流转伴随含义、修订号、存量迁移 |
-| [product-version.md](product-version.md) | 产品版本、升产品版本、引入/退出版本盖章；不维护特性清单、不指向代码仓库 |
+| [product-version.md](product-version.md) | 产品版本、产品基线（`baselines/vX.Y.yaml`）、升产品版本；不指向代码仓库 |
 | [item-deprecation.md](item-deprecation.md) | 细项废弃：原地标注、标记与引用追溯 |
 | [doc-deprecation.md](doc-deprecation.md) | 文档废弃：整份废弃自底向上（活细项未清零不得改封面）、两阶段归档入各作用域 `deprecated/` |
 | [glossary-conventions.md](glossary-conventions.md) | 词汇表编写约定：与细项编码的关系、术语上升为 `DOM` 的触发条件、三层放置方式（项目级 / 文档级 / 首次出现） |
@@ -28,4 +28,4 @@
 | 资源 | 说明 |
 |------|------|
 | [flowchart-guide.md](../assets/guides/flowchart-guide.md) | 流程图：箭头 / 表格 / Mermaid 选用规则 |
-| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（`--refs {编码}` 引用反查、`--check-templates` 模板哨兵 / 待复制正文禁区与技能包内部锚点、`--instantiate [--segment]` 实例化预览）；只执行规则，不定义规则 |
+| [check_docs.py](../scripts/check_docs.py) | 静态检查脚本（`--bump-product` 升产品版本、`--refs {编码}` 引用反查、`--check-templates` 模板哨兵 / 待复制正文禁区与技能包内部锚点、`--instantiate [--segment]` 实例化预览）；只执行规则，不定义规则 |
