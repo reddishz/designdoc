@@ -1,6 +1,6 @@
 # design-doc
 
-与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯，定稿之后可以放心作为实现依据。
+与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Skill](https://img.shields.io/badge/skill-v6.1-blue.svg)](./.agents/skills/design-doc/SKILL.md)
@@ -15,7 +15,7 @@
 | 文档格式不统一，每个团队各有风格 | 统一模板，AI 按同一套规范写 |
 | 结构混乱，审阅困难 | L0–L6 分层，按需选用 |
 | 需求改了找不到影响面 | 每条设计有唯一编码，互相用编码引用 |
-| 草稿被拿去写代码，正式内容被随手改掉 | 先定稿再实现；正式内容改之前要解冻 |
+| 草稿被拿去写代码，正式内容被随手改掉 | 只有进了当前产品基线的正式内容才拿去写代码；改正式内容要解冻 |
 | 对不对全靠人眼 | 有审核清单，也可以跑检查脚本 |
 
 ## 功能特性
@@ -24,7 +24,8 @@
 - **现成模板** — 含产品路线图、规划总览、架构决策（ADR）和外部资料（REF）
 - **全局编码** — 文档和细项都有唯一编号，正文用编码跳转，不用「见上一节」
 - **四种状态** — 初稿 / 正式 / 草案 / 废弃。正式后不就地改含义；废弃保留编号，便于追溯
-- **按文档实现** — AI 写代码时只依据已定稿内容，未定稿的会先请你确认
+- **产品基线** — 每个产品版本一份可实现细项清单；发版时更新，写代码只认当前版
+- **按文档实现** — AI 只依据已定稿且已入当前产品基线的内容；未入基线会先拦住并请你确认
 - **可检查** — `check_docs.py` 核对编码、状态、引用是否对得上
 - **多 IDE** — Cursor、Windsurf、Claude Code、VS Code 等可自动发现本 skill
 
@@ -42,7 +43,7 @@
 
 AI 会选用模板、分配编码，并默认标为「初稿」。提交前会问你哪些条目要定稿。
 
-若要按这些文档写代码，它会先看状态：还没定稿的不会直接拿去实现。
+若要按这些文档写代码，它会先看状态与当前产品基线：未定稿或未入基线的不会直接拿去实现。
 
 ### 3. 登记项目信息（推荐）
 
@@ -54,7 +55,7 @@ AI 会选用模板、分配编码，并默认标为「初稿」。提交前会�
 | `author` / `maintainer` | 默认作者 |
 | `project_code` | 可选前缀；留空则用 `FR-001` 这样的简洁编码 |
 | `scope` | 应用范围（可选） |
-| `产品版本` | 产品级标签，初值 `v1.0`；与 `baselines/vX.Y.yaml` 产品基线对应，与文档修订号不是一回事 |
+| `产品版本` | 当前产品版标签（如 `v1.0`）；对应一份产品基线，与文档修订号无关 |
 
 写法见 [README 模板](./.agents/skills/design-doc/assets/templates/readme-template.md)。缺字段时 skill 会用默认值继续工作，并提醒补齐。
 
@@ -105,6 +106,7 @@ python3 .agents/skills/design-doc/scripts/check_docs.py -p ued
 - [编码体系](./.agents/skills/design-doc/references/coding-system.md)
 - [层级与目录](./.agents/skills/design-doc/references/layer-system.md)
 - [状态定义](./.agents/skills/design-doc/references/status-definitions.md)
+- [产品版本与基线](./.agents/skills/design-doc/references/product-version.md)
 - [审核指南](./.agents/skills/design-doc/references/review-guidelines.md)
 - [检查脚本](./.agents/skills/design-doc/scripts/check_docs.py)
 

@@ -1,0 +1,14 @@
+---
+description: 根 README 是 GitHub 首页：偏功能特性，技术细节少而精
+globs: README.md
+alwaysApply: false
+---
+
+# 根 README = GitHub 首页
+
+改仓库根目录 `README.md` 时 **MUST** 按此口径：
+
+- **定位**：面向访客的产品首页，不是规范手册，也不是变更日志。
+- **核心**：讲清「为什么用 / 有什么能力 / 怎么开始」，以**功能特性**与价值对比为主。
+- **技术细节宜少而精**：编码规则、检查器开关、schema、迁移步骤等 **MUST** 用一两句点到 + 链到 `.agents/skills/design-doc/`；**MUST NOT** 把 skill / references 正文搬进 README。
+- **大升级对外叙事**：重要能力（如产品基线）在特性表 / 快速开始用**人话**各占一行即可；细节留给 skill 的 `references/` 单点（如 product-version.md）。
