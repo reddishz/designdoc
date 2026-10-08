@@ -21,7 +21,7 @@
 
 | 文件 | 内容 |
 |------|------|
-| [project-agents-guide.md](project-agents-guide.md) | 为宿主项目生成 AGENTS.md 的建议写法 |
+| [project-agents-guide.md](project-agents-guide.md) | 为宿主项目生成 AGENTS.md（含「设计文档优先」改代码规则） |
 
 ## 非模板资源
 

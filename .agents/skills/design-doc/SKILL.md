@@ -1,9 +1,9 @@
 ---
 name: design-doc
-description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
+description: 规范 AI 在 `ued/` 下创建、修改、审查设计文档，以及在改功能/修缺陷/实现代码前先对照并优先修订设计文档与产品基线门禁。用于约束按既定意图维护战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认，并约束消费侧不得绕过文档直接改行为。
 license: MIT
 metadata:
-  version: "6.1"
+  version: "6.2"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -12,16 +12,21 @@ metadata:
     - "需求文档"
     - "设计方案"
     - "增加功能"
+    - "改功能"
+    - "修bug"
+    - "修缺陷"
+    - "实现"
     - "废弃功能"
     - "设计规范"
     - "文档规范"
     - "功能需求"
-  trigger_principle: "设计文档维护涉及复杂的编码体系和规范约束，需要明确的人工意图确认以避免误触发复杂流程"
+  trigger_principle: "设计文档维护与据文档改代码均涉及编码与基线约束；改行为类请求亦应加载本技能，避免直接改代码绕过 ued/"
   capabilities:
     - "多层级设计文档生成 (L0-L6)"
     - "全局唯一编码管理与冲突检测"
     - "自动化文档规范性审查"
     - "跨文档引用一致性维护"
+    - "变更代码前的设计对照与文档优先"
 compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执行主体标识
 ---
 
@@ -29,7 +34,13 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 
 本 skill **约束 AI 的执行方式**，不是人类写作教程。规则本体在 `references/`；本文只承载身份、不变量索引与可执行程序。包内同一规则只允许一种表述，发现不一致当轮合并。措辞强度见 [coding-system.md · 需求级别说明](references/coding-system.md#需求级别说明)。
 
-**两类动作**：写 / 改 / 审查 `ued/` 文档 → 按下方程序；**据文档实现代码** → 先读 [据文档实现](#据文档实现消费侧mandatory)。
+**三类动作**：
+
+| 意图 | 先读 |
+|------|------|
+| 写 / 改 / 审查 `ued/` 文档 | 下方快速操作指南 |
+| **改功能 / 修缺陷 / 改产品行为**（项目有 `ued/`） | [变更代码前](#变更代码前消费侧mandatory) → 必要时再 [据文档实现](#据文档实现消费侧mandatory) |
+| **按已定设计实现或完善代码** | [据文档实现](#据文档实现消费侧mandatory) |
 
 ## 不变量索引
 
@@ -40,6 +51,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | `IF` / `ACT` / `PLN`、UC / FR / FLW、ADR 与 DEC | [type-profiles.md](references/type-profiles.md) |
 | 四态、门控、修订号、流转伴随 / 记录型含义 | [status-definitions.md](references/status-definitions.md) |
 | 产品版本、产品基线、升产品版本 | [product-version.md](references/product-version.md) |
+| 改代码前对照文档、据文档实现门禁 | 下文 [变更代码前](#变更代码前消费侧mandatory) / [据文档实现](#据文档实现消费侧mandatory) |
 | 细项 / 文档作废步骤 | [item-deprecation.md](references/item-deprecation.md) / [doc-deprecation.md](references/doc-deprecation.md) |
 | 检查项 | [review-guidelines.md](references/review-guidelines.md) |
 | 层级与目录 | [layer-system.md](references/layer-system.md) |
@@ -176,9 +188,23 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 
 用户说「发版 / 升产品版本」或在 Checkpoint 5 确认要升时，按 [product-version.md · 升产品版本](references/product-version.md#升产品版本mandatory) 执行：定号（默认次版本 `+1`；命中则问主版本，否决则保持次版本；首次无快照 MAY 以当前号生成）→ 写出 `baselines/vX.Y.yaml` → 更新 README。不解冻、不改修订号、不改本文引用、**MUST NOT** 再盖 `引入版本` / `退出版本`、不写 git / svn / 构建号。定稿 **MUST NOT** 写基线。优先 `check_docs.py --bump-product`。询问规则（漂移 → 次版本；主版本条件另问）见该专章。
 
+## 变更代码前（消费侧，MANDATORY）
+
+项目存在 `ued/`（或应用级设计文档树），且用户意图是**改功能、修缺陷/bug、改产品可观察行为、按需求实现某能力**时，AI **MUST** 先走本节，**MUST NOT** 默认直接改业务代码。「先文档、后代码」；纯笔误、与规格无关的构建/环境失败等 MAY 直接改代码，但 **MUST** 在回复中写明「未触及设计对象」。
+
+文档生产细则见快速操作指南；冻结与基线门禁见 [据文档实现](#据文档实现消费侧mandatory)。
+
+1. **定位**：在 `ued/` 与当前产品基线中检索相关细项（关键词、编码、`--refs`、模块/接口名）。列出候选 FR/NFR/ALG/IF/…（可附文档路径）。
+2. **对照判定**（三选一，可组合）：
+   - **仅实现偏离**：文档与基线正确，代码不符 → 先确认依据细项已在当前基线，再改代码（走 [据文档实现](#据文档实现消费侧mandatory)）。
+   - **文档错误或过时**：设计与预期不符 → **先**按生产侧程序修订文档（`正式` 须解冻；增量能力走 [新增功能需求（增量）](#新增功能需求增量)），再经 Checkpoint 定稿/漂移询问，**然后**才改代码。
+   - **文档缺失**：无对应细项 → **先**落码补设计（增量向上核对），再定稿/入基线，**然后**才实现。
+3. **呈现**：改代码前用短表说明「依据哪些编码 / 是否先改文档 / 是否需升产品版本」；须人审或解冻时 **MUST** 暂停确认。
+4. **禁止**：以「先改代码后面再补文档」「小改不用改设计」为由跳过本节；**MUST NOT** 在文档仍为 `初稿`/`草案` 或未入当前基线时，把该行为当作已批准规格去改代码（豁免规则同下节）。
+
 ## 据文档实现（消费侧，MANDATORY）
 
-AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUST** 先读本节。文档生产侧的冻结与锁定见 [status-definitions.md](references/status-definitions.md) 与 [object-model.md](references/object-model.md)；产品基线见 [product-version.md](references/product-version.md)。
+AI 在被要求**依据已定设计实现或完善代码**时（含 [变更代码前](#变更代码前消费侧mandatory) 判定为「仅实现偏离」之后），**MUST** 先读本节。文档生产侧见 [status-definitions.md](references/status-definitions.md) 与 [object-model.md](references/object-model.md)；产品基线见 [product-version.md](references/product-version.md)。
 
 1. **未入当前产品基线 MUST NOT 作为实现依据**：取作用域 README 的 `产品版本`，打开 `baselines/{该版本}.yaml`；目标细项编码 **MUST** 出现在其 `items` 中（成员均为生成时的 `正式` 细项，含全部类型码）。AI **MUST NOT** 依据未列出的细项实现、完善或重构代码，也 **MUST NOT** 依据 `状态` 为 `初稿` / `草案` / `废弃` 的整份文档实现。
 2. **被要求实现时 MUST 先判状态与基线、后拒绝**：
@@ -214,7 +240,7 @@ AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUS
 - `--instantiate {模板文件名} [--segment {段名}]`：剥除哨兵输出实例化后的正文；多段模板（`ref.md`、`readme-template.md`）用 `--segment` 取单段。
 - `python3 scripts/tests/run_fixtures.py`：夹具回归（含 `ued/` 规则夹具、技能包锚点正反夹具，以及对本包 `--check-templates` 的冒烟）。每条夹具只验证一条规则；跑台只断言目标问题名，忽略夹具极简结构带来的噪声。改 `check_docs.py` 后 **MUST** 跑通；新增校验规则 **MUST** 同时补正反夹具并登记入跑台的期望表。脚本只出静态提示，不代替人工审查与定稿确认。
 
-**适用**：创建 / 审查设计文档、分配编码、作废与更新。**不适用**：代码实现、用户手册、运维文档。绿场最常见起步 L2 + L4；已有上层时的增量见「新增功能需求（增量）」与 [按需启用原则](references/layer-system.md#按需启用原则)。
+**适用**：创建 / 审查 / 更新设计文档；分配编码；作废；以及**变更代码前的设计对照**与**据文档实现门禁**（本技能约束次序与依据，**不代替**编写业务代码本身）。**不适用**：用户手册、运维手册、与 `ued/` 无关的纯环境琐事。绿场最常见起步 L2 + L4；增量见「新增功能需求（增量）」；改行为见「变更代码前」。
 
 ## 常见问题
 
@@ -235,6 +261,9 @@ A: 否。须 `正式` **且** 出现在当前 `产品版本` 对应的 `baseline
 
 **Q: 加功能能否直接写 L4/L5？**  
 A: 绿场或上层不存在时可以按需从 L2/L4 起步。已有 L0–L2 时 **MUST** 先向上核对（愿景/干系人/FR 等），再写下层；见 [新增功能需求（增量）](#新增功能需求增量)。
+
+**Q: 改功能或修 bug 能否直接改代码？**  
+A: 项目有 `ued/` 时 **MUST NOT** 默认直接改代码。先走 [变更代码前](#变更代码前消费侧mandatory)：定位细项 → 判定文档/实现谁错 → 需改设计则先文档再代码；仅实现偏离则按 [据文档实现](#据文档实现消费侧mandatory) 在基线内改代码。
 
 **Q: 存量 `草稿` / `提议` / `规划状态` 怎么处理？**  
 A: 就地映射到四态，不解冻、不加修订号。见 [存量文档迁移](references/status-definitions.md#存量文档迁移)。

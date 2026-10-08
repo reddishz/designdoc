@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/skill-v6.1-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/skill-v6.2-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。
@@ -25,7 +25,7 @@
 - **全局编码** — 文档和细项都有唯一编号，正文用编码跳转，不用「见上一节」
 - **四种状态** — 初稿 / 正式 / 草案 / 废弃。正式后不就地改含义；废弃保留编号，便于追溯
 - **产品基线** — 每个产品版本一份可实现细项清单；发版时更新，写代码只认当前版
-- **按文档实现** — AI 只依据已定稿且已入当前产品基线的内容；未入基线会先拦住并请你确认
+- **按文档实现** — 改功能/修 bug 先对照设计文档；实现只依据已定稿且已入当前产品基线的内容，未入基线会先拦住
 - **可检查** — `check_docs.py` 核对编码、状态、引用是否对得上
 - **多 IDE** — Cursor、Windsurf、Claude Code、VS Code 等可自动发现本 skill
 
@@ -43,7 +43,7 @@
 
 AI 会选用模板、分配编码，并默认标为「初稿」。提交前会问你哪些条目要定稿。
 
-若要按这些文档写代码，它会先看状态与当前产品基线：未定稿或未入基线的不会直接拿去实现。
+若要改功能、修 bug 或按文档写代码，它会先对照 `ued/`：该改设计则先改文档；实现时再看状态与当前产品基线，未定稿或未入基线的不会直接拿去改代码。
 
 ### 3. 登记项目信息（推荐）
 
