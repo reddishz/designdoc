@@ -100,7 +100,7 @@
 - **需求追溯**（字段名 `追溯状态`，记录型）：未追溯/已追溯/不适用（L6 只记追溯覆盖关系，不记测试执行结果）
 - **应用注册表**（字段名 `状态`，记录型）：取四态（`初稿` 已登记未启用 / `正式` 在用 / `废弃` 已停用）
 
-> 各状态集合、流转与版本号递增时机的完整表述，单点承载于 [status-definitions.md](../../references/status-definitions.md)。
+> 各状态集合、流转与修订号递增时机的完整表述，单点承载于 [status-definitions.md](../../references/status-definitions.md)；产品版本见 [product-version.md](../../references/product-version.md)。
 
 ## 结构说明
 

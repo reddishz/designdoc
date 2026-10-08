@@ -60,7 +60,7 @@
 
 #### 3.1 状态流转图
 
-> **定位**：本小节只示范 `stateDiagram-v2` 的**语法与适用情形**，**不在此复述本规范的状态机**。本包内所有状态集合、流转与版本号递增时机由 [status-definitions.md](../../references/status-definitions.md#状态流转规则) 单点承载；若本示例与该文件不一致，视为规范缺陷，当轮修正。
+> **定位**：本小节只示范 `stateDiagram-v2` 的**语法与适用情形**，**不在此复述本规范的状态机**。本包内所有状态集合、流转与修订号递增时机由 [status-definitions.md](../../references/status-definitions.md#状态流转规则) 单点承载；产品版本见 [product-version.md](../../references/product-version.md)；若本示例与该文件不一致，视为规范缺陷，当轮修正。
 
 下例为**与本项目无关的中性语法示意**（故意不使用 `初稿/正式/草案/废弃` 等规范状态值，以免形成第二套表述）：
 

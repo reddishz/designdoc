@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 目录下创建、修改、审查产品设计文档时的行为规则、层级体系、目录结构、格式与模板选择。用于约束 AI 按既定意图生成战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认等文档。
 license: MIT
 metadata:
-  version: "5.1"
+  version: "6.0"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -38,7 +38,8 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 对象 × 字段 × 状态、锁定与动作 | [object-model.md](references/object-model.md) |
 | 编码形态、类型码表、属性封闭集、定义块、引用、本文引用、分配 | [coding-system.md](references/coding-system.md) |
 | `IF` / `ACT` / `PLN`、UC / FR / FLW、ADR 与 DEC | [type-profiles.md](references/type-profiles.md) |
-| 四态、门控、版本号、流转伴随 / 记录型含义 | [status-definitions.md](references/status-definitions.md) |
+| 四态、门控、修订号、流转伴随 / 记录型含义 | [status-definitions.md](references/status-definitions.md) |
+| 产品版本、升产品版本、引入 / 退出版本 | [product-version.md](references/product-version.md) |
 | 细项 / 文档作废步骤 | [item-deprecation.md](references/item-deprecation.md) / [doc-deprecation.md](references/doc-deprecation.md) |
 | 检查项 | [review-guidelines.md](references/review-guidelines.md) |
 | 层级与目录 | [layer-system.md](references/layer-system.md) |
@@ -87,7 +88,7 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 
 **项目编码规则（高级模式下）**：2-5 位、大写字母开头，其余各位可为大写字母或数字（如 `CRM`、`ERP`、`W3T`）；MUST NOT 与类型码同形，也 MUST NOT 形如 `L` 加数字。完整字符集与消歧约束见 [coding-system.md · 项目编码规则](references/coding-system.md#项目编码规则)。
 
-**README 元信息最小字段（RECOMMENDED）**：`project_name`、`project_code`、`doc_mode`（`single-app` 或 `multi-app`）、`scope`、`author` / `maintainer`。
+**README 元信息最小字段（RECOMMENDED）**：`project_name`、`project_code`、`doc_mode`（`single-app` 或 `multi-app`）、`scope`、`author` / `maintainer`、`产品版本`（`vX.Y`，见 [product-version.md](references/product-version.md)）。
 
 ## 快速操作指南
 
@@ -97,7 +98,7 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 | 2 | 分配编码 | 批量新增或核心业务规则变更 |
 | 3 | 大规模编码变更或废弃前 | 二次确认 |
 | 4 | 标注 `废弃` 前 | 确认废弃原因与替代方案 |
-| 5 | 本轮实质修改收尾 | 提交提示 + 本轮未冻结对象定稿确认 |
+| 5 | 本轮实质修改收尾 | 提交提示 + 本轮未冻结对象定稿确认；命中则问是否升产品版本 |
 
 写作与审查门禁：起草前声明「引用只用编码」；可独立语义先落码；审查命中章节编号引用即 A 级阻断；复查确认零章节编号引用；未过门禁不得合并或正式发布。
 
@@ -138,11 +139,11 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 4. 影响评估：提示检查受影响的下层引用关系，并用 `--refs` 查看依赖两表
 ```
 
-> 若诉求仅是**修订 `正式` 编码正文内容而不改变其含义与标题**，不属于违规：按 `正式→草案` 解冻（**此时递增版本号**）→ 修订 → `草案→正式` 定稿。解冻确认前 **MUST** 先 `check_docs.py --refs {编码}`，做被依赖预审并列出[须人审](references/coding-system.md#须人审不能靠号)项：改 B 则评估所有「谁依赖我」及下游「本文引用」谁会落后；改 A 则确认「我依赖谁」仍支撑新含义。**MUST NOT** 在用户确认兼容之前升钉。引用字符串变更与生效耦合不是同一张图（`来源` ≠ `依赖`，见 [coding-system.md · 追溯类属性行命名](references/coding-system.md#追溯类属性行命名mandatory)）。钉住表规则见 [本文引用](references/coding-system.md#本文引用跨文档钉住mandatory)。
+> 若诉求仅是**修订 `正式` 编码正文内容而不改变其含义与标题**，不属于违规：按 `正式→草案` 解冻（**此时该对象 `修订版本号` +1**）→ 修订 → `草案→正式` 定稿。解冻确认前 **MUST** 先 `check_docs.py --refs {编码}`，做被依赖预审并列出[须人审](references/coding-system.md#须人审不能靠号)项：改 B 则评估所有「谁依赖我」及下游「本文引用」谁会落后；改 A 则确认「我依赖谁」仍支撑新含义。**MUST NOT** 在用户确认兼容之前升钉。引用字符串变更与生效耦合不是同一张图（`来源` ≠ `依赖`，见 [coding-system.md · 追溯类属性行命名](references/coding-system.md#追溯类属性行命名mandatory)）。钉住表规则见 [本文引用](references/coding-system.md#本文引用跨文档钉住mandatory)。
 
 ### 废弃细项处理
 
-**Checkpoint 4**：标注细项或整份文档 `废弃` 前 **MUST** 暂停并确认原因与替代方案。`草案` 可直接废弃（最后版本号即该草案号）；`初稿→废弃` 时 `修订版本号` 保持 `1`、`废弃原因` 记「初稿期作废」。**MUST NOT** 以删除代替作废。标记后 **MUST** 按 [须人审](references/coding-system.md#须人审不能靠号) 列出「废弃后引用方是否仍成立」，等人确认后再改指或级联作废。整份文档另须满足 [整份废弃的前置](references/doc-deprecation.md#整份废弃的前置mandatory)：仍有未废弃细项或仍当依据的非细项正文时 **MUST NOT** 改文档 `状态`，也 **MUST NOT** 为过门批量改细项状态。标记格式、依赖图与引用追溯见 [item-deprecation.md](references/item-deprecation.md)。
+**Checkpoint 4**：标注细项或整份文档 `废弃` 前 **MUST** 暂停并确认原因与替代方案。`草案` 可直接废弃（最后修订号即该草案号）；`初稿→废弃` 时 `修订版本号` 保持 `1`、`废弃原因` 记「初稿期作废」。**MUST NOT** 以删除代替作废。标记后 **MUST** 按 [须人审](references/coding-system.md#须人审不能靠号) 列出「废弃后引用方是否仍成立」，等人确认后再改指或级联作废。整份文档另须满足 [整份废弃的前置](references/doc-deprecation.md#整份废弃的前置mandatory)：仍有未废弃细项或仍当依据的非细项正文时 **MUST NOT** 改文档 `状态`，也 **MUST NOT** 为过门批量改细项状态。标记格式、依赖图与引用追溯见 [item-deprecation.md](references/item-deprecation.md)。
 
 ### 废弃整份文档处理
 
@@ -152,14 +153,19 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 
 **Checkpoint 5**。给未冻结对象一个自然晋升窗口，AI **MUST NOT** 自行升格。
 
-**时间戳前置（MUST，先于下列步骤）**：本轮改过的每份文档，`最后更新` **MUST** 刷为当天（记录型，即使不解冻、不递增 `版本`）；`创建日期` 创建后 **MUST NOT** 改。细项 `最后修订日期` 只随 `修订版本号` 递增那天动，**MUST NOT** 用文档级 `最后更新` 代替（见 [记录型字段](references/status-definitions.md#记录型字段不参与冻结)）。
+**时间戳前置（MUST，先于下列步骤）**：本轮改过的每份文档，`最后更新` **MUST** 刷为当天（记录型，即使不解冻、不加修订号）；`创建日期` 创建后 **MUST NOT** 改。细项 `最后修订日期` 只随 `修订版本号` 递增那天动，**MUST NOT** 用文档级 `最后更新` 代替（见 [记录型字段](references/status-definitions.md#记录型字段不参与冻结)）。
 
 1. **提交提示**：询问是否提交到 git / svn。答「暂不提交」则跳过 2–4，未冻结对象保持不变。
 2. **未冻结扫描**：确认要提交时，**仅扫描本轮 AI 实际改过的文件**（以本轮会话操作清单为准，不依赖版本库差异；无法确定时只提示、不扫描），收集 `初稿` / `草案`：文档元信息 `状态`；细项定义块或清单列；缺字段者按 `变更记录` 判定（有定稿条目 → `草案`；从未定稿 → `初稿`；无法判定 → `草案`）。
 3. **呈现与确认**：紧凑表格列出，支持批量口径。清单 **MUST** 附带「未冻结对象不得作为实现依据」（见 [据文档实现](#据文档实现消费侧mandatory)）。
-4. **执行升格与提交**：明确确认者 → `正式`（定稿不递增版本号；缺字段补齐）。**升格 MUST 自底向上**：先细项后文档。细项定稿 **MUST** 审查该细项出边（含同文档）并提示[须人审](references/coding-system.md#须人审不能靠号)；用户只确认文档而未确认其下细项时 **MUST** 回指待定稿细项。文档定稿 **MUST** 按 [本文引用 · 文档定稿](references/coding-system.md#审查与定稿时机) 对齐钉住表并再次列出须人审项。未提及 / 略过 → 保持未冻结。然后按用户指示 `svn commit` / `git commit`（是否 push 另请示）。
+4. **执行升格与提交**：明确确认者 → `正式`（定稿不加修订号；缺字段补齐）。**升格 MUST 自底向上**：先细项后文档。细项定稿 **MUST** 审查该细项出边（含同文档）并提示[须人审](references/coding-system.md#须人审不能靠号)；用户只确认文档而未确认其下细项时 **MUST** 回指待定稿细项。文档定稿 **MUST** 按 [本文引用 · 文档定稿](references/coding-system.md#审查与定稿时机) 对齐钉住表并再次列出须人审项。未提及 / 略过 → 保持未冻结。然后按用户指示 `svn commit` / `git commit`（是否 push 另请示）。
+5. **升产品版本（SHOULD）**：若自上次产品版本以来命中 [主版本询问条件](references/product-version.md#升产品版本mandatory)，询问是否同时升。用户说「发版 / 升产品版本」时走下方程序。
 
 **MUST NOT**：未经确认升格；扫描并提交本轮未改的历史未冻结对象；删除已分配编码或已建档文档（放弃走作废，须 Checkpoint 4；`草案` 放弃走作废，或在草案期内改正文后再定稿，由人决定）。
+
+### 升产品版本
+
+用户说「发版 / 升产品版本」时按 [product-version.md · 升产品版本](references/product-version.md#升产品版本mandatory) 执行：定号（默认次版本 `+1`；首次纳入基线且仍为 `v1.0`、尚无发版记录时 MAY 以 `v1.0` 盖章）→ 命中则问主版本（用户否决或未答则保持次版本）→ 给未盖章的 `正式` / `草案` 对象写 `引入版本`、给非初稿期作废的 `废弃` 对象写 `退出版本` → 作用域 README 发版记录追加一行（版本 + 日期）。不解冻、不改修订号、不改本文引用、不写 git / svn / 构建号。本技能 **MUST NOT** 维护功能特性清单。
 
 ## 据文档实现（消费侧，MANDATORY）
 
@@ -191,7 +197,7 @@ AI 在被要求**依据 `ued/` 下设计文档实现或完善代码**时，**MUS
 
 模板选型见 [assets/templates/index.md](assets/templates/index.md)。检查工具：
 
-- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、版本递增时机、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
+- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、修订号递增时机、发版谱系取值、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。缺 `引入版本` / `退出版本` 不 ERROR。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
 - `--refs {编码}`：反查定义 / 登记 / 引用，并列出依赖两表（谁依赖我 / 我依赖谁）；`初稿` 改标题前、解冻改内容前与任何状态作废前 **MUST** 先执行。
 - `--check-templates`：模板哨兵（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文）与技能包内部 `文件.md#锚点` 可达性。
 - `--instantiate {模板文件名} [--segment {段名}]`：剥除哨兵输出实例化后的正文；多段模板（`ref.md`、`readme-template.md`）用 `--segment` 取单段。
@@ -210,11 +216,11 @@ A: 按 [object-model.md · 锁定矩阵](references/object-model.md#锁定矩阵
 **Q: `初稿` 与 `草案` 有何不同？能删 `初稿` 吗？**  
 A: 区别在是否曾定稿。都不能删，放弃走作废。见 [status-definitions.md · 标准四态](references/status-definitions.md#标准四态唯一生命周期状态集合) 与 [item-deprecation.md](references/item-deprecation.md)。
 
-**Q: 定稿要升版本号吗？**  
-A: 不升。唯一正规递增时机是 `正式→草案` 解冻。见 [变更流程与版本号](references/status-definitions.md#变更流程与版本号统一mandatory)。
+**Q: 定稿要升修订号或产品版本吗？**  
+A: 都不升。文档 / 细项 `修订版本号` 只在 `正式→草案` 解冻时 `+1`。产品级 `vX.Y` 只在用户说「发版 / 升产品版本」时改，见 [product-version.md](references/product-version.md)。
 
 **Q: 存量 `草稿` / `提议` / `规划状态` 怎么处理？**  
-A: 就地映射到四态，不解冻、不变号。见 [存量文档迁移](references/status-definitions.md#存量文档迁移)。
+A: 就地映射到四态，不解冻、不加修订号。见 [存量文档迁移](references/status-definitions.md#存量文档迁移)。
 
 **Q: 废弃的细项如何处理？**  
 A: 标题加 `~~已废弃~~`，补齐 `细项状态` / `废弃时间` / `废弃原因` / `替代方案`，更新索引与引用；**原地保留、不删除**。步骤见 [item-deprecation.md](references/item-deprecation.md)。整份文档走两阶段归档，见 [doc-deprecation.md](references/doc-deprecation.md)。

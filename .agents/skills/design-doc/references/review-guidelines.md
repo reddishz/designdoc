@@ -1,6 +1,6 @@
 # 设计文档审核规范
 
-检查项清单。规则本体在 [object-model.md](object-model.md)、[coding-system.md](coding-system.md)、[type-profiles.md](type-profiles.md)、[status-definitions.md](status-definitions.md)；本节只列「查什么」，不复述「为什么」。
+检查项清单。规则本体在 [object-model.md](object-model.md)、[coding-system.md](coding-system.md)、[type-profiles.md](type-profiles.md)、[status-definitions.md](status-definitions.md)、[product-version.md](product-version.md)；本节只列「查什么」，不复述「为什么」。
 
 ## 审核流程
 
@@ -23,20 +23,21 @@
 #### 元信息完整性
 - [ ] 文档编码存在且格式正确（如 `CRM-L0-001`，含项目编码与层级）
 - [ ] L0-L6 文档的层级字段与文档类型匹配；ADR 文档的 `层级` 字段为 `L3`（ADR 归属概念架构，存于 `L3-architecture/`；ADR 编码不含层级，层级靠本字段 + 存放目录 + `关联文档` 共同表达，依据见 [layer-system.md · 层级定义](layer-system.md#层级定义)）；REF 文档的类别字段为 `REF - 外部参考资料`
-- [ ] 版本字段检查：**L0-L6 / ADR / REF 均 MUST 有 `版本` 字段**且符合语义化规范（vX.Y）；缺 `版本` 字段会使版本号递增与解冻规则无法落地，且使 `check_docs.py` 的版本校验对该文档静默失效
-- [ ] **版本号递增时机**：仅在 `正式→草案` 解冻时递增；新建 `v1.0` + `初稿`、初稿期与定稿（`初稿→正式`、`草案→正式`）均不变号；文档 `版本` 与细项 `修订版本号` **均不得改小**（判定表见 [status-definitions.md · 变更流程与版本号](status-definitions.md#变更流程与版本号统一mandatory)）
-- [ ] **流转伴随字段不被单独改动**：文档 `版本`、细项 `修订版本号` / `最后修订日期` 由状态转换写入（创建时取初值，此后只在 `正式→草案` 解冻那一刻写），**MUST NOT** 作为独立修改请求单独调整；号与日期 **MUST** 成对（见 [status-definitions.md · 流转伴随字段](status-definitions.md#流转伴随字段只随指定转换写入)）
+- [ ] 修订号字段检查：**L0-L6 / ADR / REF 均 MUST 有 `修订版本号`**（正整数，新建为 `1`）；**MUST NOT** 再写元信息 `版本 | vX.Y`（`vX.Y` 留给 README `产品版本`，见 [product-version.md](product-version.md)）
+- [ ] **修订号递增时机**：仅在该对象 `正式→草案` 解冻时 `+1`；新建 `1` + `初稿`、初稿期与定稿均不变号；文档与细项 `修订版本号` **均不得改小**（判定表见 [status-definitions.md · 变更流程与版本号](status-definitions.md#变更流程与版本号统一mandatory)）
+- [ ] **流转伴随字段不被单独改动**：文档 / 细项 `修订版本号`、细项 `最后修订日期` 由状态转换写入（创建时取初值，此后只在 `正式→草案` 解冻那一刻写），**MUST NOT** 作为独立修改请求单独调整；细项号与日期 **MUST** 成对（见 [status-definitions.md · 流转伴随字段](status-definitions.md#流转伴随字段只随指定转换写入)）
+- [ ] **产品版本 / 发版谱系**：作用域 README 有 `产品版本`；`引入版本` / `退出版本` 仅升产品版本时盖章（`正式` / `草案` 盖引入，非初稿期作废的 `废弃` 盖退出），未盖章可缺；`初稿` 与初稿期作废 MUST NOT 有这两列；`退出版本` 有值则对象须已 `废弃`。缺盖章不阻断。消费方自行筛选，本技能不维护特性清单
 - [ ] 状态字段检查：`状态` / `细项状态` 为必备字段；缺失时按 `变更记录` 判定（有定稿条目 → `草案`；从未定稿 → `初稿`；无法判定 → `草案`）并纳入定稿确认，不作为阻断性错误
 - [ ] 作者或录入人字段非空
-- [ ] 日期字段完整：L0-L6 与 **ADR** 需 `创建日期` 和 `最后更新`（ADR **MUST NOT** 用单一的 `日期` 字段同时承担两个语义）；REF 需 `录入日期` 与**最近核验日期**；`创建日期` 属流转伴随字段，创建时写入一次后 **MUST NOT** 修改；本轮改过的文档 `最后更新` **MUST** 已刷为当天（记录型字段，任何一次编辑都动，即使不解冻、不递增 `版本`）
-- [ ] 当前作用域 `README.md` 含必要元信息，至少可识别 `doc_mode`、`project_name` 与 `project_code` 或其缺省状态
+- [ ] 日期字段完整：L0-L6 与 **ADR** 需 `创建日期` 和 `最后更新`（ADR **MUST NOT** 用单一的 `日期` 字段同时承担两个语义）；REF 需 `录入日期` 与**最近核验日期**；`创建日期` 属流转伴随字段，创建时写入一次后 **MUST NOT** 修改；本轮改过的文档 `最后更新` **MUST** 已刷为当天（记录型字段，任何一次编辑都动，即使不解冻、不加修订号）
+- [ ] 当前作用域 `README.md` 含必要元信息，至少可识别 `doc_mode`、`project_name` 与 `project_code` 或其缺省状态；应用级另有 `产品版本`
 
 #### 编码体系合规性
 - [ ] 细项编码全局唯一（无重复）
 - [ ] 编码格式符合类型码规范
 - [ ] 交叉引用编码确实存在
 - [ ] **引用格式**：正文/属性行为链接格式、表格型追溯为裸编码；跨文件路径以 `./` 或 `../` 开头，不用裸文件名；链接 **MUST NOT** 写修订号（见 [coding-system.md · 交叉引用规则](coding-system.md#交叉引用规则) / [本文引用](coding-system.md#本文引用跨文档钉住mandatory)）
-- [ ] **定义块形态 / 属性行组三段 / 属性名封闭集 / 正文不混用属性行**：见 [coding-system.md · 细项定义块形态](coding-system.md#细项定义块形态mandatory) 与 [属性行定义集（封闭）](coding-system.md#属性行定义集封闭)
+- [ ] **定义块形态 / 属性行组段位 / 属性名封闭集 / 正文不混用属性行**：见 [coding-system.md · 细项定义块形态](coding-system.md#细项定义块形态mandatory) 与 [属性行定义集（封闭）](coding-system.md#属性行定义集封闭)
 - [ ] **锚点定义位**：标题行上方 `<a id="{编码全小写}"></a>`；MUST NOT 用 `{#编码小写}`（见 [锚点定义位](coding-system.md#锚点定义位)）
 - [ ] 引用方向正确（仅下层引用上层）
 

@@ -9,7 +9,8 @@ DesignDoc 文档检查工具
 - 旧状态值（`草稿` / `提议` / `采纳` / `登记中` / `使用中` / `验证状态` 等）的迁移提示
 - 正文定义 / 本文档清单 / 作用域 README 全局索引三方的编码与状态一致
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
-- 版本号递增时机（仅 `正式→草案` 解冻时递增）、版本号不得改小、变更记录倒序
+- 修订号递增时机（仅 `正式→草案` 解冻时 +1）、修订号不得改小、变更记录倒序
+- 发版谱系：`引入版本` / `退出版本` 若出现则取值须为产品版本 `vX.Y`；`初稿` / 初稿期作废不得带谱系；`退出版本` 须已 `废弃`。缺盖章不报 ERROR
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
@@ -18,7 +19,7 @@ DesignDoc 文档检查工具
 - 零章节编号引用门禁、文件名与结构合规
 - 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、属性名白名单
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
-- 属性行组三段：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、追溯段（`出处` → `来源` → `依赖`）居末且值形态互斥
+- 属性行组段位：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、发版谱系段（有则紧随治理段）、追溯段（`出处` → `来源` → `依赖`）居末且值形态互斥
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期
 - 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）、整份废止自底向上（文档 `废弃` 而仍有未废弃细项 → ERROR）、依据方向（`正式`/`草案` 细项依据 `初稿` 细项 → 提示确认；`依赖` 指向 `初稿` → ERROR）
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
@@ -60,6 +61,7 @@ LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 # 缺省快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
 # 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
 FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "最后修订日期",
+                        "引入版本", "退出版本",
                         "废弃时间", "废弃原因", "替代方案", "出处", "来源", "依赖")
 FALLBACK_TYPE_ATTRS: Dict[str, Tuple[str, ...]] = {
     "GOL": (), "STK": ("目标",), "SCN": ("参与者",),
@@ -181,10 +183,11 @@ ATTR_NAME_VALUE = re.compile(
 # 自有属性表按「`名` → 值形态」的书写式抽名（`—` 即无自有属性，自然抽不到）。
 CODE_SPAN_ONLY = re.compile(r"`([^`]+)`")
 ATTR_NAME_ARROW = re.compile(r"`([^`]+)`\s*\u2192")
-# 属性行组三段（房规：coding-system.md ·《细项定义块形态》）
+# 属性行组段位（房规：coding-system.md ·《细项定义块形态》）
 GOV_SEGMENT = ("细项状态", "修订版本号", "最后修订日期")
+LINEAGE_SEGMENT = ("引入版本", "退出版本")
 TRACE_SEGMENT = ("出处", "来源", "依赖")  # 追溯段固定序；`依赖` 不豁免依据方向
-REV_VALUE = re.compile(r"^\d+$")
+REV_VALUE = re.compile(r"^[1-9]\d*$")
 DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATE_IN_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")   # 表格单元格内提取日期（可带后缀说明）
 # 《依据方向门控》的豁免字段 = `出处` / `来源` + 记录型字段 `落实记录`。
@@ -731,13 +734,13 @@ class DesignDocChecker:
             is_index=Path(path).name.upper() == "README.MD",
         )
 
-        doc.meta = self._parse_meta_table(lines)
+        doc.meta = self._parse_meta_table(lines, merge_all=doc.is_index)
         if doc.meta.get("文档编号") and not doc.meta.get("文档编码"):
             doc.meta["文档编码"] = doc.meta["文档编号"]
         doc.doc_code = doc.meta.get("文档编码") or ""
         doc.status_present = bool(doc.meta.get("状态") or doc.meta.get("文档状态"))
         doc.status = self._norm_status(doc.meta.get("状态") or doc.meta.get("文档状态") or "", doc)
-        doc.version = doc.meta.get("版本") or doc.meta.get("文档版本") or ""
+        doc.version = doc.meta.get("修订版本号") or ""
         if "文档编号" in doc.meta:
             self.add_issue("WARNING", "元信息字段名不规范",
                            f"{path}: 字段 `文档编号` 应用 `文档编码`（与索引表列名、编码体系术语一致）")
@@ -758,8 +761,13 @@ class DesignDocChecker:
         self._parse_items(doc)
         return doc
 
-    def _parse_meta_table(self, lines: List[str]) -> Dict[str, str]:
-        """取第一张「属性 | 值」两列表格作为文档元信息。"""
+    def _parse_meta_table(self, lines: List[str],
+                          merge_all: bool = False) -> Dict[str, str]:
+        """取「属性 | 值」或「字段 | 值」两列表格作为文档元信息。
+
+        设计文档只取第一张（紧接 H1 的封面表）。README 等索引 `merge_all=True`，
+        合并全部两列表格（先出现的键优先），以便读到 `doc_mode` 与 `产品版本`。
+        """
         meta: Dict[str, str] = {}
         for _idx, header, rows in iter_tables(lines):
             if len(header) != 2:
@@ -772,7 +780,8 @@ class DesignDocChecker:
                 key = norm(cells[0])
                 if key and key not in meta:
                     meta[key] = norm(cells[1])
-            break
+            if not merge_all:
+                break
         return meta
 
     def _norm_status(self, value: str, doc: Optional[DocInfo] = None,
@@ -968,7 +977,7 @@ class DesignDocChecker:
     # -------------------------------------------------------------- 检查规则
 
     def check_doc_meta(self) -> None:
-        """文件名、文档编码、文档 `状态`、版本号格式。"""
+        """文件名、文档编码、文档 `状态`、修订号格式与发版谱系。"""
         for doc in self.docs:
             name = Path(doc.path).name
             if re.search(r"[\u3400-\u9fff]", name):
@@ -1005,9 +1014,34 @@ class DesignDocChecker:
                 self.add_issue("WARNING", "无效状态值",
                                f"{doc.path}: 状态 '{doc.status}' 不在标准四态内 "
                                f"{'/'.join(DOC_STATUSES)}（L0-L6 / ADR / REF / PLN 共用同一枚举）")
-            if doc.version and not VERSION_RE.match(doc.version):
-                self.add_issue("WARNING", "版本号格式错误",
-                               f"{doc.path}: 版本 '{doc.version}' 应为 v主.次（如 v1.0）")
+            legacy_ver = doc.meta.get("版本") or doc.meta.get("文档版本") or ""
+            if legacy_ver:
+                self.add_issue("WARNING", "文档元信息仍用版本字段",
+                               f"{doc.path}: 元信息 `版本` 已改为整数 `修订版本号`；"
+                               f"当前仍为 '{legacy_ver}'。仅 `v1.0` 且无解冻 → `1`，"
+                               "否则按变更记录解冻顺位映射，MUST NOT 把 `v2.0` 当成修订号 `2`")
+            if doc.version:
+                if not REV_VALUE.match(doc.version):
+                    self.add_issue("WARNING", "修订版本号格式错误",
+                                   f"{doc.path}: 文档 `修订版本号` '{doc.version}' "
+                                   "MUST 是单个正整数（新建为 1、每轮解冻 +1）")
+                elif doc.status == "初稿" and int(doc.version) != 1:
+                    self.add_issue("WARNING", "文档修订号与状态不一致",
+                                   f"{doc.path}: `状态` 为 `初稿` 而 `修订版本号` 为 "
+                                   f"{doc.version}；`初稿` = 从未解冻，rev MUST 为 1")
+                elif doc.status == "草案" and int(doc.version) < 2:
+                    self.add_issue("WARNING", "文档修订号与状态不一致",
+                                   f"{doc.path}: `状态` 为 `草案` 而 `修订版本号` 为 "
+                                   f"{doc.version}；`草案` 必经一轮解冻，rev MUST ≥ 2")
+            elif not legacy_ver:
+                self.add_issue("WARNING", "文档修订版本号缺失",
+                               f"{doc.path}: 元信息缺 `修订版本号`；新建为 `1`，"
+                               "此后只在本文档 `正式→草案` 解冻时 +1")
+            self._check_lineage_values(
+                doc.path, doc.status,
+                doc.meta.get("引入版本") or "",
+                doc.meta.get("退出版本") or "",
+                doc.meta.get("废弃原因") or "")
 
     def check_duplicate_codes(self) -> None:
         """检查重复编码（文档编码与细项编码）"""
@@ -1323,14 +1357,16 @@ class DesignDocChecker:
         return start
 
     def _changelog_rows(self, doc: DocInfo) -> List[Tuple[str, str]]:
-        """取变更记录表，返回 [(版本号, 变更说明)]，按文件中的顺序（应为倒序）。"""
+        """取变更记录表，返回 [(修订号, 变更说明)]，按文件中的顺序（应为倒序）。"""
         start = self._changelog_start(doc)
         if start is None:
             return []
         for idx, header, rows in iter_tables(doc.lines):
             if idx <= start:
                 continue
-            ver_col = col_index(header, "版本")
+            ver_col = col_index(header, "修订版本号")
+            if ver_col is None:
+                ver_col = col_index(header, "版本")
             desc_col = col_index(header, "变更说明", "说明", "内容")
             if ver_col is None:
                 return []
@@ -1378,34 +1414,63 @@ class DesignDocChecker:
             return max(dates) if dates else ""
         return ""
 
+    def check_readme_product_version(self) -> None:
+        """应用级 README 应有 `产品版本`（`vX.Y`）。多应用顶层 README 不充当来源。
+
+        缺字段 WARNING 不阻断：存量按《存量文档迁移》补 `v1.0`，不追溯猜测。
+        """
+        for doc in self.docs:
+            if not doc.is_index:
+                continue
+            mode = (doc.meta.get("doc_mode") or "").strip()
+            if mode == "multi-app":
+                continue
+            if not (mode in ("single-app", "app")
+                    or doc.meta.get("project_name")
+                    or doc.meta.get("project_code")
+                    or doc.meta.get("产品版本")):
+                continue
+            pv = doc.meta.get("产品版本") or ""
+            if not pv:
+                self.add_issue("WARNING", "缺产品版本",
+                               f"{doc.path}: 作用域 README 项目元信息缺 `产品版本`；"
+                               "初值 `v1.0`，仅升产品版本时改")
+            elif not VERSION_RE.match(pv):
+                self.add_issue("WARNING", "产品版本格式错误",
+                               f"{doc.path}: `产品版本` '{pv}' 应为 v主.次（如 v1.0）")
+
     def check_version_flow(self) -> None:
-        """版本机制：起始 v1.0、初稿期与定稿不变号、解冻才递增、版本号不得改小、
+        """修订号机制：起始 1、初稿期与定稿不变号、解冻才 +1、不得改小、
         变更记录倒序。状态机已无回退动作，变更记录若声明回退则告警。"""
 
-        def key(ver: str) -> Optional[Tuple[int, int]]:
-            m = re.fullmatch(r"v(\d+)\.(\d+)", ver)
-            return (int(m.group(1)), int(m.group(2))) if m else None
+        def key(ver: str) -> Optional[int]:
+            return int(ver) if ver.isdigit() else None
 
         for doc in self.docs:
             rows = self._changelog_rows(doc)
             if not rows:
                 continue
+            if any(VERSION_RE.match(v) for v, _d in rows):
+                self.add_issue("WARNING", "变更记录仍用语义化版本",
+                               f"{doc.path}: 变更记录首列已改为整数 `修订版本号`；"
+                               "按解冻顺位映射为 1, 2, 3…，MUST NOT 把 `v2.0` 写成 `2`")
             versions = [key(v) for v, _d in rows]
-            if doc.version:
-                cur = key(doc.version)
-                if cur and versions[0] and cur != versions[0]:
-                    self.add_issue("WARNING", "文档版本与变更记录不一致",
-                                   f"{doc.path}: 元信息 `版本` {doc.version} != 变更记录最新行 {rows[0][0]}")
+            if doc.version and doc.version.isdigit() and versions[0] is not None:
+                if int(doc.version) != versions[0]:
+                    self.add_issue("WARNING", "文档修订号与变更记录不一致",
+                                   f"{doc.path}: 元信息 `修订版本号` {doc.version} != "
+                                   f"变更记录最新行 {rows[0][0]}")
 
             prev = None
             for idx, ver in enumerate(versions):
                 if ver is None:
-                    if not rows[idx][0].startswith("{"):
-                        self.add_issue("WARNING", "版本号格式错误",
-                                       f"{doc.path}: 变更记录版本 '{rows[idx][0]}' 应为 v主.次")
+                    cell = rows[idx][0]
+                    if cell and not cell.startswith("{") and not VERSION_RE.match(cell):
+                        self.add_issue("WARNING", "修订版本号格式错误",
+                                       f"{doc.path}: 变更记录修订号 '{cell}' MUST 是正整数")
                     continue
-                if prev and ver > prev:
-                    self.add_issue("WARNING", "变更记录未按版本倒序",
+                if prev is not None and ver > prev:
+                    self.add_issue("WARNING", "变更记录未按修订号倒序",
                                    f"{doc.path}: {rows[idx][0]} 晚于其上一行，最新记录应置顶")
                 prev = ver
 
@@ -1414,28 +1479,32 @@ class DesignDocChecker:
                 if is_legacy_rollback_action(desc):
                     self.add_issue("WARNING", "变更记录声明回退",
                                    f"{doc.path}: '{desc[:28]}' 状态机已取消回退；放弃本轮须在"
-                                   "草案期内改正文再定稿，或走 `草案→废弃`。版本号不得改回解冻前")
+                                   "草案期内改正文再定稿，或走 `草案→废弃`。修订号不得改回解冻前")
                 older = rows[idx + 1] if idx + 1 < len(rows) else None
                 if older is None:
-                    if INIT_KW.search(desc) and ver and not ver.startswith("v1.0"):
-                        self.add_issue("INFO", "起始版本非 v1.0",
-                                       f"{doc.path}: 历史起始版本 {ver}（新建文档应从 v1.0 + `初稿` 起）")
+                    if INIT_KW.search(desc) and ver and ver.isdigit() and int(ver) != 1:
+                        self.add_issue("INFO", "起始修订号非 1",
+                                       f"{doc.path}: 历史起始修订号 {ver}（新建文档应从 1 + `初稿` 起）")
                     continue
                 cur_key, old_key = key(ver), key(older[0])
-                history_max = max((k for k in versions[idx + 1:] if k), default=None)
-                if FINALIZE_KW.search(desc) and cur_key and old_key and cur_key != old_key:
-                    self.add_issue("WARNING", "定稿时递增了版本号",
+                history_max = max((k for k in versions[idx + 1:] if k is not None), default=None)
+                if FINALIZE_KW.search(desc) and cur_key is not None and old_key is not None \
+                        and cur_key != old_key:
+                    self.add_issue("WARNING", "定稿时递增了修订号",
                                    f"{doc.path}: '{desc[:28]}' 定稿不应变号"
                                    "（{old} -> {new}）".replace("{old}", older[0]).replace("{new}", ver))
-                if UNFREEZE_KW.search(desc) and cur_key and old_key:
+                if UNFREEZE_KW.search(desc) and cur_key is not None and old_key is not None:
                     if cur_key == old_key:
-                        self.add_issue("WARNING", "解冻未递增版本号",
-                                       f"{doc.path}: `正式→草案` 解冻是版本号唯一正规递增时机，"
-                                       f"应保持 {ver} 递增一版")
-                    elif history_max and cur_key <= history_max:
-                        self.add_issue("WARNING", "递增未基于历史最大版本号",
-                                       f"{doc.path}: 解冻递增到 {ver}，但历史已出现过不低于它的版本号；"
-                                       "递增基准 = 该对象当前版本号（单调、不得改小）")
+                        self.add_issue("WARNING", "解冻未递增修订号",
+                                       f"{doc.path}: `正式→草案` 解冻是修订号唯一正规递增时机，"
+                                       f"应从 {older[0]} +1，当前仍为 {ver}")
+                    elif cur_key != old_key + 1:
+                        self.add_issue("WARNING", "解冻修订号跳号",
+                                       f"{doc.path}: 解冻 MUST +1 且不得跳号（{older[0]} → {ver}）")
+                    elif history_max is not None and cur_key <= history_max:
+                        self.add_issue("WARNING", "递增未基于历史最大修订号",
+                                       f"{doc.path}: 解冻递增到 {ver}，但历史已出现过不低于它的修订号；"
+                                       "递增基准 = 该对象当前修订号（单调、不得改小）")
 
     CHAPTER_REF_PATTERNS = [
         (re.compile(r"§\s*\d"), "§ 编号引用"),
@@ -1655,7 +1724,7 @@ class DesignDocChecker:
         return out
 
     def _check_attr_segments(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
-        """属性行组三段校验：治理段齐备且居首、追溯段居末且值形态互斥。
+        """属性行组段位校验：治理段齐备且居首、发版谱系紧随其后、追溯段居末。
 
         房规单点承载于 `references/coding-system.md` ·《细项定义块形态》与
         《追溯类属性行命名》；本方法只执行校验。废弃登记字段的值形态一并在此判，
@@ -1665,6 +1734,7 @@ class DesignDocChecker:
         if not attrs:
             return                      # 整组缺失属「缺属性行」，不在本方法职责内
         self._check_gov_segment(doc, item, attrs)
+        self._check_lineage_segment(doc, item, attrs)
         self._check_trace_segment(doc, item, attrs)
         self._check_dep_item(doc, item, attrs)
         self._check_replacement_value(doc, item, attrs)
@@ -1688,7 +1758,7 @@ class DesignDocChecker:
                 "ERROR", "属性名未在定义集内",
                 f"{doc.path}:{lineno} `{item.code}` 定义块的属性行 `{name}` 未在"
                 "《属性行定义集（封闭）》登记；该类型码允许的自有属性为 "
-                f"{hint}（固定属性为治理段 / 废弃登记段 / 追溯段）。"
+                f"{hint}（固定属性为治理段 / 发版谱系段 / 废弃登记段 / 追溯段）。"
                 "未登记的语义 MUST 改写进正文段（属性行组后空一行，形态自由），"
                 "MUST NOT 自造属性名")
 
@@ -1745,6 +1815,71 @@ class DesignDocChecker:
                                f"{doc.path}:{lineno} `{item.code}`: `{field}` "
                                f"'{val[:24]}' {msg}")
         self._check_rev_invariants(doc, item, attrs, pos)
+
+    def _lineage_present(self, val: str) -> bool:
+        return bool(val) and "{" not in val and val.lower() not in EMPTY_MARKS
+
+    def _check_lineage_values(self, loc: str, status: str,
+                              intro: str, exitv: str,
+                              reason: str = "") -> None:
+        """发版谱系取值：有则须为 `vX.Y`；`初稿` / 初稿期作废不得带；退出须已废弃。
+
+        缺盖章不报——写入时机是升产品版本，不是定稿。房规见 product-version.md。
+        """
+        if self._lineage_present(intro) and not VERSION_RE.match(intro):
+            self.add_issue("WARNING", "引入版本格式错误",
+                           f"{loc}: `引入版本` '{intro[:24]}' 应为产品版本 v主.次（如 v1.0）")
+        if self._lineage_present(exitv) and not VERSION_RE.match(exitv):
+            self.add_issue("WARNING", "退出版本格式错误",
+                           f"{loc}: `退出版本` '{exitv[:24]}' 应为产品版本 v主.次（如 v1.2）")
+        stamped = self._lineage_present(intro) or self._lineage_present(exitv)
+        if status == "初稿" and stamped:
+            self.add_issue("WARNING", "初稿带发版谱系",
+                           f"{loc}: `初稿` 从未进入产品基线，MUST NOT 写 `引入版本` / `退出版本`")
+        if status == "废弃" and "初稿期作废" in (reason or "") and stamped:
+            self.add_issue("WARNING", "初稿期作废带发版谱系",
+                           f"{loc}: 初稿期作废从未进入产品基线，MUST NOT 写 `引入版本` / `退出版本`")
+        if self._lineage_present(exitv) and status and status != "废弃":
+            self.add_issue("WARNING", "退出版本须已废弃",
+                           f"{loc}: 有 `退出版本` 则对象须已 `废弃`（当前 `{status}`）")
+        if self._lineage_present(exitv) and not self._lineage_present(intro):
+            self.add_issue("WARNING", "退出版本缺引入版本",
+                           f"{loc}: 已盖 `退出版本` 则 MUST 同时有 `引入版本`")
+
+    def _check_lineage_segment(self, doc: DocInfo, item: ItemInfo,
+                               attrs: List[Tuple[str, str, int]]) -> None:
+        """发版谱系段：有则紧随治理段，序为 `引入版本` → `退出版本`。"""
+        names = [n for n, _v, _l in attrs]
+        pos: Dict[str, int] = {}
+        for i, n in enumerate(names):
+            pos.setdefault(n, i)
+        hits = [(i, n) for i, n in enumerate(names) if n in LINEAGE_SEGMENT]
+        intro = attrs[pos["引入版本"]][1].strip() if "引入版本" in pos else ""
+        exitv = attrs[pos["退出版本"]][1].strip() if "退出版本" in pos else ""
+        reason = attrs[pos["废弃原因"]][1].strip() if "废弃原因" in pos else ""
+        status = (attrs[pos["细项状态"]][1].strip() if "细项状态" in pos
+                  else item.item_status)
+        loc = f"{doc.path}:{item.line} `{item.code}`"
+        if hits:
+            gov_idxs = [pos[n] for n in GOV_SEGMENT if n in pos]
+            start = (max(gov_idxs) + 1) if gov_idxs else 0
+            misplaced = False
+            for k, (i, n) in enumerate(hits):
+                if i != start + k:
+                    self.add_issue("ERROR", "发版谱系段位置错乱",
+                                   f"{doc.path}:{attrs[i][2]} `{item.code}`: `{n}` 排在第 "
+                                   f"{i + 1} 行，MUST 紧随治理段（第 {start + 1} 行起）")
+                    misplaced = True
+                    break
+            order = [n for _i, n in hits]
+            expect: List[str] = []
+            for seg_name in LINEAGE_SEGMENT:
+                expect.extend([seg_name] * order.count(seg_name))
+            if not misplaced and order != expect:
+                self.add_issue("ERROR", "发版谱系段顺序错乱",
+                               f"{doc.path}:{attrs[hits[0][0]][2]} `{item.code}`: 谱系段为 "
+                               f"{' → '.join(order)}，MUST 为 {' → '.join(expect)}")
+        self._check_lineage_values(loc, status, intro, exitv, reason)
 
     def _check_rev_invariants(self, doc: DocInfo, item: ItemInfo,
                               attrs: List[Tuple[str, str, int]],
@@ -2247,12 +2382,12 @@ class DesignDocChecker:
             if doc.status == "初稿":
                 self.add_issue("INFO", "文档待定稿",
                                f"{doc.path}: 状态为 '初稿'，稳定后请经确认定稿"
-                               "（初稿→正式，不递增版本号）" + NOT_IMPL_BASIS)
+                               "（初稿→正式，不加修订号）" + NOT_IMPL_BASIS)
             elif doc.status == "草案":
                 self.add_issue("INFO", "草案待定稿",
                                f"{doc.path}: 状态为 '草案'（已从 `正式` 解冻），修订完成后请定稿"
-                               "（草案→正式，沿用当前版本号）；放弃本轮须在草案期内改正文再定稿，"
-                               "或走 `草案→废弃`，版本号不得改回解冻前" + NOT_IMPL_BASIS)
+                               "（草案→正式，沿用当前修订号）；放弃本轮须在草案期内改正文再定稿，"
+                               "或走 `草案→废弃`，修订号不得改回解冻前" + NOT_IMPL_BASIS)
             pending = sorted({item.code for item in doc.items
                               if item.item_status in ("", "初稿", "草案")})
             if pending:
@@ -2286,7 +2421,7 @@ class DesignDocChecker:
                 self.add_issue("ERROR", "细项草案而文档正式",
                                f"{doc.path}: 文档状态为 `正式`，但细项 {shown} 为 `草案`；"
                                "解冻 MUST 自顶向下——细项 `正式→草案` 前 MUST 先解冻所在"
-                               "文档（文档版本号在此递增），或把细项定稿 / 作废")
+                               "文档（文档修订号在此 +1），或把细项定稿 / 作废")
             pending = sorted({it.code for it in own
                               if it.item_status in ("初稿", "草案")})
             if pending:
@@ -2731,6 +2866,7 @@ class DesignDocChecker:
         self.check_index_order_and_gaps()
         self.check_counters()
         self.check_version_flow()
+        self.check_readme_product_version()
         self.check_chapter_references()
         self.check_structure()
         self.check_def_blocks()
