@@ -23,6 +23,11 @@ HEADING_TITLE = re.compile(
 ATTR_REV = re.compile(
     r"^\s*[-*+]\s+\*\*修订版本号\*\*\s*[:：]\s*(\d+)\s*$"
 )
+ATTR_FIELD = re.compile(
+    r"^(\s*[-*+]\s+\*\*(.+?)\*\*\s*[:：]\s*)(.*)$"
+)
+# 谱系缓存插入点：紧随治理段末行 `最后修订日期`（见 coding-system 段位）
+_LINEAGE_AFTER = ("最后修订日期", "创建日期", "修订版本号", "细项状态")
 
 
 def version_key(ver: str) -> Tuple[int, int]:
@@ -217,3 +222,99 @@ def list_baseline_files(scope_dir: Path) -> List[Path]:
 def latest_baseline(scope_dir: Path) -> Optional[Path]:
     files = list_baseline_files(scope_dir)
     return files[-1] if files else None
+
+
+def _attr_group_range(lines: List[str], item_line: int) -> Tuple[int, int]:
+    """属性行组在标题行（1-based）下方的 [start, end) 下标。"""
+    idx = max(0, item_line - 1)
+    j = idx + 1
+    while j < len(lines) and not lines[j].strip():
+        j += 1
+    start = j
+    while j < len(lines) and lines[j].strip() and ATTR_FIELD.match(lines[j]):
+        j += 1
+    return start, j
+
+
+def set_item_attr(lines: List[str], item_line: int, field: str, value: str) -> bool:
+    """在定义块属性行组内写入 `field`；已存在则改值，否则按段位插入。返回是否改动。"""
+    start, end = _attr_group_range(lines, item_line)
+    if start >= end:
+        return False
+    indent = re.match(r"^(\s*)", lines[start]).group(1) if start < len(lines) else ""
+    bullet = f"{indent}- **{field}**：{value}"
+    for i in range(start, end):
+        m = ATTR_FIELD.match(lines[i])
+        if m and m.group(2) == field:
+            if m.group(3).strip() == value:
+                return False
+            lines[i] = f"{m.group(1)}{value}"
+            return True
+    # 插入：引入版本紧随治理段；退出版本紧随引入版本（若有）否则同引入
+    names = []
+    for i in range(start, end):
+        m = ATTR_FIELD.match(lines[i])
+        names.append(m.group(2) if m else "")
+    if field == "退出版本" and "引入版本" in names:
+        insert_at = start + names.index("引入版本") + 1
+    else:
+        insert_at = start + 1
+        for anchor in _LINEAGE_AFTER:
+            if anchor in names:
+                insert_at = start + names.index(anchor) + 1
+                break
+    lines.insert(insert_at, bullet)
+    return True
+
+
+def stamp_lineage_cache(
+    docs,
+    added: List[str],
+    removed: List[str],
+    version: str,
+) -> List[Path]:
+    """升版回写 `引入版本` / `退出版本`。返回改过的文件路径。
+
+    真源仍是 baselines/；本函数只维护对象上的便查阅缓存。
+    """
+    from collections import defaultdict
+
+    code_loc: Dict[str, Tuple[Path, int]] = {}
+    for doc in docs:
+        path = Path(getattr(doc, "path", "") or "")
+        if not path:
+            continue
+        for item in getattr(doc, "items", []) or []:
+            if not getattr(item, "defined", True):
+                continue
+            code = getattr(item, "code", "") or ""
+            line = getattr(item, "line", 0) or 0
+            if code and line:
+                code_loc[code] = (path, line)
+
+    jobs: Dict[Path, List[Tuple[int, str, str]]] = defaultdict(list)
+    for code in added or []:
+        if code in code_loc:
+            path, line = code_loc[code]
+            jobs[path].append((line, "引入版本", version))
+    for code in removed or []:
+        if code in code_loc:
+            path, line = code_loc[code]
+            jobs[path].append((line, "退出版本", version))
+
+    changed: List[Path] = []
+    for path, ops in jobs.items():
+        if not path.is_file():
+            continue
+        raw = path.read_text(encoding="utf-8")
+        lines = raw.splitlines()
+        dirty = False
+        # 同文件多细项：按行号降序改，避免插入打乱后续下标
+        for item_line, field, ver in sorted(ops, key=lambda t: t[0], reverse=True):
+            if set_item_attr(lines, item_line, field, ver):
+                dirty = True
+        if dirty:
+            ending = "\n" if raw.endswith("\n") else ""
+            path.write_text("\n".join(lines) + ending, encoding="utf-8")
+            changed.append(path)
+    return changed

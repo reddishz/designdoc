@@ -11,7 +11,7 @@ DesignDoc 文档检查工具
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
 - 修订号递增时机（仅 `正式→草案` 解冻时 +1）、修订号不得改小、变更记录倒序
 - 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项且可重算 added/removed/changed
-- 遗留谱系：`引入版本` / `退出版本` 若出现则取值须为 `vX.Y`；`初稿` / 初稿期作废不得带；`退出版本` 须已 `废弃`（升版不再盖章）
+- 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；升版时对 added/removed 回写；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
@@ -20,9 +20,8 @@ DesignDoc 文档检查工具
 - 零章节编号引用门禁、文件名与结构合规
 - 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、属性名白名单
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
-- 属性行组段位：治理段（`细项状态` / `修订版本号` / `最后修订日期`）齐备且居首、发版谱系段（有则紧随治理段）、追溯段（`出处` → `来源` → `依赖`）居末且值形态互斥
-- 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期
-- 层级门控：解冻自顶向下（细项 `草案` 而文档 `正式` = 结构违规）、定稿自底向上（文档 `正式` 而有未定稿细项 → 提示确认）、整份废止自底向上（文档 `废弃` 而仍有未废弃细项 → ERROR）、依据方向（`正式`/`草案` 细项依据 `初稿` 细项 → 提示确认；`依赖` 指向 `初稿` → ERROR）
+- 属性行组段位：治理段（`细项状态` / `修订版本号` / `创建日期` / `最后修订日期`）齐备且居首、发版谱系段（有则紧随治理段）、追溯段居末
+- 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期；细项 `草案` 而文档 `正式` 为门控违规
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
@@ -68,6 +67,7 @@ from baseline_ops import (  # noqa: E402
     list_baseline_files,
     load_baseline,
     next_version,
+    stamp_lineage_cache,
 )
 
 # 缺省快照：与 references/coding-system.md 的类型码表保持一致
@@ -81,7 +81,7 @@ LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 
 # 缺省快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
 # 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
-FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "最后修订日期",
+FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "创建日期", "最后修订日期",
                         "引入版本", "退出版本",
                         "废弃时间", "废弃原因", "替代方案", "出处", "来源", "依赖")
 FALLBACK_TYPE_ATTRS: Dict[str, Tuple[str, ...]] = {
@@ -205,7 +205,7 @@ ATTR_NAME_VALUE = re.compile(
 CODE_SPAN_ONLY = re.compile(r"`([^`]+)`")
 ATTR_NAME_ARROW = re.compile(r"`([^`]+)`\s*\u2192")
 # 属性行组段位（房规：coding-system.md ·《细项定义块形态》）
-GOV_SEGMENT = ("细项状态", "修订版本号", "最后修订日期")
+GOV_SEGMENT = ("细项状态", "修订版本号", "创建日期", "最后修订日期")
 LINEAGE_SEGMENT = ("引入版本", "退出版本")
 TRACE_SEGMENT = ("出处", "来源", "依赖")  # 追溯段固定序；`依赖` 不豁免依据方向
 REV_VALUE = re.compile(r"^[1-9]\d*$")
@@ -1719,6 +1719,12 @@ class DesignDocChecker:
         snap = build_snapshot(new_pv, curr_items, prev_data=prev_data, note=note)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_baseline(snap), encoding="utf-8")
+        stamp_lineage_cache(
+            scoped_docs or self.docs,
+            snap.get("added") or [],
+            snap.get("removed") or [],
+            new_pv,
+        )
         self._update_readme_product_version(readme_path, new_pv, note, out)
         return out
 
@@ -2081,11 +2087,11 @@ class DesignDocChecker:
 
     def _check_gov_segment(self, doc: DocInfo, item: ItemInfo,
                            attrs: List[Tuple[str, str, int]]) -> None:
-        """治理段：`细项状态` / `修订版本号` / `最后修订日期` MUST 齐备、按序居首。
+        """治理段：`细项状态` / `修订版本号` / `创建日期` / `最后修订日期` MUST 齐备、按序居首。
 
         `细项状态` 缺失或不在首行报 ERROR（它同时受 `references/status-definitions.md`
-        ·《状态即基线》的「承载位 MUST 两处」约束）；`修订版本号` / `最后修订日期`
-        是新增治理字段，缺失按《存量文档迁移》回填，故报 WARNING 不阻断。
+        ·《状态即基线》的「承载位 MUST 两处」约束）；其余三行是治理字段，缺失按
+        《存量文档迁移》回填，故报 WARNING 不阻断。
         """
         names = [n for n, _v, _l in attrs]
         pos: Dict[str, int] = {}
@@ -2104,15 +2110,15 @@ class DesignDocChecker:
                            f"`细项状态` 排在第 {pos['细项状态'] + 1} 行（首行是 "
                            f"`{names[0]}`）；治理段 MUST 按 {' / '.join(GOV_SEGMENT)} "
                            "之序位于属性行组最前")
-        for want, slot in (("修订版本号", 1), ("最后修订日期", 2)):
+        for want, slot in (("修订版本号", 1), ("创建日期", 2), ("最后修订日期", 3)):
             if want not in pos:
                 self.add_issue("WARNING", "治理段缺行",
                                f"{doc.path}:{item.line} `{item.code}`: 属性行组缺 "
-                               f"`- **{want}**：…`；治理段三行 MUST 齐备并按序居首，"
+                               f"`- **{want}**：…`；治理段四行 MUST 齐备并按序居首，"
                                "存量文档按《存量文档迁移》回填")
             elif not anchored:
-                # 首行错位时槽位判定无意义：把 `细项状态` 移回首位，其余两行自然归槽。
-                # 连带报「顺序错乱」会把 1 处笔误放大成 3 条 ERROR，且后两条不可独立处置。
+                # 首行错位时槽位判定无意义：把 `细项状态` 移回首位，其余自然归槽。
+                # 连带报「顺序错乱」会把 1 处笔误放大成多条 ERROR，且后几条不可独立处置。
                 continue
             elif pos[want] != slot:
                 self.add_issue("ERROR", "治理段顺序错乱",
@@ -2121,6 +2127,8 @@ class DesignDocChecker:
                                f"{slot + 1} 行（治理段固定序：{' / '.join(GOV_SEGMENT)}）")
         for field, pat, msg in (("修订版本号", REV_VALUE,
                                  "MUST 是单个正整数（新建为 1、每轮解冻 +1、单调不得改小）"),
+                                ("创建日期", DATE_VALUE,
+                                 "MUST 为 YYYY-MM-DD；细项首次落盘日，此后不得改"),
                                 ("最后修订日期", DATE_VALUE,
                                  "MUST 为 YYYY-MM-DD")):
             if field not in pos:
@@ -2139,9 +2147,9 @@ class DesignDocChecker:
     def _check_lineage_values(self, loc: str, status: str,
                               intro: str, exitv: str,
                               reason: str = "") -> None:
-        """发版谱系取值：有则须为 `vX.Y`；`初稿` / 初稿期作废不得带；退出须已废弃。
+        """基线谱系缓存取值：有则须为 `vX.Y`；`初稿` / 初稿期作废不得带；退出须已废弃。
 
-        缺盖章不报——写入时机是升产品版本，不是定稿。房规见 product-version.md。
+        缺缓存不报——写入时机是升产品版本，不是定稿。房规见 product-version.md。
         """
         if self._lineage_present(intro) and not VERSION_RE.match(intro):
             self.add_issue("WARNING", "引入版本格式错误",
