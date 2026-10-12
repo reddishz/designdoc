@@ -25,7 +25,7 @@ DesignDoc 文档检查工具
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
-- ADR / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
+- ADR / EVAL / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
 - `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文），以及技能包内部 `文件.md#锚点` 可达性
 - `--instantiate TPL`：剥除哨兵输出模板实例化后的正文，供预览评估
@@ -76,7 +76,7 @@ FALLBACK_TYPE_CODES = {
     "ALG", "DOM", "ASM", "RSK", "MET", "TC", "AC", "CON", "RUL", "ACT", "PLN",
     "REF",
 }
-DOC_CODE_PREFIXES = {"L0", "L1", "L2", "L3", "L4", "L5", "L6", "ADR", "REF"}
+DOC_CODE_PREFIXES = {"L0", "L1", "L2", "L3", "L4", "L5", "L6", "ADR", "EVAL", "REF"}
 LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 
 # 缺省快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
@@ -99,7 +99,7 @@ FALLBACK_TYPE_ATTRS: Dict[str, Tuple[str, ...]] = {
             "最近核验日期", "复查周期", "失效风险"),
 }
 
-# 标准四态：唯一生命周期状态集合（L0-L6 / ADR / REF / PLN 共用，不设专属枚举）
+# 标准四态：唯一生命周期状态集合（L0-L6 / ADR / EVAL / REF / PLN 共用，不设专属枚举）
 DOC_STATUSES = ["初稿", "正式", "草案", "废弃"]
 DEFAULT_DOC_STATUS = "初稿"
 ITEM_STATUSES = DOC_STATUSES
@@ -1011,10 +1011,10 @@ class DesignDocChecker:
                                f"{doc.path}: 未找到元信息表 `文档编码`；"
                                "若属词汇表等辅助文件可忽略")
                 continue
-            if not re.fullmatch(PROJECT_PREFIX + r"(?:L[0-6]|ADR|REF)-\d{3}", doc.doc_code):
+            if not re.fullmatch(PROJECT_PREFIX + r"(?:L[0-6]|ADR|EVAL|REF)-\d{3}", doc.doc_code):
                 self.add_issue("ERROR", "文档编码格式错误",
                                f"{doc.path}: {doc.doc_code}（应为 L{{层级}}-三位序号 / ADR-三位序号 / "
-                               "REF-三位序号；启用项目编码时前缀加在其前，如 `ERP-L2-003`）")
+                               "EVAL-三位序号 / REF-三位序号；启用项目编码时前缀加在其前，如 `ERP-L2-003`）")
             if not name.startswith(doc.doc_code + "-"):
                 self.add_issue("WARNING", "文件名与文档编码不一致",
                                f"{doc.path}: 文件名应以 `{doc.doc_code}-` 开头")
@@ -1034,7 +1034,7 @@ class DesignDocChecker:
             elif doc.status not in DOC_STATUSES:
                 self.add_issue("WARNING", "无效状态值",
                                f"{doc.path}: 状态 '{doc.status}' 不在标准四态内 "
-                               f"{'/'.join(DOC_STATUSES)}（L0-L6 / ADR / REF / PLN 共用同一枚举）")
+                               f"{'/'.join(DOC_STATUSES)}（L0-L6 / ADR / EVAL / REF / PLN 共用同一枚举）")
             legacy_ver = doc.meta.get("版本") or doc.meta.get("文档版本") or ""
             if legacy_ver:
                 self.add_issue("WARNING", "文档元信息仍用版本字段",
@@ -1063,6 +1063,34 @@ class DesignDocChecker:
                 doc.meta.get("引入版本") or "",
                 doc.meta.get("退出版本") or "",
                 doc.meta.get("废弃原因") or "")
+            if doc.doc_type == "EVAL":
+                self._check_eval_meta(doc)
+
+    def _check_eval_meta(self, doc: DocInfo) -> None:
+        """EVAL 文档元信息：对照版本 / 评估日期 / 评估类型。房规见 type-profiles.md。"""
+        cv = (doc.meta.get("对照版本") or "").strip()
+        if not cv:
+            self.add_issue("WARNING", "EVAL缺对照版本",
+                           f"{doc.path}: 基线评估报告 MUST 有元信息 `对照版本`（产品版本 vX.Y）")
+        elif not BASELINE_VER_RE.match(cv):
+            self.add_issue("WARNING", "EVAL对照版本格式错误",
+                           f"{doc.path}: `对照版本` '{cv[:24]}' 应为产品版本 v主.次（如 v1.0）")
+        ed = (doc.meta.get("评估日期") or "").strip()
+        if not ed:
+            self.add_issue("WARNING", "EVAL缺评估日期",
+                           f"{doc.path}: MUST 有元信息 `评估日期`（YYYY-MM-DD）")
+        elif not DATE_VALUE.match(ed):
+            self.add_issue("WARNING", "EVAL评估日期格式错误",
+                           f"{doc.path}: `评估日期` '{ed[:24]}' MUST 为 YYYY-MM-DD")
+        et = (doc.meta.get("评估类型") or "").strip()
+        allowed = {"性能", "关键", "回归", "运维复盘", "算法对照", "验收", "其他"}
+        if not et:
+            self.add_issue("WARNING", "EVAL缺评估类型",
+                           f"{doc.path}: MUST 有元信息 `评估类型`")
+        elif et not in allowed:
+            self.add_issue("WARNING", "EVAL评估类型非法",
+                           f"{doc.path}: `评估类型` '{et[:24]}' 不在 "
+                           f"{'/'.join(sorted(allowed))}")
 
     def check_duplicate_codes(self) -> None:
         """检查重复编码（文档编码与细项编码）"""
@@ -1280,7 +1308,7 @@ class DesignDocChecker:
             for series, filled in sorted(by_series.items()):
                 if not filled:
                     continue
-                # 文档编码（L0-L6 / ADR / REF）不参与细项编号连续性判定；判定用真实
+                # 文档编码（L0-L6 / ADR / EVAL / REF）不参与细项编号连续性判定；判定用真实
                 # 类型码而非序列键——带项目前缀时序列键形如 `ERP-L2`，不在该集合内
                 if series_type.get(series, series) in DOC_CODE_PREFIXES:
                     continue
@@ -1857,8 +1885,8 @@ class DesignDocChecker:
     def check_structure(self) -> None:
         """结构完整性：必备小节、细项清单存在。
 
-        key 优先用层级（`L0`-`L6`）；ADR / REF 的文档编码不含层级（`doc.layer`
-        为空），改用 `doc.doc_type`，否则两类文档的结构校验会整体静默失效。
+        key 优先用层级（`L0`-`L6`）；ADR / EVAL / REF 的文档编码不含层级（`doc.layer`
+        为空），改用 `doc.doc_type`，否则结构校验会整体静默失效。
 
         同一层级 MAY 有**多种文档形态**（与 `assets/templates/` 的官方模板一一对应：
         L0 分产品战略 / 产品路线图，L1 分利益相关者需求 / 产品规划总览），命中任一
@@ -1879,6 +1907,9 @@ class DesignDocChecker:
             # （房规见 coding-system.md ·《ADR 与 DEC 的定位》）
             "ADR": [("架构决策记录",
                      [("背景",), ("备选方案",), ("决策",), ("理由",), ("后果",)])],
+            "EVAL": [("基线评估报告",
+                      [("评估范围", "范围"), ("方法",), ("结果",),
+                       ("结论", "建议")])],
             "REF": [("外部参考资料", [("来源信息",)])],
         }
         for doc in self.docs:
@@ -1907,8 +1938,9 @@ class DesignDocChecker:
                     best = (form, missing)
             if best:
                 form, missing = best
+                title = "EVAL缺少必需章节" if key == "EVAL" else "缺少必需章节"
                 for group in missing:
-                    self.add_issue("WARNING", "缺少必需章节",
+                    self.add_issue("WARNING", title,
                                    f"{doc.path}: {key}「{form}」形态文档未找到含 "
                                    f"{'/'.join(group)} 的小节")
 

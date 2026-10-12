@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """`check_docs.py` 的规则回归集跑台。
 
-`fixtures/` 下每条夹具是一个最小 L2 文档，刻意触发（或刻意不触发）某一条校验
-规则。`skill_link_fixtures/` 验证技能包内部 `#锚点` 可达性（正例零命中、反例必报）。
+`fixtures/` 下每条夹具是一份最小设计文档（多为 L2，亦含 EVAL 等文档型），刻意触发
+（或刻意不触发）某一条校验规则。`skill_link_fixtures/` 验证技能包内部 `#锚点` 可达性。
 跑台末尾对本包执行 `--check-templates` 冒烟，并跑哨兵内写作约束 / 技能包路径的正反例。改动 `check_docs.py` 后跑一遍，可确认
 既有规则没有静默退化。
 
@@ -28,7 +28,10 @@ SECTION = re.compile(r"^###\s+(?:ERROR|WARNING|INFO)")
 ITEM = re.compile(r"^\d+\.\s+(.+?)\s*$")
 # 夹具名 MAY 带项目编码前缀（如 `W3T-L2-929-prefix-digit.md`），前缀字符集与
 # check_docs.py 的 PROJECT_PREFIX 同口径。
-FIXTURE = re.compile(r"((?:[A-Z][A-Z0-9]{1,4}-)?L\d+-\d+-[a-z0-9\-]+)\.md")
+# 夹具名：层文档 L{n}-…，或文档型 ADR/EVAL/REF-…；MAY 带项目编码前缀。
+FIXTURE = re.compile(
+    r"((?:[A-Z][A-Z0-9]{1,4}-)?(?:L\d+|ADR|EVAL|REF)-\d+-[a-z0-9\-]+)\.md"
+)
 LINK_FILE = re.compile(r"([^/\\]+\.md):")
 
 # 技能包锚点夹具 → 期望命中的目标问题名（空集 = 正例，MUST 零命中）。
@@ -123,6 +126,11 @@ EXPECT = {
     # —— 产品基线 baselines/vX.Y.yaml ——
     "L2-952-baseline-ok":         set(),
     "L2-953-baseline-informal":   {"产品基线成员非正式"},
+    # —— EVAL 文档级基线评估报告 ——
+    "EVAL-901-ok":                set(),
+    "EVAL-902-no-scope":          {"EVAL缺少必需章节"},
+    "EVAL-903-bad-meta":          {"EVAL对照版本格式错误", "EVAL评估日期格式错误",
+                                   "EVAL评估类型非法"},
 }
 
 

@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 下创建、修改、审查设计文档，以及在改功能/修缺陷/实现代码前先对照并优先修订设计文档与产品基线门禁。用于约束按既定意图维护战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认，并约束消费侧不得绕过文档直接改行为。
 license: MIT
 metadata:
-  version: "6.3"
+  version: "6.4"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -48,7 +48,8 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 |------|------|
 | 对象 × 字段 × 状态、锁定与动作 | [object-model.md](references/object-model.md) |
 | 编码形态、类型码表、属性封闭集、定义块、引用、本文引用、分配 | [coding-system.md](references/coding-system.md) |
-| `IF` / `ACT` / `PLN`、UC / FR / FLW、ADR 与 DEC | [type-profiles.md](references/type-profiles.md) |
+| `IF` / `ACT` / `PLN`、UC / FR / FLW、ADR 与 DEC、EVAL | [type-profiles.md](references/type-profiles.md) |
+| 信息项角色（承诺 / 证据 / 决策 / 外部依据） | [object-model.md · 信息项角色](references/object-model.md#信息项角色agent-选槽) |
 | 四态、门控、修订号、流转伴随 / 记录型含义 | [status-definitions.md](references/status-definitions.md) |
 | 产品版本、产品基线、升产品版本 | [product-version.md](references/product-version.md) |
 | 改代码前对照文档、据文档实现门禁 | 下文 [变更代码前](#变更代码前消费侧mandatory) / [据文档实现](#据文档实现消费侧mandatory) |
@@ -226,14 +227,14 @@ AI 在被要求**依据已定设计实现或完善代码**时（含 [变更代�
 | `ued/L3-*` | 概念架构；内含 `ADR-*`（宏观决策一事一档，归属 L3，不设 `adr/` 子目录） |
 | `ued/L4-*` | 逻辑/系统设计 |
 | `ued/L5-*` | 详细设计 |
-| `ued/L6-*` | 验证与确认 |
+| `ued/L6-*` | 验证与确认；同目录可含 `EVAL-*`（基线评估报告，证据一事一档，不设 `eval/`） |
 | `ued/references/` 内 `REF-*` | 外部参考资料 |
 
-常用类型码导览：需求 `FR` `NFR` `AC` `CON` `RUL`；架构与设计 `PRN` `DEC` `CMP` `DOM` `IF` `FLW` `ALG` `ACT`；场景与前瞻 `SCN` `UC` `PLN` `RSK` `ASM` `MET`；战略与参与方 `GOL` `STK`；验证与外部 `TC` `REF`。语义单点在 [coding-system.md · 类型码表](references/coding-system.md#类型码表)。
+常用类型码导览：需求 `FR` `NFR` `AC` `CON` `RUL`；架构与设计 `PRN` `DEC` `CMP` `DOM` `IF` `FLW` `ALG` `ACT`；场景与前瞻 `SCN` `UC` `PLN` `RSK` `ASM` `MET`；战略与参与方 `GOL` `STK`；验证 `TC`。文档型：`ADR` / `EVAL`（证据）/ `REF`（外部）。语义单点在 [coding-system.md](references/coding-system.md) 与 [type-profiles.md · EVAL](references/type-profiles.md#eval-与-adr--ref--tc--met)。
 
 模板选型见 [assets/templates/index.md](assets/templates/index.md)。检查工具：
 
-- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、修订号递增时机、产品基线快照、基线谱系缓存取值、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
+- `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、修订号递增时机、产品基线快照、基线谱系缓存取值、EVAL 对照版本与必备小节、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
 - `--bump-product [--major] [--note TEXT]`：升产品版本——按正式集生成 `baselines/vX.Y.yaml` 并更新 README（见 [product-version.md](references/product-version.md)）。
 - `--refs {编码}`：反查定义 / 登记 / 引用，并列出依赖两表（谁依赖我 / 我依赖谁）；`初稿` 改标题前、解冻改内容前与任何状态作废前 **MUST** 先执行。
 - `--check-templates`：模板哨兵（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文）与技能包内部 `文件.md#锚点` 可达性。

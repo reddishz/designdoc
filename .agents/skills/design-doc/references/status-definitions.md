@@ -223,7 +223,7 @@ L6 是**设计文档**层级，记录验证策略与追溯覆盖关系，**不�
 
 所有模板中的状态字段应使用上述标准值，格式为：
 
-- 文档元信息：`状态` = `初稿/正式/草案/废弃`，**新建默认 `初稿`**；`修订版本号` 起始 `1`（**MUST NOT** 再写 `版本 | vX.Y`）。产品切片见 `baselines/`（[product-version.md](product-version.md)）；**MUST NOT** 预填 `引入版本` / `退出版本`（由升版回写）
+- 文档元信息：`状态` = `初稿/正式/草案/废弃`，**新建默认 `初稿`**；`修订版本号` 起始 `1`（**MUST NOT** 再写 `版本 | vX.Y`）。产品切片见 `baselines/`（[product-version.md](product-version.md)）；**MUST NOT** 预填 `引入版本` / `退出版本`（由升版回写）。EVAL 另填 `对照版本` / `评估日期` / `评估类型`（见 [type-profiles.md · EVAL](type-profiles.md#eval-与-adr--ref--tc--met)），定稿表示可作证据引用、不进基线 `items`
 - 细项清单：`细项状态` = 同上四态（清单表 **MUST** 含该列，但 **MUST NOT** 增设 `修订版本号` / `创建日期` / `最后修订日期` 列——修订信息只在定义块治理段承载）
 - 本文引用：清单之后、变更记录之前（见 [coding-system.md · 本文引用](coding-system.md#本文引用跨文档钉住mandatory)）
 - 细项定义块：治理段首四行固定为 `细项状态` / `修订版本号` / `创建日期` / `最后修订日期`；其后 MAY 接发版谱系段（`引入版本` / `退出版本`，升版回写；新稿省略）；废弃时废弃登记段再其后；追溯段固定在末尾（见 [coding-system.md · 细项定义块形态](coding-system.md#细项定义块形态mandatory)）
