@@ -1,6 +1,4 @@
-> **模板：ADR - 架构决策记录**
->
-> **定位**：宏观架构决策一事一档（why）；事项级用 `DEC`。切分见 [type-profiles.md · ADR 与 DEC 的定位](../../references/type-profiles.md#adr-与-dec-的定位)；存放见 [layer-system.md · 层级定义](../../references/layer-system.md#层级定义)（`L3-architecture/`，不设 `adr/`）。
+> **模板：ADR - 架构决策记录**（宏观架构决策一事一档 / why；事项级用 `DEC`。切分见 [type-profiles.md · ADR 与 DEC 的定位](../../references/type-profiles.md#adr-与-dec-的定位)；存 `L3-architecture/`，不设 `adr/`。以下整段前置说明 **勿写入实例**。）
 >
 > **通用规则**：见 [index.md · 整篇型模板共用](index.md#整篇型模板共用)。
 >

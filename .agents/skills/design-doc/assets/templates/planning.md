@@ -1,6 +1,4 @@
-> **模板：L1 - 产品规划总览**
->
-> **定位**：只登记 PLN、不定义；定义块在所属层级（默认 L2）。状态与落实口径见 [type-profiles.md · 规划项生命周期](../../references/type-profiles.md#规划项生命周期pln-统一口径)。
+> **模板：L1 - 产品规划总览**（只登记 PLN、不定义；定义块在所属层级，默认 L2。状态与落实口径见 [type-profiles.md · 规划项生命周期](../../references/type-profiles.md#规划项生命周期pln-统一口径)。以下整段前置说明 **勿写入实例**。）
 >
 > **通用规则**：见 [index.md · 整篇型模板共用](index.md#整篇型模板共用)。
 >

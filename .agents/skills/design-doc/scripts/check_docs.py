@@ -1950,6 +1950,33 @@ class DesignDocChecker:
                     self.add_issue("WARNING", title,
                                    f"{doc.path}: {key}「{form}」形态文档未找到含 "
                                    f"{'/'.join(group)} 的小节")
+            self._check_template_preamble_leak(doc)
+
+    def _check_template_preamble_leak(self, doc: DocInfo) -> None:
+        """H1 与首个正文 H2 之间若出现模板前置标签，视为哨兵外说明被抄进实例。
+
+        房规：assets/templates/index.md · 模板边界（哨兵）· 实例化。
+        """
+        leak = re.compile(
+            r"^\s*>\s*\*\*(定位|模板|通用规则|本模板|结构依据|正文边界)\*\*"
+        )
+        rfc_quote = re.compile(r"^\s*>\s*\*\*MUST(?:\s+NOT)?\*\*")
+        seen_h1 = False
+        for i, line in enumerate(doc.lines):
+            if re.match(r"^\s{0,3}#\s+\S", line):
+                seen_h1 = True
+                continue
+            if not seen_h1:
+                continue
+            if re.match(r"^\s{0,3}##\s+\S", line):
+                break
+            if leak.match(line) or rfc_quote.match(line):
+                self.add_issue(
+                    "WARNING", "疑似模板前置泄漏",
+                    f"{doc.path}:{i + 1}: H1 与首个 `##` 之间出现模板前置/"
+                    f"RFC 约束 blockquote；实例只应保留元信息表，见 "
+                    f"assets/templates/index.md · 模板边界（哨兵）")
+                return
 
     # ------------------------------------------------- 定义块形态与锚点
 

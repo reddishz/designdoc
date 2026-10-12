@@ -131,6 +131,7 @@ EXPECT = {
     "EVAL-902-no-scope":          {"EVAL缺少必需章节"},
     "EVAL-903-bad-meta":          {"EVAL对照版本格式错误", "EVAL评估日期格式错误",
                                    "EVAL评估类型非法"},
+    "EVAL-904-preamble-leak":     {"疑似模板前置泄漏"},
 }
 
 

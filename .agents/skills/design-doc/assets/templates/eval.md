@@ -1,6 +1,4 @@
-> **模板：EVAL - 基线评估报告**
->
-> **定位**：相对某产品基线的内部评价长文（证据槽）；一事一档。切分见 [type-profiles.md · EVAL](../../references/type-profiles.md#eval-与-adr--ref--tc--met)；信息项角色见 [object-model.md · 信息项角色](../../references/object-model.md#信息项角色agent-选槽)。存放于 `L6-verification/`，不设 `eval/` 子目录。
+> **模板：EVAL - 基线评估报告**（相对产品基线的内部评价长文 / 证据槽；一事一档。切分见 [type-profiles.md · EVAL](../../references/type-profiles.md#eval-与-adr--ref--tc--met)；信息项角色见 [object-model.md · 信息项角色](../../references/object-model.md#信息项角色agent-选槽)。存 `L6-verification/`，不设 `eval/`。以下整段前置说明 **勿写入实例**。）
 >
 > **结构依据（裁剪自国际标准，非自造栏目）**：
 >
