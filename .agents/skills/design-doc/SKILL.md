@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 下创建、修改、审查设计文档，以及在改功能/修缺陷/实现代码前先对照并优先修订设计文档与产品基线门禁。用于约束按既定意图维护战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认，并约束消费侧不得绕过文档直接改行为。
 license: MIT
 metadata:
-  version: "6.5"
+  version: "6.6"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -49,6 +49,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 对象 × 字段 × 状态、锁定与动作 | [object-model.md](references/object-model.md) |
 | 编码形态、类型码表、属性封闭集、定义块、引用、本文引用、分配 | [coding-system.md](references/coding-system.md) |
 | `IF` / `ACT` / `PLN`、UC / FR / FLW、ADR 与 DEC、EVAL | [type-profiles.md](references/type-profiles.md) |
+| EVAL 正文结构与填写口径 | [eval-report-profile.md](references/eval-report-profile.md) |
 | 信息项角色（承诺 / 证据 / 决策 / 外部依据） | [object-model.md · 信息项角色](references/object-model.md#信息项角色agent-选槽) |
 | 四态、门控、修订号、流转伴随 / 记录型含义 | [status-definitions.md](references/status-definitions.md) |
 | 产品版本、产品基线、升产品版本 | [product-version.md](references/product-version.md) |
@@ -230,7 +231,7 @@ AI 在被要求**依据已定设计实现或完善代码**时（含 [变更代�
 | `ued/L6-*` | 验证与确认；同目录可含 `EVAL-*`（基线评估报告，证据一事一档，不设 `eval/`） |
 | `ued/references/` 内 `REF-*` | 外部参考资料 |
 
-常用类型码导览：需求 `FR` `NFR` `AC` `CON` `RUL`；架构与设计 `PRN` `DEC` `CMP` `DOM` `IF` `FLW` `ALG` `ACT`；场景与前瞻 `SCN` `UC` `PLN` `RSK` `ASM` `MET`；战略与参与方 `GOL` `STK`；验证 `TC`。文档型：`ADR` / `EVAL`（证据）/ `REF`（外部）。语义单点在 [coding-system.md](references/coding-system.md) 与 [type-profiles.md · EVAL](references/type-profiles.md#eval-与-adr--ref--tc--met)。
+常用类型码导览：需求 `FR` `NFR` `AC` `CON` `RUL`；架构与设计 `PRN` `DEC` `CMP` `DOM` `IF` `FLW` `ALG` `ACT`；场景与前瞻 `SCN` `UC` `PLN` `RSK` `ASM` `MET`；战略与参与方 `GOL` `STK`；验证 `TC`。文档型：`ADR` / `EVAL`（证据）/ `REF`（外部）。语义单点在 [coding-system.md](references/coding-system.md)、[type-profiles.md · EVAL](references/type-profiles.md#eval-与-adr--ref--tc--met)、[eval-report-profile.md](references/eval-report-profile.md)。
 
 模板选型见 [assets/templates/index.md](assets/templates/index.md)。检查工具：
 

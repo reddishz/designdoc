@@ -77,7 +77,7 @@
 | 类型 | 模板名称 | 状态值 | 用途 | 模板位置 |
 |------|----------|--------|------|----------|
 | ADR | 架构决策记录 | 初稿/正式/草案/废弃 | 宏观架构级决策的一事一档，与 `DEC` 的切分见 [type-profiles.md · ADR 与 DEC 的定位](../../references/type-profiles.md#adr-与-dec-的定位)；存放于 `L3-architecture/`（ADR 归属 L3），**不设** `adr/` 子目录 | [adr.md](adr.md) ✅ |
-| EVAL | 基线评估报告 | 初稿/正式/草案/废弃 | 相对产品基线的内部评估长文（证据）；与 REF/TC/MET 切分见 [type-profiles.md · EVAL](../../references/type-profiles.md#eval-与-adr--ref--tc--met)；存放于 `L6-verification/`，**不设** `eval/` 子目录 | [eval.md](eval.md) ✅ |
+| EVAL | 基线评估报告 | 初稿/正式/草案/废弃 | 相对产品基线的内部评估长文（证据）；结构见 [eval-report-profile.md](../../references/eval-report-profile.md)；与 REF/TC/MET 切分见 [type-profiles.md · EVAL](../../references/type-profiles.md#eval-与-adr--ref--tc--met)；存放于 `L6-verification/`，**不设** `eval/` 子目录 | [eval.md](eval.md) ✅ |
 | REF | 外部参考资料 | 初稿/正式/草案/废弃 | 管理外部参考资源 | [ref.md](ref.md) ✅ |
 | PLN | 产品规划总览 | 初稿/正式/草案/废弃 | 登记当前不做、留待将来考虑的待议想法 | [planning.md](planning.md) ✅ |
 
