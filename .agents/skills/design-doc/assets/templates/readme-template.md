@@ -10,7 +10,7 @@
 
 > **模板 A：单应用模式 `ued/README.md`**
 >
-> 产品基线：`baselines/vX.Y.yaml`；规则见 [product-version.md](../../references/product-version.md)。首次发版前用 `check_docs.py --bump-product` 生成。
+> 产品基线：`baselines/vX.Y.yaml`（两段式文件；tip 为文件内 `full_version`=`vX.Y.Z`）。规则见 [product-version.md](../../references/product-version.md)。`--bump-product --patch|--minor|--major`。
 
 <!-- TEMPLATE:BEGIN 模板 A：单应用模式 ued/README.md -->
 # {project_name} 设计文档索引
@@ -37,7 +37,7 @@
 | 产品版本 | 日期 | 说明 |
 |----------|------|------|
 
-产品基线快照目录：`baselines/`（每产品版本一份 `vX.Y.yaml`）。
+产品基线快照目录：`baselines/`（每两段产品版本一份 `vX.Y.yaml`；纠错用 PATCH 升 tip）。
 
 ## 项目词汇表（可选）
 
@@ -192,7 +192,7 @@
 | 产品版本 | 日期 | 说明 |
 |----------|------|------|
 
-产品基线快照目录：`baselines/`（每产品版本一份 `vX.Y.yaml`）。首次发版前用 `check_docs.py --bump-product` 生成。
+产品基线快照目录：`baselines/`（每两段产品版本一份 `vX.Y.yaml`；纠错用 PATCH 升 tip）。
 
 ## 文档索引
 

@@ -3,7 +3,7 @@ name: design-doc
 description: 规范 AI 在 `ued/` 下创建、修改、审查设计文档，以及在改功能/修缺陷/实现代码前先对照并优先修订设计文档与产品基线门禁。用于约束按既定意图维护战略与愿景、利益相关者需求、系统/产品需求、概念架构、逻辑/系统设计、详细设计、验证与确认，并约束消费侧不得绕过文档直接改行为。
 license: MIT
 metadata:
-  version: "6.6"
+  version: "6.7"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -182,13 +182,19 @@ AI 在创建或编辑设计文档时，模板中的 `{当前用户.作者}` 与 
 2. **未冻结扫描**：确认要提交时，**仅扫描本轮 AI 实际改过的文件**（以本轮会话操作清单为准，不依赖版本库差异；无法确定时只提示、不扫描），收集 `初稿` / `草案`：文档元信息 `状态`；细项定义块或清单列；缺字段者按 `变更记录` 判定（有定稿条目 → `草案`；从未定稿 → `初稿`；无法判定 → `草案`）。
 3. **呈现与确认**：紧凑表格列出未冻结对象，支持批量口径。清单 **MUST** 附带「未冻结或未入当前产品基线不得作为实现依据」（见 [据文档实现](#据文档实现消费侧mandatory)）。
 4. **执行升格与提交**：明确确认者 → `正式`（定稿不加修订号；缺字段补齐；**定稿不写** `baselines/`）。**升格 MUST 自底向上**：先细项后文档。细项定稿 **MUST** 审查该细项出边（含同文档）并提示[须人审](references/coding-system.md#须人审不能靠号)；用户只确认文档而未确认其下细项时 **MUST** 回指待定稿细项。文档定稿 **MUST** 按 [本文引用 · 文档定稿](references/coding-system.md#审查与定稿时机) 对齐钉住表并再次列出须人审项。未提及 / 略过 → 保持未冻结。然后按用户指示 `svn commit` / `git commit`（是否 push 另请示）。
-5. **基线漂移与升产品版本（MUST 呈现；询问见专章）**：只要本轮未选「暂不提交」，在定稿步骤之后（若无待定稿对象则紧接提交确认后）**MUST** 按 [相对当前基线的漂移](references/product-version.md#相对当前基线的漂移) 列出短表——含「待建首份基线」或未入基线 / 已退出正式集 / revision 落后（可附建议版本号）。尚无任何基线文件 → **MUST** 问是否**建立首份基线**（默认沿用当前 `产品版本` 号，勿默认劝升次版本）。已有基线且三类漂移非空 → **MUST** 问是否升**次版本**；若用户同意建/升且命中 [主版本询问条件](references/product-version.md#何时询问)，再问主/次。无待建且漂移空 → 不追问发版。用户确认或主动说「发版 / 升产品版本」时走下方程序；**MUST NOT** 未经确认自行 `--bump-product`。
+5. **基线漂移与 PATCH/MINOR/MAJOR（MUST 呈现；询问见专章）**：只要本轮未选「暂不提交」，在定稿步骤之后（若无待定稿对象则紧接提交确认后）**MUST** 按 [相对当前基线的漂移](references/product-version.md#相对当前基线的漂移) 列出短表。尚无基线 → **MUST** 问是否建首份（沿用两段 `产品版本`）。仅 revision 落后 → **MUST** 建议 **PATCH**（更新当前 `vX.Y.yaml` 的 `full_version` tip，不改 README 两段号）。有未入基线/已退出 → **MUST** 建议 **MINOR**；命中 [主版本条件](references/product-version.md#何时询问) 再问 **MAJOR**。无漂移 → 不追问。用户确认后走下方程序；**MUST NOT** 未经确认自行 `--bump-product`。
 
 **MUST NOT**：未经确认升格；扫描并提交本轮未改的历史未冻结对象；删除已分配编码或已建档文档（放弃走作废，须 Checkpoint 4；`草案` 放弃走作废，或在草案期内改正文后再定稿，由人决定）。
 
-### 升产品版本
+### 升产品版本 / 更新基线
 
-用户说「发版 / 升产品版本」或在 Checkpoint 5 确认要升时，按 [product-version.md · 升产品版本](references/product-version.md#升产品版本mandatory) 执行：定号（默认次版本 `+1`；命中则问主版本，否决则保持次版本；首次无快照 MAY 以当前号生成）→ 写出 `baselines/vX.Y.yaml` → 对 `added`/`removed` 回写对象 `引入版本`/`退出版本` 缓存 → 更新 README。不解冻、不改修订号、不改本文引用、不写 git / svn / 构建号。定稿 **MUST NOT** 写基线或手填谱系。优先 `check_docs.py --bump-product`。询问规则（漂移 → 次版本；主版本条件另问）见该专章。
+用户确认 PATCH、MINOR、MAJOR 或说「发版」时，按 [product-version.md · 升产品版本](references/product-version.md#升产品版本mandatory) 执行。优先：
+
+- 纠错 / 仅 revision 落后：`check_docs.py --bump-product --patch --note '…'`
+- 新编码纳入：`--bump-product --minor`（或默认不加 `--patch`）
+- 主版本：`--bump-product --major`
+
+README / 文件名保持两段 `vX.Y`；tip 为 `full_version`（`vX.Y.Z`）。不解冻、不改修订号、不改本文引用、不写 git / svn / 构建号。定稿 **MUST NOT** 写基线或手填谱系。
 
 ## 变更代码前（消费侧，MANDATORY）
 
@@ -211,12 +217,13 @@ AI 在被要求**依据已定设计实现或完善代码**时（含 [变更代�
 1. **未入当前产品基线 MUST NOT 作为实现依据**：取作用域 README 的 `产品版本`，打开 `baselines/{该版本}.yaml`；目标细项编码 **MUST** 出现在其 `items` 中（成员均为生成时的 `正式` 细项，含全部类型码）。AI **MUST NOT** 依据未列出的细项实现、完善或重构代码，也 **MUST NOT** 依据 `状态` 为 `初稿` / `草案` / `废弃` 的整份文档实现。
 2. **被要求实现时 MUST 先判状态与基线、后拒绝**：
    - `初稿` / `草案` / `废弃`，或字段缺失按 [缺字段的判定](references/status-definitions.md#状态即基线冻结规则mandatory) 推定为未冻结 → **MUST 拒绝**；`初稿` 请用户定稿（不设豁免）；`草案` 请用户定稿，解冻轮次内确需据 `草案` 改代码时 **MUST** 由用户**逐项明确豁免**，并在文档 `变更记录` 记「按 `草案` 实现，定稿后 MUST 复核，且 MUST 升产品版本后方可作为基线依据」。
-   - `正式` 但不在当前基线 `items` → **MUST 拒绝**，提示先「升产品版本」纳入基线（默认可升**次版本**）；**MUST NOT** 对此情形做实现豁免。
+   - `正式` 但编码不在当前基线 `items` → **MUST 拒绝**，提示先 **MINOR** 纳入；**MUST NOT** 对此情形做实现豁免。
+   - `正式` 且在 `items` 中但基线 `revision` 落后 → **MUST 拒绝**按新语义实现，提示先 **PATCH**（或用户确认的立新基线）。
    - 无基线文件或 README 无 `产品版本` → **MUST 拒绝**，提示先建立产品基线。
-
    豁免只能由用户对 `草案` 逐项授予并留痕，**MUST NOT** 由 AI 自行推定，也 **MUST NOT** 以“先按现状实现、后续再对齐”为由绕过基线门禁。
-3. **审查时一并提示**：[status-definitions.md · 定稿提示](references/status-definitions.md#状态即基线冻结规则mandatory) 的提示 **MUST** 含“未入当前产品基线不得作为实现依据”。
-4. **提交前一并呈现**：Checkpoint 5 的未冻结清单与[基线漂移](references/product-version.md#相对当前基线的漂移)短表（见上节步骤 5）；漂移非空时的次版本询问为 **MUST**。
+3. **运行版本展示（SHOULD）**：发运或改行为时，SHOULD 使可见版本与当前基线 `full_version`（`vX.Y.Z`）一致；与 git SHA 正交。设计文档 **MUST NOT** 登记构建号或包路径。
+4. **审查时一并提示**：[status-definitions.md · 定稿提示](references/status-definitions.md#状态即基线冻结规则mandatory) 的提示 **MUST** 含“未入当前产品基线不得作为实现依据”。
+5. **提交前一并呈现**：Checkpoint 5 的未冻结清单与[基线漂移](references/product-version.md#相对当前基线的漂移)短表（见上节步骤 5）；漂移非空时按 PATCH/MINOR/MAJOR 询问（**MUST**）。
 
 ## 范围与模板
 
@@ -236,7 +243,7 @@ AI 在被要求**依据已定设计实现或完善代码**时（含 [变更代�
 模板选型见 [assets/templates/index.md](assets/templates/index.md)。检查工具：
 
 - `python3 scripts/check_docs.py -p <ued 路径>`：格式与一致性（编码格式 / 唯一性 / 升序 / 缺口与计数器等式、状态四态与旧值迁移提示、正文定义与清单与全局索引三方一致、标题与引用处一致、定义块形态与属性封闭集、修订号不变式、层级门控与依据方向、`依赖` 与 `来源` 分界、正式文档待定标记、正式 FR/NFR 缺 `验证方式` 提示、修订号递增时机、产品基线快照、基线谱系缓存取值、EVAL 对照版本与必备小节、废弃字段与建议归档日期、废弃文档仍含未废弃细项、REF 时效字段与复查周期、PLN 闭环、锚点可达性、章节编号引用）。「本文引用」钉住表本版由审查与定稿门控，脚本不因缺表或落后报 ERROR。非细项正文是否仍当依据本版不 ERROR。
-- `--bump-product [--major] [--note TEXT]`：升产品版本——按正式集生成 `baselines/vX.Y.yaml` 并更新 README（见 [product-version.md](references/product-version.md)）。
+- `--bump-product [--patch|--minor|--major] [--note TEXT]`：PATCH 更新当前基线 tip，或 MINOR/MAJOR 新建 `baselines/vX.Y.yaml`（见 [product-version.md](references/product-version.md)）。
 - `--refs {编码}`：反查定义 / 登记 / 引用，并列出依赖两表（谁依赖我 / 我依赖谁）；`初稿` 改标题前、解冻改内容前与任何状态作废前 **MUST** 先执行。
 - `--check-templates`：模板哨兵（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文）与技能包内部 `文件.md#锚点` 可达性。
 - `--instantiate {模板文件名} [--segment {段名}]`：剥除哨兵输出实例化后的正文；多段模板（`ref.md`、`readme-template.md`）用 `--segment` 取单段。
@@ -256,10 +263,10 @@ A: 按 [object-model.md · 锁定矩阵](references/object-model.md#锁定矩阵
 A: 区别在是否曾定稿。都不能删，放弃走作废。见 [status-definitions.md · 标准四态](references/status-definitions.md#标准四态唯一生命周期状态集合) 与 [item-deprecation.md](references/item-deprecation.md)。
 
 **Q: 定稿要升修订号或产品版本吗？**  
-A: 定稿不升修订号，也 **MUST NOT** 自动写基线。Checkpoint 5 **MUST** 呈现漂移：尚无基线则问是否建首份（默认可沿用当前产品版本号）；已有基线且漂移非空则问是否升**次版本**；主版本另按条件问。见 [product-version.md](references/product-version.md)。
+A: 定稿不升修订号，也 **MUST NOT** 自动写基线。Checkpoint 5 **MUST** 呈现漂移：尚无基线则问建首份；仅 revision 落后建议 **PATCH**；有成员进出建议 **MINOR**；主版本另按条件问。见 [product-version.md](references/product-version.md)。
 
 **Q: `正式` 是否即可实现？**  
-A: 否。须 `正式` **且** 出现在当前 `产品版本` 对应的 `baselines/vX.Y.yaml` 的 `items` 中；不在则先升产品版本（通常次版本）纳入基线。
+A: 否。须 `正式` **且** 在当前 `baselines/{产品版本}.yaml` 的 `items` 中并对齐 `revision`；编码不在则 **MINOR**，仅 revision 落后则 **PATCH**。
 
 **Q: 加功能能否直接写 L4/L5？**  
 A: 绿场或上层不存在时可以按需从 L2/L4 起步。已有 L0–L2 时 **MUST** 先向上核对（愿景/干系人/FR 等），再写下层；见 [新增功能需求（增量）](#新增功能需求增量)。

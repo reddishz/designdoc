@@ -57,17 +57,23 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from baseline_ops import (  # noqa: E402
+    FULL_VERSION_RE,
     VERSION_RE as BASELINE_VER_RE,
+    bump_full_patch,
     build_snapshot,
     collect_formal_items,
     compute_delta,
     dump_baseline,
+    effective_full_version,
     find_baseline_dir,
+    initial_full,
     latest_baseline,
     list_baseline_files,
     load_baseline,
     next_version,
+    resolve_prev_path,
     stamp_lineage_cache,
+    xy_of,
 )
 
 # 缺省快照：与 references/coding-system.md 的类型码表保持一致
@@ -1071,10 +1077,10 @@ class DesignDocChecker:
         cv = (doc.meta.get("对照版本") or "").strip()
         if not cv:
             self.add_issue("WARNING", "EVAL缺对照版本",
-                           f"{doc.path}: 基线评估报告 MUST 有元信息 `对照版本`（产品版本 vX.Y）")
-        elif not BASELINE_VER_RE.match(cv):
+                           f"{doc.path}: 基线评估报告 MUST 有元信息 `对照版本`（`vX.Y` 或 tip `vX.Y.Z`）")
+        elif not (BASELINE_VER_RE.match(cv) or FULL_VERSION_RE.match(cv)):
             self.add_issue("WARNING", "EVAL对照版本格式错误",
-                           f"{doc.path}: `对照版本` '{cv[:24]}' 应为产品版本 v主.次（如 v1.0）")
+                           f"{doc.path}: `对照版本` '{cv[:24]}' 应为 v主.次 或 v主.次.补丁")
         ed = (doc.meta.get("评估日期") or "").strip()
         if not ed:
             self.add_issue("WARNING", "EVAL缺评估日期",
@@ -1585,6 +1591,25 @@ class DesignDocChecker:
         if not VERSION_RE.match(pv):
             self.add_issue("ERROR", "产品基线版本格式错误",
                            f"{rel}: product_version '{pv}' 应为 v主.次")
+        fv = str(data.get("full_version") or "").strip()
+        if not fv:
+            self.add_issue("WARNING", "产品基线缺 full_version",
+                           f"{rel}: 缺 `full_version`；存量按 {initial_full(pv)} 理解，"
+                           "下次 PATCH/立新基线时补齐")
+            fv = initial_full(pv)
+        elif not FULL_VERSION_RE.match(fv):
+            self.add_issue("ERROR", "产品基线 full_version 格式错误",
+                           f"{rel}: full_version '{fv}' 应为 v主.次.补丁")
+        elif xy_of(fv) != pv:
+            self.add_issue("ERROR", "产品基线 full_version 前缀不一致",
+                           f"{rel}: full_version '{fv}' 前两段 MUST 等于 "
+                           f"product_version '{pv}'")
+        if not data.get("created") and not data.get("date"):
+            self.add_issue("WARNING", "产品基线缺 created",
+                           f"{rel}: 建议有 `created`（可用旧字段 date 迁移）")
+        if data.get("patch_log") is None and not data.get("note"):
+            self.add_issue("WARNING", "产品基线缺 patch_log",
+                           f"{rel}: 建议有 `patch_log`（一 tip 一条）")
         items = data.get("items")
         if not isinstance(items, list):
             self.add_issue("ERROR", "产品基线缺 items", f"{rel}: 须有 items 列表")
@@ -1646,10 +1671,20 @@ class DesignDocChecker:
             expect_removed: List[str] = []
             expect_changed: List[str] = []
         else:
-            prev_path = bpath.parent / f"{prev_ver}.yaml"
-            if not prev_path.is_file():
+            prev_s = str(prev_ver).strip()
+            if VERSION_RE.match(prev_s) and not FULL_VERSION_RE.match(prev_s):
+                self.add_issue("WARNING", "产品基线 prev 非 tip",
+                               f"{rel}: prev '{prev_s}' 建议改为前一基线 tip "
+                               "（SemVer v主.次.补丁）")
+            elif not FULL_VERSION_RE.match(prev_s) and not VERSION_RE.match(prev_s):
+                self.add_issue("ERROR", "产品基线 prev 格式错误",
+                               f"{rel}: prev '{prev_s}' 应为 tip SemVer 或两段式")
+                return
+            prev_path = resolve_prev_path(bpath.parent, prev_s)
+            if prev_path is None or not prev_path.is_file():
                 self.add_issue("ERROR", "产品基线 prev 缺失",
-                               f"{rel}: prev={prev_ver} 但找不到 {prev_path.name}")
+                               f"{rel}: prev={prev_s} 但找不到 "
+                               f"{xy_of(prev_s) or '?'}.yaml")
                 return
             try:
                 prev_data = load_baseline(prev_path)
@@ -1672,12 +1707,15 @@ class DesignDocChecker:
     def bump_product_version(
         self,
         major: bool = False,
+        patch: bool = False,
         note: str = "",
         force_version: str = "",
     ) -> List[Path]:
-        """升产品版本：各应用作用域各写一份 baselines 并更新 README。返回新文件路径列表。"""
+        """PATCH 更新当前基线，或 MINOR/MAJOR 新建。返回写入的基线路径列表。"""
         if yaml is None:
             raise RuntimeError("需要 PyYAML（pip install pyyaml）")
+        if patch and major:
+            raise RuntimeError("--patch 与 --major 互斥")
         if not self.docs:
             self.scan_docs()
         scopes = self._scope_dirs_with_product()
@@ -1700,7 +1738,8 @@ class DesignDocChecker:
             try:
                 outs.append(self._bump_one_scope(
                     scope, cur_pv, Path(readme_path),
-                    major=major, note=note, force_version=force_version))
+                    major=major, patch=patch, note=note,
+                    force_version=force_version))
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"{readme_path}: {exc}")
         if errors and not outs:
@@ -1711,7 +1750,91 @@ class DesignDocChecker:
                 + ", ".join(str(p) for p in outs) + "）：" + "; ".join(errors))
         return outs
 
+    def _scoped_docs(self, scope: Path) -> List:
+        scope_resolved = scope.resolve()
+        scoped = []
+        for d in self.docs:
+            try:
+                p = Path(d.path).resolve()
+            except OSError:
+                continue
+            if p.parent == scope_resolved or scope_resolved in p.parents:
+                scoped.append(d)
+        return scoped
+
     def _bump_one_scope(
+        self,
+        scope: Path,
+        cur_pv: str,
+        readme_path: Path,
+        major: bool = False,
+        patch: bool = False,
+        note: str = "",
+        force_version: str = "",
+    ) -> Path:
+        if patch:
+            return self._patch_one_scope(scope, cur_pv, readme_path, note=note)
+        return self._new_baseline_one_scope(
+            scope, cur_pv, readme_path,
+            major=major, note=note, force_version=force_version)
+
+    def _patch_one_scope(
+        self,
+        scope: Path,
+        cur_pv: str,
+        readme_path: Path,
+        note: str = "",
+    ) -> Path:
+        if not cur_pv:
+            raise RuntimeError("PATCH 需要 README 已有 `产品版本`")
+        out = find_baseline_dir(scope) / f"{cur_pv}.yaml"
+        if not out.is_file():
+            raise RuntimeError(f"PATCH 找不到当前基线 {out}；请先立首份或 MINOR")
+        cur_data = load_baseline(out)
+        scoped = self._scoped_docs(scope)
+        curr_items = collect_formal_items(scoped or self.docs)
+        old_items = list(cur_data.get("items") or [])
+        added_vs_cur, removed_vs_cur, _ = compute_delta(old_items, curr_items)
+        if added_vs_cur or removed_vs_cur:
+            raise RuntimeError(
+                "相对当前基线存在成员 added/removed，不能 PATCH；请改用 --minor/--major："
+                f" added={added_vs_cur[:8]} removed={removed_vs_cur[:8]}"
+            )
+        prev_tip = cur_data.get("prev")
+        prev_path = resolve_prev_path(out.parent, prev_tip) if prev_tip not in (
+            None, "null", "") else None
+        prev_data = None
+        if prev_path is not None and prev_path.is_file():
+            prev_data = load_baseline(prev_path)
+        elif prev_tip not in (None, "null", "") and VERSION_RE.match(str(prev_tip)):
+            # 存量两段式 prev
+            p2 = out.parent / f"{prev_tip}.yaml"
+            if p2.is_file():
+                prev_data = load_baseline(p2)
+
+        new_full = bump_full_patch(effective_full_version(cur_data))
+        log = list(cur_data.get("patch_log") or [])
+        if not log and cur_data.get("note"):
+            log.append({
+                "full_version": effective_full_version(cur_data),
+                "date": str(cur_data.get("updated") or cur_data.get("date") or ""),
+                "note": str(cur_data.get("note") or ""),
+            })
+        created = str(cur_data.get("created") or cur_data.get("date") or "")
+        snap = build_snapshot(
+            cur_pv, curr_items, prev_data=prev_data, note=note,
+            full_version=new_full, prev_tip=prev_tip if prev_data else None,
+            created=created, patch_log=log,
+        )
+        # PATCH 不改 prev
+        snap["prev"] = cur_data.get("prev")
+        out.write_text(dump_baseline(snap), encoding="utf-8")
+        self._append_readme_release_row(
+            readme_path, cur_pv, note or "基线 PATCH", out,
+            full_version=new_full, update_product_field=False)
+        return out
+
+    def _new_baseline_one_scope(
         self,
         scope: Path,
         cur_pv: str,
@@ -1724,6 +1847,8 @@ class DesignDocChecker:
         prev_data = load_baseline(prev_path) if prev_path else None
         if force_version:
             new_pv = force_version
+            if not VERSION_RE.match(new_pv):
+                raise RuntimeError(f"--force-version 须为两段式 vX.Y，收到 '{new_pv}'")
         elif not cur_pv and not prev_path:
             new_pv = "v1.0"
         elif cur_pv and not prev_path:
@@ -1734,42 +1859,47 @@ class DesignDocChecker:
         out = find_baseline_dir(scope) / f"{new_pv}.yaml"
         if out.exists():
             raise RuntimeError(f"已存在 {out}，拒绝覆盖；请改号或删除后重试")
-        scope_resolved = scope.resolve()
-        scoped_docs = []
-        for d in self.docs:
-            try:
-                p = Path(d.path).resolve()
-            except OSError:
-                continue
-            if p.parent == scope_resolved or scope_resolved in p.parents:
-                scoped_docs.append(d)
-        curr_items = collect_formal_items(scoped_docs or self.docs)
-        snap = build_snapshot(new_pv, curr_items, prev_data=prev_data, note=note)
+        scoped = self._scoped_docs(scope)
+        curr_items = collect_formal_items(scoped or self.docs)
+        prev_tip = effective_full_version(prev_data) if prev_data else None
+        snap = build_snapshot(
+            new_pv, curr_items, prev_data=prev_data, note=note,
+            full_version=initial_full(new_pv), prev_tip=prev_tip,
+        )
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_baseline(snap), encoding="utf-8")
         stamp_lineage_cache(
-            scoped_docs or self.docs,
+            scoped or self.docs,
             snap.get("added") or [],
             snap.get("removed") or [],
             new_pv,
         )
-        self._update_readme_product_version(readme_path, new_pv, note, out)
+        self._append_readme_release_row(
+            readme_path, new_pv, note or "升产品版本", out,
+            full_version=snap["full_version"], update_product_field=True)
         return out
 
-    def _update_readme_product_version(
-        self, readme: Path, new_pv: str, note: str, baseline_path: Path,
+    def _append_readme_release_row(
+        self,
+        readme: Path,
+        product_ver: str,
+        note: str,
+        baseline_path: Path,
+        full_version: str = "",
+        update_product_field: bool = True,
     ) -> None:
         from datetime import date as _date
         text = readme.read_text(encoding="utf-8")
-        if re.search(r"^\|\s*产品版本\s*\|", text, re.M):
+        if update_product_field and re.search(r"^\|\s*产品版本\s*\|", text, re.M):
             text = re.sub(
                 r"^(\|\s*产品版本\s*\|\s*)[^|\n]+(\|)\s*$",
-                lambda m: f"{m.group(1)}{new_pv} {m.group(2)}",
+                lambda m: f"{m.group(1)}{product_ver} {m.group(2)}",
                 text, count=1, flags=re.M,
             )
         today = _date.today().isoformat()
         rel = baseline_path.name
-        row = f"| {new_pv} | {today} | {note or '升产品版本'}（`baselines/{rel}`） |"
+        tip = full_version or product_ver
+        row = (f"| {product_ver} | {today} | {note}（{tip}，`baselines/{rel}`） |")
         if "## 发版记录" in text:
             def _insert(m: re.Match) -> str:
                 return m.group(0) + row + "\n"
@@ -1781,7 +1911,7 @@ class DesignDocChecker:
             )
             if n:
                 text = text2
-            elif f"| {new_pv} |" not in text.split("## 发版记录", 1)[-1][:800]:
+            elif f"| {product_ver} |" not in text.split("## 发版记录", 1)[-1][:800]:
                 text = text.replace(
                     "## 发版记录\n",
                     "## 发版记录\n\n| 产品版本 | 日期 | 说明 |\n"
@@ -3544,13 +3674,17 @@ def main() -> int:
     parser.add_argument("--segment", metavar="NAME",
                         help="配合 --instantiate：只输出指定段名的那一段")
     parser.add_argument("--bump-product", action="store_true",
-                        help="升产品版本：扫描正式细项写入 baselines/vX.Y.yaml 并更新 README")
+                        help="更新/新建产品基线：默认 MINOR 新建 vX.Y；见 --patch/--major")
+    parser.add_argument("--patch", action="store_true",
+                        help="配合 --bump-product：PATCH 更新当前基线 tip（full_version Z+1，不改 README 两段号）")
+    parser.add_argument("--minor", action="store_true",
+                        help="配合 --bump-product：显式 MINOR（与默认相同；与 --patch/--major 互斥）")
     parser.add_argument("--major", action="store_true",
-                        help="配合 --bump-product：升主版本（vX.Y → v(X+1).0）")
+                        help="配合 --bump-product：升主版本（新建 v(X+1).0）")
     parser.add_argument("--note", default="",
-                        help="配合 --bump-product：发版说明")
+                        help="配合 --bump-product：发版/补丁说明（写入 patch_log）")
     parser.add_argument("--force-version", default="",
-                        help="配合 --bump-product：强制使用指定产品版本号（如 v5.17）")
+                        help="配合 --bump-product：强制两段式产品版本号（如 v5.17；不可用于 --patch）")
     args = parser.parse_args()
 
     if args.check_templates:
@@ -3564,9 +3698,15 @@ def main() -> int:
     checker = DesignDocChecker(args.path)
 
     if args.bump_product:
+        if sum(bool(x) for x in (args.patch, args.minor, args.major)) > 1:
+            print("❌ --patch / --minor / --major 只能选一个")
+            return 1
+        if args.patch and args.force_version:
+            print("❌ --patch 不可与 --force-version 同用")
+            return 1
         try:
             outs = checker.bump_product_version(
-                major=args.major, note=args.note,
+                major=args.major, patch=args.patch, note=args.note,
                 force_version=args.force_version)
         except Exception as exc:  # noqa: BLE001
             print(f"❌ --bump-product 失败：{exc}")
