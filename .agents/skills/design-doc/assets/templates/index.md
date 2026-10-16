@@ -7,7 +7,7 @@
 - **不得包含可执行代码与实现片段**；允许算法、规则、约束、逻辑、流程、状态、假定、接口契约与决策说明等设计性内容。
 - **细项编码**：按 [编码体系](../../references/coding-system.md) 执行，默认简洁编码（`{类型码}-{三位序号}`），项目前缀需明确配置。正文中定义的细项须在文末维护**本文档细项编码清单**，并同步更新全局索引。清单之后维护**本文引用**（跨文档契约链接的钉住表，见 [本文引用](../../references/coding-system.md#本文引用跨文档钉住mandatory)）。
 - **交叉引用**：只允许引用细项编码或文档编码，不得用章节编号定位；正文引用写作 `[{编码}（{标题}）](锚点)`，表格型追溯可写裸编码。跨文件路径 MUST 以 `./` 或 `../` 开头（见 [交叉引用规则](../../references/coding-system.md#交叉引用规则)）；下层可引用上层，上层无需引用下层。
-- **`{当前用户.作者}`**：按当前作用域 `README.md` 的项目元信息解析，解析不到时回落为技能默认值（解析链单点见 [SKILL.md · AI 运行时配置解析规则](../../SKILL.md#ai-运行时配置解析规则)）。
+- **`{当前用户.作者}`**：按当前作用域 `README.md` 的项目元信息解析，解析不到时回落为技能默认值（解析链单点见 [runtime-config.md](../../references/workflows/runtime-config.md)）。
 - **术语与概念**：非必填；需要统一名词时见 [glossary-conventions.md](../../references/glossary-conventions.md)，模板中「术语与概念（可选）」小节与项目词汇表二选一或组合使用。
 
 ### 模板边界（哨兵）
@@ -30,7 +30,7 @@
 
 | 事项 | 单点 |
 |------|------|
-| 占位符与 `{当前用户.作者}` | 上文《编写约定》；解析链见 [SKILL.md · AI 运行时配置解析规则](../../SKILL.md#ai-运行时配置解析规则) |
+| 占位符与 `{当前用户.作者}` | 上文《编写约定》；解析链见 [runtime-config.md](../../references/workflows/runtime-config.md) |
 | 四态、新建默认 `初稿`、缺字段判定 | 下文《状态值标准》；[status-definitions.md](../../references/status-definitions.md) |
 | 编码形态、项目前缀、交叉引用、独立定义块 | 上文《编写约定》；[coding-system.md](../../references/coding-system.md) |
 | 定义块形态、属性封闭集、`出处` / `来源` / `依赖`、链接类每行一个对象 | [coding-system.md · 细项定义块形态](../../references/coding-system.md#细项定义块形态mandatory) |

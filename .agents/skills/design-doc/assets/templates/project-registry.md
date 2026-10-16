@@ -11,7 +11,7 @@
 
 ## 项目编码分配原则
 
-字符集、消歧与解析顺序见 [coding-system.md · 项目编码规则](../../references/coding-system.md#项目编码规则) 与 [SKILL.md · AI 运行时配置解析规则](../../SKILL.md#ai-运行时配置解析规则)。
+字符集、消歧与解析顺序见 [coding-system.md · 项目编码规则](../../references/coding-system.md#项目编码规则) 与 [runtime-config.md](../../references/workflows/runtime-config.md)。
 
 ## 应用注册表示例
 
@@ -24,7 +24,7 @@
 
 ## 注册与启用流程
 
-见 [SKILL.md · AI 运行时配置解析规则](../../SKILL.md#ai-运行时配置解析规则)：登记应用注册表 → 应用级 README 声明 `project_code` → 请求发起方确认后启用前缀。
+见 [runtime-config.md](../../references/workflows/runtime-config.md)：登记应用注册表 → 应用级 README 声明 `project_code` → 请求发起方确认后启用前缀。
 
 ---
 

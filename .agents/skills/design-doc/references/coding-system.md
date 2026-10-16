@@ -350,7 +350,7 @@ FR / NFR 正文首段 **SHOULD** 写成可验证的对外承诺，不把实现�
 
 ### 强制提示启用场景
 
-提示时机、确认话术与解析链见 [SKILL.md · AI 运行时配置解析规则](../SKILL.md#ai-运行时配置解析规则)。
+提示时机、确认话术与解析链见 [runtime-config.md](workflows/runtime-config.md)。
 
 ### 项目编码规则
 - **格式要求**：2-5 位，MUST 以大写字母开头，其余各位 MAY 为大写字母或数字（`[A-Z][A-Z0-9]{1,4}`），如 `CRM`、`ERP`、`W3T`。
@@ -358,7 +358,7 @@ FR / NFR 正文首段 **SHOULD** 写成可验证的对外承诺，不把实现�
 - **MUST NOT 形如 `L` 加数字**：文档编码以 `L0-L6` 起头，项目编码取 `L2` 之类会与文档编码 `L2-001` 同形。
 - **分配原则**：全局唯一；应体现项目或产品线特征；项目一旦启动并分配编码，禁止中途修改。
 
-解析链与启用确认见 [SKILL.md · AI 运行时配置解析规则](../SKILL.md#ai-运行时配置解析规则)。
+解析链与启用确认见 [runtime-config.md](workflows/runtime-config.md)。
 
 ### 扩展编码格式
 前缀加在**细项编码与文档编码**两者之前，其余形态与简洁编码一一对应：
@@ -370,7 +370,7 @@ FR / NFR 正文首段 **SHOULD** 写成可验证的对外承诺，不把实现�
 
 ### 获取方式
 
-见 [SKILL.md · AI 运行时配置解析规则](../SKILL.md#ai-运行时配置解析规则)。
+见 [runtime-config.md](workflows/runtime-config.md)。
 
 ---
 
@@ -406,7 +406,7 @@ FR / NFR 正文首段 **SHOULD** 写成可验证的对外承诺，不把实现�
 
 ### AI 编码分配强制流程
 
-操作步骤见 [SKILL.md · 分配新编码](../SKILL.md#分配新编码)。计数器等式与索引排序见下节。
+操作步骤见 [allocate-and-lock.md](workflows/allocate-and-lock.md)。计数器等式与索引排序见下节。
 
 ### README 索引排序与计数器治理（MANDATORY）
 
@@ -430,7 +430,7 @@ FR / NFR 正文首段 **SHOULD** 写成可验证的对外承诺，不把实现�
 
 ### 违规检测与纠正（REQUIRED）
 
-识别三类违规请求并按通道响应，程序见 [SKILL.md · 处理编码含义变更请求](../SKILL.md#处理编码含义变更请求)；权限表见 [object-model.md · 锁定矩阵](object-model.md#锁定矩阵mandatory)。
+识别三类违规请求并按通道响应，程序见 [allocate-and-lock.md](workflows/allocate-and-lock.md)；权限表见 [object-model.md · 锁定矩阵](object-model.md#锁定矩阵mandatory)。
 
 ---
 

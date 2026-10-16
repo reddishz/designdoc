@@ -149,7 +149,7 @@ items:
 
 ## 据文档实现与产品基线
 
-改功能/修缺陷须先走 [SKILL.md · 变更代码前](../SKILL.md#变更代码前消费侧mandatory)。实现门禁：目标细项 MUST `正式` 且出现在**当前** `baselines/{产品版本}.yaml` 的 `items` 中，且实现所依据的语义对应基线中的 `revision`（落后则先 PATCH 或立新基线）。新编码未入基线 → **MUST NOT** 实现（须 MINOR）。
+改功能/修缺陷须先走 [before-code-change.md](workflows/before-code-change.md)。实现门禁见 [implement-from-design.md](workflows/implement-from-design.md)：目标细项 MUST `正式` 且出现在**当前** `baselines/{产品版本}.yaml` 的 `items` 中，且 revision 对齐（落后则先 PATCH）。新编码未入基线 → **MUST NOT** 实现（须 MINOR）。
 
 **运行中版本展示（SHOULD）**：发运或改行为时，SHOULD 使 `--version` / 启动日志 / 关于页等可见版本与当前基线 `full_version`（`vX.Y.Z`）一致；与 git SHA 正交。设计文档 **MUST NOT** 登记构建号或包路径。
 

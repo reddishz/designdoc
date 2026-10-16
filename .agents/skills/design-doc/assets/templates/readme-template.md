@@ -1,6 +1,6 @@
 > **模板：项目设计文档 README**
 >
-> 先确定 `doc_mode`，再复制对应哨兵段（A 单应用 / B 多应用顶层 / C 应用级）。职责切分见 [SKILL.md · AI 运行时配置解析规则](../../SKILL.md#ai-运行时配置解析规则)。
+> 先确定 `doc_mode`，再复制对应哨兵段（A 单应用 / B 多应用顶层 / C 应用级）。职责切分见 [runtime-config.md](../../references/workflows/runtime-config.md)。
 >
 > **通用规则**：见 [index.md · 整篇型模板共用](index.md#整篇型模板共用)。
 >

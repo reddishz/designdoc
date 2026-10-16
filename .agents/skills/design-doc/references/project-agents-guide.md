@@ -41,7 +41,7 @@
 4. **禁止**「先改代码、以后再补文档」。
 5. **版本展示（SHOULD）**：运行中可见版本与当前基线 `full_version`（`vX.Y.Z`）一致。
 
-细则见 `.agents/skills/design-doc/SKILL.md` ·「变更代码前」与「据文档实现」。
+细则见 workflows/before-code-change.md 与 implement-from-design.md。
 
 ## 可用技能
 

@@ -15,11 +15,11 @@
 - [ ] **无第二套状态枚举**：不得出现旧值或专属状态集合（如 `草稿` / `提议` / `采纳` / `拒绝` / `取代` / `登记中` / `有效` / `待验证` / `使用中`），也不得出现旧字段名（`规划状态` / `验证状态` / `应用状态` / `建议移除日期`）；映射表见 [status-definitions.md · 存量文档迁移](status-definitions.md#存量文档迁移)
 
 #### 定稿提示（状态即基线）
-- [ ] 遇到未冻结对象时提示是否定稿，并含「不得作为实现依据」（见 [SKILL.md · 据文档实现](../SKILL.md#据文档实现消费侧mandatory)）；AI 不自行升格
+- [ ] 遇到未冻结对象时提示是否定稿，并含「不得作为实现依据」（见 [implement-from-design.md](workflows/implement-from-design.md)）；AI 不自行升格
 - [ ] 放弃 / 改标题 / 删除通道按 [object-model.md · 锁定矩阵](object-model.md#锁定矩阵mandatory)；改标题前 `--refs`
 - [ ] **层级门控**与依据方向：解冻自顶向下、定稿与整份废止自底向上；见 [status-definitions.md · 层级门控](status-definitions.md#层级门控文档状态--细项状态mandatory) / [doc-deprecation.md · 整份废弃的前置](doc-deprecation.md#整份废弃的前置mandatory)
 - [ ] **本文引用 / 须人审**：解冻确认看「谁依赖我」；细项定稿审出边（含同文档）；文档定稿对齐钉住表。须人审项 **MUST** 列出并等人确认，不得默默升钉（见 [coding-system.md · 本文引用](coding-system.md#本文引用跨文档钉住mandatory) / [须人审](coding-system.md#须人审不能靠号)）
-- [ ] 提交前定稿确认流程见 [SKILL.md · 修改完毕](../SKILL.md#修改完毕定稿确认与提交提示)
+- [ ] 提交前定稿确认流程见 [lifecycle.md](workflows/lifecycle.md)
 
 #### 元信息完整性
 - [ ] 文档编码存在且格式正确（如 `CRM-L0-001`，含项目编码与层级）
@@ -106,7 +106,7 @@
 - [ ] L5 文档包含算法逻辑、流程与约束、异常策略；组件引用 L3 CMP，不在 L5 重复定义，也不定义 FR / NFR / AC / UC
 - [ ] L6 文档包含测试策略、需求追溯矩阵、缺陷管理策略；功能与非功能测试均有 TC；不定义 AC
 - [ ] **对层正确**：文档回答的问题与 [layer-system.md · 分层问题](layer-system.md#分层问题对层判据) 一致；L2 不写架构方案，L3 不另编特性类型；用户可见路径用 UC，系统路径用 FLW
-- [ ] **增量向上核对**：本轮新增能力时，若已有 L0–L2，未无故只改 L4/L5 而跳过上层（见 [SKILL.md · 新增功能需求（增量）](../SKILL.md#新增功能需求增量) / [按需启用](layer-system.md#按需启用原则)）
+- [ ] **增量向上核对**：本轮新增能力时，若已有 L0–L2，未无故只改 L4/L5 而跳过上层（见 [change-feature.md](workflows/change-feature.md) / [按需启用](layer-system.md#按需启用原则)）
 - [ ] **定义与引用分离**：锁定类型只在定义层写定义块，他层只链接（[coding-system.md · 细项定义层级](coding-system.md#细项定义层级mandatory)）
 - [ ] **L6 定位正确**：追溯矩阵用 `追溯状态`（未追溯 / 已追溯 / 不适用）表达追溯覆盖关系，**不记录测试执行结果**（通过 / 失败 / 缺陷数属测试管理系统职责）
 
