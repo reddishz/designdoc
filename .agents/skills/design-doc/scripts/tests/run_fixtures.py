@@ -12,12 +12,29 @@
 用法：
     python3 scripts/tests/run_fixtures.py       # 全量
     python3 scripts/tests/run_fixtures.py -v    # 附带每条夹具的命中详情
+
+测试环境依赖（仅本跑台，非正式规范）：须能 `import yaml`（PyYAML），否则含基线
+成员状态等夹具会被检查器跳过而假漏报；缺依赖时本脚本以环境错误退出。
 """
 import re
 import sys
 import subprocess
 from collections import defaultdict
 from pathlib import Path
+
+
+def require_test_deps() -> None:
+    """跑台前置：基线类夹具依赖 PyYAML；缺则不得伪装成规则回归失败。"""
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        print(
+            "ERROR: 测试环境缺少 PyYAML（`pip install pyyaml`）。\n"
+            "基线相关夹具在无 yaml 时会被 check_docs 跳过，不能当作规则漏报。\n"
+            "此依赖仅约束 scripts/tests/run_fixtures.py，不改变正式检查规则。",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
 ROOT = Path(__file__).resolve().parent
 FIXTURES = ROOT / "fixtures"
@@ -291,6 +308,7 @@ def run_check_templates_smoke():
 
 
 def main():
+    require_test_deps()
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
     proc = subprocess.run(
         [sys.executable, str(CHECKER), "-p", str(FIXTURES)],

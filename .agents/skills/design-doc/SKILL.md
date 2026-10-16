@@ -50,9 +50,9 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 
 1. 确认作用域存在 `ued/`（或应用级设计树）；解析配置见 [runtime-config.md](references/workflows/runtime-config.md)。
 2. 按下方**任务路由**加载对应 workflow（**MUST read**）；仅在流程分支需要时再打开所列 rule。
-3. R2/R3 级设计变更（解冻、废弃、批量编码、基线）先短计划，人审停点见各 workflow 的 Checkpoint。
+3. 解冻、废弃、批量编码或动基线前：先短计划，人审停点见各 workflow 的 Checkpoint。
 4. 改完跑 `check_docs.py`；通过≠语义正确。
-5. 收尾走 [lifecycle.md · Checkpoint 5](references/workflows/lifecycle.md)（定稿询问与基线漂移）。
+5. **仅当**本轮改过 `ued/`、要定稿/提交、或有基线漂移须询问时，再加载 [lifecycle.md](references/workflows/lifecycle.md) 走 Checkpoint 5；未改设计文档则不必读 lifecycle。
 
 ## 任务路由
 
@@ -61,7 +61,8 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 增量加功能 / 加需求 | [change-feature.md](references/workflows/change-feature.md) |
 | 创建新设计文档 | [create-document.md](references/workflows/create-document.md) |
 | 分配编码；改 ID/类型码/正式标题或含义 | [allocate-and-lock.md](references/workflows/allocate-and-lock.md) |
-| 废弃细项/文档；定稿与提交收尾 | [lifecycle.md](references/workflows/lifecycle.md) |
+| 废弃细项/文档 | [lifecycle.md](references/workflows/lifecycle.md)（作废段） |
+| 定稿确认 / 提交收尾 / 基线漂移询问 | [lifecycle.md](references/workflows/lifecycle.md)（Checkpoint 5；见上「仅当」） |
 | 基线 PATCH / MINOR / MAJOR | [baseline-change.md](references/workflows/baseline-change.md) |
 | 写/改 EVAL | [eval-report-profile.md](references/eval-report-profile.md) + 模板 [eval.md](assets/templates/eval.md) |
 | 审查设计文档 | [review-guidelines.md](references/review-guidelines.md) |
