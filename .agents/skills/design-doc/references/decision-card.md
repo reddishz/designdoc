@@ -10,6 +10,7 @@
 | 新建 / 改编码、标题、类型码 | [allocate-and-lock.md](workflows/allocate-and-lock.md) + [锁定矩阵](object-model.md#锁定矩阵mandatory) | 删除或复用已分配编码；就地改编码 ID / 类型码 / `正式`·`草案` 标题与正式含义 |
 | 废弃 / 受控复活 | [item-deprecation.md](item-deprecation.md) / [doc-deprecation.md](doc-deprecation.md) + [状态定义](status-definitions.md) | 废弃字段不齐；仍有活细项就整份废弃；复活条件未逐条满足或未取得人确认 |
 | 定稿 / 发版 / 基线变更 | [lifecycle.md](workflows/lifecycle.md)（Checkpoint 5）与 [baseline-change.md](workflows/baseline-change.md) | 未经人确认的定稿 / `--bump-product`；未跑检查 |
+| 维护术语 / 解决术语冲突 | [glossary-conventions.md](glossary-conventions.md) | 同一术语在不同文档各定义一次；用第二张表或应用命名空间并存同名不同义 |
 | 审查设计文档 | [review-guidelines.md](review-guidelines.md) | 包内或文档间存在未解消冲突；把冲突留给「优先级表」 |
 
 ## 最小命令集

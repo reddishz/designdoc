@@ -667,6 +667,17 @@ class ItemInfo:
 
 
 @dataclass
+class TermInfo:
+    """文档「术语和概念」中的一个术语定义块。"""
+    doc_path: str
+    line: int
+    heading: str
+    zh: str = ""
+    en: str = ""
+    definition: str = ""
+
+
+@dataclass
 class DocInfo:
     """文档信息"""
     path: str
@@ -679,6 +690,7 @@ class DocInfo:
     version: str = ""
     content: str = ""
     is_index: bool = False          # README.md 等作用域索引文件
+    is_glossary: bool = False       # 全局术语表 glossary.md（辅助文档，无编码/无四态）
     lines: List[str] = field(default_factory=list)        # 已屏蔽代码围栏
     raw_lines: List[str] = field(default_factory=list)
     meta: Dict[str, str] = field(default_factory=dict)
@@ -772,6 +784,7 @@ class DesignDocChecker:
             lines=lines,
             raw_lines=raw_lines,
             is_index=Path(path).name.upper() == "README.MD",
+            is_glossary=Path(path).name.lower() == "glossary.md",
         )
 
         doc.meta = self._parse_meta_table(lines, merge_all=doc.is_index)
@@ -1059,6 +1072,402 @@ class DesignDocChecker:
                 return same[0]
         return code
 
+    # -------------------------------------------------------------- 术语表 / 术语块
+
+    TERM_SECTION_RE = re.compile(
+        r"^\s{0,3}(#{1,6})\s+(?:\d+(?:[.．]\d+)*[.、]?\s*)?"
+        r"(术语和概念|术语与概念)(?:\s*[（(][^）)]*[）)])?\s*$")
+    TERM_ATTR_RE = re.compile(
+        r"^\s*[-*+]\s*\*\*(中文名称|英文名称|英文标识符|定义来源)\*\*\s*[：:]\s*(.*)$")
+    TERM_DEF_RE = re.compile(r"^\s*(?:[-*+]\s*)?\*\*定义\*\*\s*[：:]\s*(.*)$")
+    TERM_COLUMNS = ("中文名称", "英文名称", "定义", "定义位置")
+
+    @staticmethod
+    def _is_placeholder(text: str) -> bool:
+        return "{" in text or "}" in text
+
+    def _parse_term_block(self, doc: DocInfo, start: int, end: int,
+                          heading: str) -> TermInfo:
+        fields: Dict[str, str] = {}
+        definition = ""
+        for j in range(start + 1, end):
+            line = doc.lines[j]
+            m = self.TERM_ATTR_RE.match(line)
+            if m:
+                fields[m.group(1)] = norm(m.group(2))
+                continue
+            dm = self.TERM_DEF_RE.match(line)
+            if dm and not definition:
+                definition = norm(dm.group(1))
+                if not definition:
+                    for k in range(j + 1, end):
+                        if doc.lines[k].strip():
+                            definition = norm(doc.lines[k])
+                            break
+        return TermInfo(
+            doc_path=doc.path,
+            line=start + 1,
+            heading=norm(heading),
+            zh=fields.get("中文名称", ""),
+            en=fields.get("英文名称", ""),
+            definition=definition,
+        )
+
+    def _term_sections(self, doc: DocInfo) -> List[Tuple[int, str, str, List[TermInfo]]]:
+        """解析「术语和概念」章节：返回 [(起始行, 标题, 井号数, 术语块)]。"""
+        lines = doc.lines
+        sections: List[Tuple[int, str, str, List[TermInfo]]] = []
+        for start, line in enumerate(lines):
+            m = self.TERM_SECTION_RE.match(line)
+            if not m:
+                continue
+            hashes, title = m.group(1), m.group(2)
+            end = len(lines)
+            for j in range(start + 1, len(lines)):
+                hm = re.match(r"^\s{0,3}(#{1,6})\s+", lines[j])
+                if hm and len(hm.group(1)) <= len(hashes):
+                    end = j
+                    break
+            blocks: List[TermInfo] = []
+            k = start + 1
+            while k < end:
+                hm = re.match(r"^\s{0,3}(#{1,6})\s+(.*)$", lines[k])
+                if hm and len(hm.group(1)) == len(hashes) + 1:
+                    bend = end
+                    for j in range(k + 1, end):
+                        nm = re.match(r"^\s{0,3}(#{1,6})\s+", lines[j])
+                        if nm and len(nm.group(1)) <= len(hm.group(1)):
+                            bend = j
+                            break
+                    blocks.append(self._parse_term_block(doc, k, bend, hm.group(2)))
+                    k = bend
+                    continue
+                k += 1
+            sections.append((start + 1, title, hashes, blocks))
+        return sections
+
+    def _glossary_table(self, doc: DocInfo):
+        """取术语表本身：返回 (表头行号, 表头, 行) 或 (None, [], [])。"""
+        for idx, header, rows in iter_tables(doc.lines):
+            clean = [norm(h) for h in header]
+            if any(h in clean for h in ("中文名称", "英文名称", "定义位置", "术语")):
+                return idx, clean, rows
+        return None, [], []
+
+    @staticmethod
+    def _term_names_match(term: TermInfo, zh: str, en: str) -> bool:
+        return bool((zh and term.zh == zh)
+                    or (en and term.en and term.en.casefold() == en.casefold()))
+
+    @staticmethod
+    def _term_names_strict(term: TermInfo, zh: str, en: str) -> bool:
+        """中英文名称须同时一致；术语块本身缺某语言时按已有语言匹配。"""
+        if term.zh and term.en:
+            return bool(zh and en and term.zh == zh
+                        and term.en.casefold() == en.casefold())
+        return bool((zh and term.zh == zh)
+                    or (en and term.en and term.en.casefold() == en.casefold()))
+
+    @staticmethod
+    def _term_key_value(value: str) -> str:
+        return value.casefold()
+
+    def check_glossary(self) -> None:
+        """全局术语表与文档术语块：唯一定义、固定四列、定义位置可解析。
+
+        房规见 `references/glossary-conventions.md`：术语表固定 `ued/glossary.md`，
+        不分配编码、不参与四态；文档用顶层 `## 术语和概念` 承载本文引入的术语。
+        """
+        glos = [d for d in self.docs if d.is_glossary]
+        terms_by_doc: Dict[str, List[TermInfo]] = {}
+        all_terms: List[TermInfo] = []
+        used_by_doc: Dict[str, str] = {}
+        first_numbered: Dict[str, int] = {}
+
+        for doc in self.docs:
+            if doc.is_glossary or doc.archived:
+                continue
+            for i, line in enumerate(doc.lines):
+                if re.match(r"^\s{0,3}##\s+\d+\.", line):
+                    first_numbered[doc.path] = i + 1
+                    break
+            sections = self._term_sections(doc)
+            if len(sections) > 1:
+                self.add_issue("WARNING", "术语章节重复",
+                               f"{doc.path}: 找到 {len(sections)} 个「术语和概念」章节；"
+                               "同一文档 MUST 只有一个")
+            doc_terms: List[TermInfo] = []
+            for line_no, title, hashes, blocks in sections:
+                if hashes != "##":
+                    self.add_issue("WARNING", "术语章节层级错误",
+                                   f"{doc.path}:{line_no} 「{title}」应为顶层 `## 术语和概念`，"
+                                   "不是小节标题")
+                if title == "术语与概念":
+                    self.add_issue("INFO", "术语章节标题待迁移",
+                                   f"{doc.path}:{line_no} 建议改用 `术语和概念`")
+                if doc.path in first_numbered and line_no > first_numbered[doc.path]:
+                    self.add_issue("WARNING", "术语章节位置靠后",
+                                   f"{doc.path}:{line_no} 「术语和概念」应位于正文编号章节之前")
+                # 术语章节内 MUST NOT 用表格承载定义
+                sec_end = len(doc.lines)
+                for j in range(line_no, len(doc.lines)):
+                    hm = re.match(r"^\s{0,3}(#{1,6})\s+", doc.lines[j])
+                    if j > line_no - 1 and hm and len(hm.group(1)) <= len(hashes):
+                        sec_end = j
+                        break
+                for tidx, theader, _trows in iter_tables(doc.lines):
+                    if not (line_no - 1 <= tidx < sec_end):
+                        continue
+                    tclean = [norm(h) for h in theader]
+                    if {"术语", "中文名称", "英文名称", "定义"} & set(tclean):
+                        self.add_issue("ERROR", "术语章节使用表格",
+                                       f"{doc.path}:{tidx + 1} 「术语和概念」MUST 用段落块定义，"
+                                       "MUST NOT 用表格")
+                        break
+                for term in blocks:
+                    if self._is_placeholder(term.zh) or self._is_placeholder(term.en) \
+                            or self._is_placeholder(term.definition):
+                        continue
+                    if not term.zh:
+                        self.add_issue("ERROR", "术语定义缺失",
+                                       f"{doc.path}:{term.line} 术语块缺 `中文名称`")
+                    if not term.en:
+                        self.add_issue("ERROR", "术语定义缺失",
+                                       f"{doc.path}:{term.line} 术语块缺 `英文名称`")
+                    if not term.definition:
+                        self.add_issue("ERROR", "术语定义缺失",
+                                       f"{doc.path}:{term.line} 术语块缺 `定义`")
+                    if term.zh and term.en:
+                        heading_ok = (term.heading == term.zh
+                                      or term.heading.casefold() == term.en.casefold())
+                        if not heading_ok:
+                            self.add_issue("ERROR", "术语标题与名称不一致",
+                                           f"{doc.path}:{term.line} 标题「{term.heading}」"
+                                           f"应等于中文名称「{term.zh}」或英文名称「{term.en}」")
+                    doc_terms.append(term)
+            if doc_terms:
+                seen: Dict[Tuple[str, str], TermInfo] = {}
+                for term in doc_terms:
+                    for lang, value in (("zh", term.zh), ("en", self._term_key_value(term.en))):
+                        if not value:
+                            continue
+                        key = (lang, value)
+                        if key in seen:
+                            self.add_issue("ERROR", "术语重复定义",
+                                           f"{doc.path}:{term.line} 与 {seen[key].line} "
+                                           f"重复定义术语「{term.zh or term.en}」")
+                        else:
+                            seen[key] = term
+                terms_by_doc[doc.path] = doc_terms
+                all_terms.extend(doc_terms)
+
+            used = (doc.meta.get("所用术语") or "").strip()
+            if used:
+                used_by_doc[doc.path] = used
+
+        # 跨文档重复定义：同一术语只能有一个权威定义
+        by_key: Dict[Tuple[str, str], List[TermInfo]] = defaultdict(list)
+        for term in all_terms:
+            if term.zh:
+                by_key[("zh", term.zh)].append(term)
+            if term.en:
+                by_key[("en", self._term_key_value(term.en))].append(term)
+        reported_pairs: Set[Tuple[str, ...]] = set()
+        for key, group in by_key.items():
+            paths = sorted({t.doc_path for t in group})
+            if len(paths) <= 1:
+                continue
+            pair = tuple(paths)
+            if pair in reported_pairs:
+                continue
+            reported_pairs.add(pair)
+            self.add_issue("ERROR", "术语重复定义",
+                           f"术语「{group[0].zh or group[0].en}」在多个文档定义："
+                           f"{' / '.join(paths)}；项目内 MUST 只有一个权威定义")
+
+        if not glos:
+            if all_terms:
+                for path in sorted(terms_by_doc):
+                    self.add_issue("ERROR", "缺少全局术语表",
+                                   f"{path}: 定义了术语但缺少 `ued/glossary.md`；"
+                                   "术语 MUST 登记在唯一全局术语表")
+            for path in sorted(used_by_doc):
+                self.add_issue("ERROR", "缺少全局术语表",
+                               f"{path}: 使用了 `所用术语` 但缺少 `ued/glossary.md`")
+            return
+
+        expected = (self.ued_path / "glossary.md").resolve()
+        if len(glos) > 1:
+            self.add_issue("ERROR", "术语表位置非法",
+                           "只允许一份全局术语表，当前找到："
+                           + " / ".join(sorted(d.path for d in glos)))
+        g = next((d for d in glos if Path(d.path).resolve() == expected), glos[0])
+        if Path(g.path).resolve() != expected:
+            self.add_issue("ERROR", "术语表位置非法",
+                           f"{g.path}: 全局术语表 MUST 固定在 `{expected}`")
+
+        # 元信息与修订
+        ver = (g.meta.get("修订版本号") or "").strip()
+        if not ver:
+            self.add_issue("ERROR", "术语表元信息缺失", f"{g.path}: 缺 `修订版本号`")
+        elif not REV_VALUE.match(ver):
+            self.add_issue("ERROR", "术语表修订号非法",
+                           f"{g.path}: `修订版本号` '{ver}' MUST 是单个正整数")
+        for field in ("作者", "创建日期", "最后更新"):
+            value = (g.meta.get(field) or "").strip()
+            if not value or self._is_placeholder(value):
+                self.add_issue("ERROR", "术语表元信息缺失", f"{g.path}: 缺 `{field}`")
+            elif field in ("创建日期", "最后更新") and not DATE_VALUE.match(norm(value)):
+                self.add_issue("WARNING", "术语表日期格式错误",
+                               f"{g.path}: `{field}` '{value[:24]}' MUST 为 YYYY-MM-DD")
+        if g.meta.get("文档编码") or g.meta.get("状态"):
+            self.add_issue("WARNING", "术语表含编码或状态字段",
+                           f"{g.path}: 术语表不分配文档编码、不参与四态；"
+                           "删除 `文档编码` / `状态` 字段")
+        if self._changelog_start(g) is None:
+            self.add_issue("WARNING", "术语表缺变更记录",
+                           f"{g.path}: 术语表也是文档，MUST 有 `变更记录`")
+
+        _idx, header, rows = self._glossary_table(g)
+        if _idx is None:
+            self.add_issue("ERROR", "术语表缺少固定四列表",
+                           f"{g.path}: 未找到含 `中文名称` / `英文名称` / `定义` / "
+                           "`定义位置` 的表格")
+            return
+        cols = {name: col_index(header, name) for name in self.TERM_COLUMNS}
+        missing_cols = [name for name, i in cols.items() if i is None]
+        if missing_cols:
+            self.add_issue("ERROR", "术语表缺少固定四列表",
+                           f"{g.path}: 缺列 {'、'.join(missing_cols)}；"
+                           "固定列为 中文名称 / 英文名称 / 定义 / 定义位置")
+        used_idx = {i for i in cols.values() if i is not None}
+        extra_cols = [header[i] for i in range(len(header))
+                      if i not in used_idx and norm(header[i])]
+        if extra_cols:
+            self.add_issue("ERROR", "术语表列不合规",
+                           f"{g.path}: 固定四列之外不得有列 "
+                           f"{'、'.join(extra_cols)}；可选信息放到表后的《补充信息》")
+
+        def cell(cells: List[str], name: str) -> str:
+            i = cols.get(name)
+            return norm(cells[i]) if i is not None and i < len(cells) else ""
+
+        glossary_terms: List[Dict[str, str]] = []
+        seen_zh: Dict[str, int] = {}
+        seen_en: Dict[str, int] = {}
+        for lineno, cells in rows:
+            values = {name: cell(cells, name) for name in self.TERM_COLUMNS}
+            if not any(values.values()):
+                continue
+            if any(self._is_placeholder(v) for v in values.values() if v):
+                continue
+            empty = [name for name in self.TERM_COLUMNS if not values[name]]
+            if empty:
+                self.add_issue("ERROR", "术语表字段缺失",
+                               f"{g.path}:{lineno + 1} 缺 {'、'.join(empty)}")
+            zh, en = values["中文名称"], values["英文名称"]
+            loc = values["定义位置"]
+            if zh:
+                if zh in seen_zh:
+                    self.add_issue("ERROR", "术语名称重复",
+                                   f"{g.path}:{lineno + 1} 中文名称「{zh}」与第 "
+                                   f"{seen_zh[zh] + 1} 行重复")
+                else:
+                    seen_zh[zh] = lineno
+            if en:
+                ekey = self._term_key_value(en)
+                if ekey in seen_en:
+                    self.add_issue("ERROR", "术语名称重复",
+                                   f"{g.path}:{lineno + 1} 英文名称「{en}」与第 "
+                                   f"{seen_en[ekey] + 1} 行重复")
+                else:
+                    seen_en[ekey] = lineno
+            if not zh or not en:
+                continue
+            row = {"zh": zh, "en": en, "loc": loc, "line": str(lineno + 1)}
+            glossary_terms.append(row)
+            if not loc:
+                continue
+            m = re.fullmatch(r"\s*(" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4})\s*", loc)
+            if not m:
+                self.add_issue("ERROR", "术语定义位置非法",
+                               f"{g.path}:{lineno + 1} `定义位置` '{loc[:32]}' MUST 是"
+                               "完整文档编码（不得写路径、文件名、锚点或章节号）")
+                continue
+            code = m.group(1)
+            target = self.code_to_doc.get(code)
+            if target is None:
+                key = self._code_key(code)
+                cands = sorted({c for c in self.code_to_doc if self._code_key(c) == key}) \
+                    if key[0] else []
+                if cands:
+                    self.add_issue("ERROR", "术语定义位置非法",
+                                   f"{g.path}:{lineno + 1} `定义位置` {code} 不是完整编码；"
+                                   f"候选：{' / '.join(cands)}")
+                else:
+                    self.add_issue("ERROR", "术语定义位置非法",
+                                   f"{g.path}:{lineno + 1} `定义位置` {code} 指向的文档不存在")
+                continue
+            target_terms = terms_by_doc.get(target.path, [])
+            if not any(self._term_names_strict(t, zh, en) for t in target_terms):
+                elsewhere = [t for t in all_terms if self._term_names_strict(t, zh, en)]
+                if elsewhere:
+                    self.add_issue("ERROR", "术语定义位置错误",
+                                   f"{g.path}:{lineno + 1} 术语「{zh}」定义在 "
+                                   f"{elsewhere[0].doc_path}:{elsewhere[0].line}，"
+                                   f"但 `定义位置` 写的是 {code}")
+                else:
+                    self.add_issue("ERROR", "术语定义未找到",
+                                   f"{g.path}:{lineno + 1} 术语「{zh}」在 {code} 的"
+                                   "「术语和概念」中找不到定义")
+                continue
+
+        # 文档定义 → 全局表登记（中英文名称须与同一行一致）
+        for term in all_terms:
+            if not (term.zh and term.en):
+                continue
+            if not any(r["zh"] == term.zh
+                       and self._term_key_value(r["en"]) == self._term_key_value(term.en)
+                       for r in glossary_terms):
+                self.add_issue("ERROR", "术语未登记",
+                               f"{term.doc_path}:{term.line} 术语「{term.zh}」未登记到 "
+                               "`ued/glossary.md`（或名称与表内不一致）")
+
+        # `所用术语`
+        for path, raw in sorted(used_by_doc.items()):
+            if "[" in raw or "]" in raw or CODE_TOKEN.search(raw):
+                self.add_issue("ERROR", "所用术语含链接或编码",
+                               f"{path}: `所用术语` 只用逗号/顿号分隔名称，"
+                               "MUST NOT 加链接、编码或表格语法")
+            for name in re.split(r"[,，、;；]", raw):
+                name = name.strip()
+                if not name or self._is_placeholder(name):
+                    continue
+                row = next((r for r in glossary_terms
+                            if r["zh"] == name
+                            or self._term_key_value(r["en"]) == self._term_key_value(name)), None)
+                if row is None:
+                    self.add_issue("ERROR", "所用术语无法解析",
+                                   f"{path}: `所用术语` 中的「{name}」不在全局术语表")
+                    continue
+                own = terms_by_doc.get(path, [])
+                if any(self._term_names_match(t, name, name) for t in own):
+                    self.add_issue("INFO", "所用术语重复本文定义",
+                                   f"{path}: 「{name}」已在本文「术语和概念」中定义，"
+                                   "SHOULD NOT 再列入 `所用术语`")
+
+        readme = self.ued_path / "README.md"
+        text = ""
+        if readme.exists():
+            try:
+                text = readme.read_text(encoding="utf-8")
+            except OSError:
+                text = ""
+        if not re.search(r"\]\([^)]*glossary\.md(?:[#)])", text):
+            self.add_issue("WARNING", "README未登记术语表",
+                           f"{readme}: 存在全局术语表，但 README 未以链接形式登记 "
+                           "`glossary.md`")
+
     # -------------------------------------------------------------- 检查规则
 
     def check_doc_meta(self) -> None:
@@ -1070,10 +1479,12 @@ class DesignDocChecker:
                                f"{doc.path}: 文件名 MUST NOT 使用中文（描述用小写英文/拼音、短横线分隔）")
             if doc.is_index:
                 continue
+            if doc.is_glossary:
+                continue                    # 术语表由 check_glossary 单独校验（无编码、无四态）
             if not doc.doc_code:
                 self.add_issue("INFO", "无文档编码",
                                f"{doc.path}: 未找到元信息表 `文档编码`；"
-                               "若属词汇表等辅助文件可忽略")
+                               "若属全局术语表等辅助文件可忽略")
                 continue
             if not re.fullmatch(PROJECT_PREFIX + r"(?:L[0-6]|ADR|EVAL|REF)-\d{2,4}", doc.doc_code):
                 self.add_issue("ERROR", "文档编码格式错误",
@@ -3712,6 +4123,7 @@ class DesignDocChecker:
 
         print("🔧 运行检查规则...")
         self.check_doc_meta()
+        self.check_glossary()
         self.check_duplicate_codes()
         self.check_item_status()
         self.check_registration_consistency()

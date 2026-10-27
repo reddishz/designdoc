@@ -40,7 +40,7 @@
 
 **术语**：模板中「概念架构」与目录名 `L3-architecture` 指同一层级（`architecture` 表示架构蓝图，非代码实现）。
 
-**业务与领域用语**：当多文档、多角色需对齐同一套名词时，可采用**项目级词汇表**。单应用模式下登记在 `ued/README.md`；多应用模式下登记在 `ued/{app-name}/README.md`，必要时在顶层 `ued/README.md` 追加跨应用词汇表入口；与细项编码的分工见 [glossary-conventions.md](glossary-conventions.md)。
+**业务与领域用语**：术语在项目内只有一个权威定义。全局索引固定为 `ued/glossary.md`（单应用、多应用、含 `shared/` 都只有这一份），文档在顶层「术语和概念」章节定义本文引入的术语；定义、登记与校验规则见 [glossary-conventions.md](glossary-conventions.md)。
 
 ## 目录结构规范
 
@@ -51,6 +51,7 @@
 ```
 ued/
 ├── README.md                # 项目元信息 + 文档索引 + 编码计数器 + 全局编码索引
+├── glossary.md              # 可选：全局术语表（全项目唯一）
 ├── L0-vision/
 ├── L1-stakeholder/
 ├── L2-requirements/
@@ -69,6 +70,7 @@ ued/
 ```
 ued/
 ├── README.md                # 多应用总入口 + 应用注册表 + 跨应用规则
+├── glossary.md              # 可选：全局术语表（全项目唯一，跨应用共用）
 ├── shared/                  # 可选，共享文档域
 │   ├── README.md            # 共享文档索引
 │   ├── L0-vision/

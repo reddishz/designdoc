@@ -28,7 +28,7 @@
 | [product-version.md](product-version.md) | 产品版本、基线、PATCH/MINOR/MAJOR |
 | [item-deprecation.md](item-deprecation.md) | 细项废弃 |
 | [doc-deprecation.md](doc-deprecation.md) | 整份文档废弃与归档 |
-| [glossary-conventions.md](glossary-conventions.md) | 词汇表约定 |
+| [glossary-conventions.md](glossary-conventions.md) | 术语定义、全局术语表与 `所用术语` |
 | [review-guidelines.md](review-guidelines.md) | 审核检查项 |
 
 ## 操作与辅助

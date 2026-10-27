@@ -2,7 +2,8 @@
 """`check_docs.py` 的规则回归集跑台。
 
 `fixtures/` 下每条夹具是一份最小设计文档（多为 L2，亦含 EVAL 等文档型），刻意触发
-（或刻意不触发）某一条校验规则。`skill_link_fixtures/` 验证技能包内部 `#锚点` 可达性。
+（或刻意不触发）某一条校验规则。`glossary_fixtures/` 是自成一体的 `ued/` 场景目录，
+验证术语表 / 术语块规则；`skill_link_fixtures/` 验证技能包内部 `#锚点` 可达性。
 跑台末尾对本包执行 `--check-templates` 冒烟，并跑哨兵内写作约束 / 技能包路径的正反例。改动 `check_docs.py` 后跑一遍，可确认
 既有规则没有静默退化。
 
@@ -16,6 +17,8 @@
 测试环境依赖（仅本跑台，非正式规范）：须能 `import yaml`（PyYAML），否则含基线
 成员状态等夹具会被检查器跳过而假漏报；缺依赖时本脚本以环境错误退出。
 """
+import contextlib
+import io
 import re
 import sys
 import subprocess
@@ -167,6 +170,56 @@ EXPECT = {
     "EVAL-904-preamble-leak":     {"疑似模板前置泄漏"},
 }
 
+# 术语表夹具是自成一体的 `ued/` 场景目录（各含 README、可选 glossary.md 与
+# L2 文档）。它们不能放进 `fixtures/`：只要目录里出现 glossary.md，检查器就会
+# 对**所有**夹具启用术语校验，污染既有断言。
+GLOSSARY_FIXTURES = ROOT / "glossary_fixtures"
+
+GLOSSARY_TITLES = {
+    "术语章节重复", "术语章节层级错误", "术语章节标题待迁移", "术语章节位置靠后",
+    "术语章节使用表格", "术语定义缺失", "术语标题与名称不一致", "术语重复定义",
+    "缺少全局术语表", "术语表位置非法", "术语表元信息缺失", "术语表修订号非法",
+    "术语表日期格式错误", "术语表含编码或状态字段", "术语表缺变更记录",
+    "术语表缺少固定四列表", "术语表列不合规", "术语表字段缺失", "术语名称重复",
+    "术语定义位置非法", "术语定义位置错误", "术语定义未找到", "术语未登记",
+    "所用术语含链接或编码", "所用术语无法解析", "所用术语重复本文定义",
+    "README未登记术语表", "文档修订号与变更记录不一致",
+}
+
+# 场景目录名 → 期望命中的问题名（空集 = 正例，MUST 零命中）。
+GLOSSARY_EXPECT = {
+    "ok":                        set(),
+    "ok-empty":                  set(),
+    "duplicate-definition":      {"术语重复定义"},
+    "duplicate-name":            {"术语名称重复"},
+    "missing-registration":      {"术语未登记"},
+    "bad-location":              {"术语定义位置非法"},
+    "shorthand-location":        {"术语定义位置非法"},
+    "wrong-doc-location":        {"术语定义位置错误"},
+    "term-not-found":            {"术语定义未找到"},
+    "used-term-missing":         {"所用术语无法解析"},
+    "used-term-link":            {"所用术语含链接或编码", "所用术语无法解析"},
+    "used-term-own":             {"所用术语重复本文定义"},
+    "no-glossary":               {"缺少全局术语表"},
+    "no-glossary-used":          {"缺少全局术语表"},
+    "missing-english":           {"术语定义缺失"},
+    "heading-mismatch":          {"术语标题与名称不一致"},
+    "extra-column":              {"术语表列不合规"},
+    "missing-column":            {"术语表缺少固定四列表"},
+    "glossary-field-missing":    {"术语表字段缺失"},
+    "glossary-bad-date":         {"术语表日期格式错误"},
+    "glossary-state-field":      {"术语表含编码或状态字段"},
+    "table-in-doc-term-section": {"术语章节使用表格"},
+    "term-section-nested":       {"术语章节层级错误", "术语章节标题待迁移"},
+    "term-section-late":         {"术语章节位置靠后"},
+    "term-section-duplicate":    {"术语章节重复"},
+    "glossary-meta":             {"术语表修订号非法", "术语表元信息缺失",
+                                  "术语表缺变更记录"},
+    "rev-mismatch":              {"文档修订号与变更记录不一致"},
+    "readme-no-link":            {"README未登记术语表"},
+    "app-glossary":              {"术语表位置非法"},
+}
+
 
 def parse(report):
     """把检查报告解析为 {夹具名: {问题名, ...}}。
@@ -245,6 +298,45 @@ def run_skill_link_fixtures(verbose):
     for name in stale:
         print(f"  FAIL {name}：LINK_EXPECT 登记的夹具已不在 skill_link_fixtures/")
         fails.append((name, set(), set()))
+    return 1 if (fails or orphan or stale) else 0
+
+
+def run_glossary_fixtures(verbose):
+    """术语表 / 术语块场景：逐目录跑完整检查，只断言术语相关的问题名。"""
+    check_docs = _load_checker()
+    scenarios = sorted(p for p in GLOSSARY_FIXTURES.iterdir() if p.is_dir())
+    got = {}
+    for scenario in scenarios:
+        checker = check_docs.DesignDocChecker(str(scenario))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        got[scenario.name] = {i["title"] for i in checker.issues
+                              if i["title"] in GLOSSARY_TITLES}
+
+    on_disk = {p.name for p in scenarios}
+    fails = []
+    for name in sorted(GLOSSARY_EXPECT):
+        want, have = GLOSSARY_EXPECT[name], got.get(name, set())
+        missing, unexpected = want - have, have - want
+        if missing or unexpected:
+            fails.append((name, missing, unexpected))
+        if verbose:
+            mark = "FAIL" if (missing or unexpected) else "ok  "
+            print(f"  [{mark}] {name}")
+    orphan = sorted(on_disk - set(GLOSSARY_EXPECT))
+    stale = sorted(set(GLOSSARY_EXPECT) - on_disk)
+    total = len(GLOSSARY_EXPECT)
+    print(f"术语表场景 {total} 条，通过 {total - len(fails)} 条")
+    for name, missing, unexpected in fails:
+        print(f"  FAIL {name}")
+        if missing:
+            print(f"       漏报：{'、'.join(sorted(missing))}")
+        if unexpected:
+            print(f"       误报：{'、'.join(sorted(unexpected))}")
+    for name in orphan:
+        print(f"  FAIL {name}：场景存在但未在 GLOSSARY_EXPECT 登记期望")
+    for name in stale:
+        print(f"  FAIL {name}：GLOSSARY_EXPECT 登记的场景已不在 glossary_fixtures/")
     return 1 if (fails or orphan or stale) else 0
 
 
@@ -363,6 +455,7 @@ def main():
     for stem in stale:
         print(f"  FAIL {stem}：EXPECT 登记的夹具已不在 fixtures/")
     rc = 1 if (fails or orphan or stale) else 0
+    rc |= run_glossary_fixtures(verbose)
     rc |= run_skill_link_fixtures(verbose)
     rc |= run_template_body_hygiene_cases()
     rc |= run_check_templates_smoke()

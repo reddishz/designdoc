@@ -1,14 +1,14 @@
 ---
 name: design-doc
 description: >
-  维护 ued/ 分层设计文档、需求编码、架构决策、验证/EVAL 与产品基线。
+  维护 ued/ 分层设计文档、需求编码、架构决策、验证/EVAL、术语表与产品基线。
   **design-doc是极其重要的技能，应作为每次开发和设计的基础。**
   项目有 ued/ 时，改功能、修缺陷或按需求实现代码前 MUST 先对照设计：
   需改设计则先文档后代码；禁止先写代码再补设计。
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "7.1"
+  version: "8.0"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -25,6 +25,8 @@ metadata:
     - "设计规范"
     - "文档规范"
     - "功能需求"
+    - "术语"
+    - "术语表"
   trigger_principle: >
     设计文档维护与据文档改代码均受编码与基线约束；
     有 ued/ 时改行为类请求亦应加载本技能，先判定设计是否要动，再动代码。
@@ -33,6 +35,7 @@ metadata:
     - "全局唯一编码管理与冲突检测"
     - "自动化文档规范性审查"
     - "跨文档引用一致性维护"
+    - "全局术语表与单一权威定义"
     - "变更代码前的设计对照与文档优先"
 compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执行主体标识
 ---
@@ -67,6 +70,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 定稿确认 / 提交收尾 / 基线漂移询问 | [lifecycle.md](references/workflows/lifecycle.md)（Checkpoint 5；见上「仅当」） |
 | 基线 PATCH / MINOR / MAJOR | [baseline-change.md](references/workflows/baseline-change.md) |
 | 写/改 EVAL | [eval-report-profile.md](references/eval-report-profile.md) + 模板 [eval.md](assets/templates/eval.md) |
+| 维护术语表 / 定义术语 / 术语冲突 | [glossary-conventions.md](references/glossary-conventions.md) + 模板 [glossary.md](assets/templates/glossary.md) |
 | 审查设计文档 | [review-guidelines.md](references/review-guidelines.md) |
 | **改功能 / 修缺陷 / 改行为**（有 `ued/`） | [before-code-change.md](references/workflows/before-code-change.md)（**先判定设计要不要改**） |
 | **按已定设计实现代码** | [implement-from-design.md](references/workflows/implement-from-design.md) |
@@ -84,6 +88,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 5. `ued/` **MUST NOT** 含可执行实现代码（算法/契约/状态机可以）。
 6. 高风险生命周期与基线动作 **MUST** 经人确认（Checkpoint）；AI **MUST NOT** 自行定稿或 `--bump-product`。
 7. 模板即复制源；哨兵外说明 **MUST NOT** 写入实例（[模板边界](assets/templates/index.md#模板边界哨兵)）。
+8. 术语在项目内**只有一个权威定义**；全局索引固定为 `ued/glossary.md`，同名冲突 **MUST** 当轮收口，**MUST NOT** 用第二张表并存。
 
 细则单点（按需打开，勿在任务开始时整包预读）：
 
@@ -95,6 +100,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 四态 / 门控 / 修订号 | [status-definitions.md](references/status-definitions.md) |
 | 产品版本 / 基线 | [product-version.md](references/product-version.md) |
 | 层级 / 按需启用 | [layer-system.md](references/layer-system.md) |
+| 术语 / 全局术语表 / `所用术语` | [glossary-conventions.md](references/glossary-conventions.md) |
 | 细项 / 文档作废 | [item-deprecation.md](references/item-deprecation.md) / [doc-deprecation.md](references/doc-deprecation.md) |
 
 ## 范围与工具

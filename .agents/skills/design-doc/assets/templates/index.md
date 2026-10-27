@@ -8,7 +8,7 @@
 - **细项编码**：按 [编码体系](../../references/coding-system.md) 执行，默认简洁编码（`{类型码}-{序号}`，默认三位补零、超过 999 自然四位），项目前缀需明确配置。正文中定义的细项须在文末维护**本文档细项编码清单**，并同步更新全局索引。清单之后维护**本文引用**（跨文档契约链接的钉住表，见 [本文引用](../../references/coding-system.md#本文引用跨文档钉住mandatory)）。
 - **交叉引用**：只允许引用细项编码或文档编码，不得用章节编号定位；正文引用写作 `[{编码}（{标题}）](锚点)`，表格型追溯可写裸编码。跨文件路径 MUST 以 `./` 或 `../` 开头（见 [交叉引用规则](../../references/coding-system.md#交叉引用规则)）；跨层只由下层引用上层，同层 `依赖` 允许。
 - **`{当前用户.作者}`**：按当前作用域 `README.md` 的项目元信息解析，解析不到时回落为技能默认值（解析链单点见 [runtime-config.md](../../references/workflows/runtime-config.md)）。
-- **术语与概念**：非必填；需要统一名词时见 [glossary-conventions.md](../../references/glossary-conventions.md)，模板中「术语与概念（可选）」小节与项目词汇表二选一或组合使用。
+- **术语与概念**：非必填；术语在项目内只有一个权威定义。文档用顶层 `## 术语和概念` 承载本文引入的术语，项目用唯一的 `ued/glossary.md` 做全局索引；规则见 [glossary-conventions.md](../../references/glossary-conventions.md)。
 
 ### 模板边界（哨兵）
 
@@ -36,6 +36,7 @@
 | 定义块形态、属性封闭集、`出处` / `来源` / `依赖`、链接类每行一个对象 | [coding-system.md · 细项定义块形态](../../references/coding-system.md#细项定义块形态mandatory) |
 | 清单范围、分配、升序与缺口、变更记录倒序、本文引用 | [编码分配管理](../../references/coding-system.md#编码分配管理)；[本文引用](../../references/coding-system.md#本文引用跨文档钉住mandatory) |
 | 文档修订号、产品版本、产品基线 | [status-definitions.md · 变更流程与版本号](../../references/status-definitions.md#变更流程与版本号统一mandatory)；[product-version.md](../../references/product-version.md) |
+| 术语定义、全局术语表、`所用术语` | [glossary-conventions.md](../../references/glossary-conventions.md) |
 | 实例化与哨兵 | 上文《模板边界（哨兵）》 |
 
 关联文档填对应上层文档编码：元信息表已占位，不必在使用说明里重复。标题层级随父小节，**MUST** 比父小节深一级（见定义块形态），模板骨架里的 `###` / `####` 即示例，不必在使用说明里再声明。有同层支撑时在 `来源` 之后写 `依赖`，无则不要写空行；正式 FR / NFR 应当有 `验证方式` 指向 AC。
@@ -46,6 +47,7 @@
 - **变更记录**首列是整数修订号，与元信息 `修订版本号` 一致；**MUST NOT** 再写 `v1.0`。
 - **可选小节**（标题含「可选」）无内容时删除该节，不要写「无」占位。
 - **可选属性行**（`处理规则`、`依赖`、`取值范围`、第二条及以后的 `来源`）无对象时删除该行，不要留空链接。一条定义块先写一个主 `来源`；确有多个派生依据再追加行。
+- **术语行与术语块**：元信息 `所用术语` 只写逗号/顿号分隔的名称，不加链接、编码或括号说明；无重点术语时删除该行。本文未引入术语时整节删除 `## 术语和概念`，不写「无」占位。术语块不是设计细项，**MUST NOT** 写 `细项状态` / `修订版本号`，也不进入细项清单与全局索引；可选段落无内容时删除。
 - **FR / NFR 正文首段**按 [需求陈述](../../references/coding-system.md#需求陈述should) 的「系统应当」句式填写。
 - **路径占位符**（`{L1 文档相对路径}` 等）实例化后 MUST 以 `./` 或 `../` 开头，MUST NOT 只填文件名（见 [交叉引用规则 · 链接路径](../../references/coding-system.md#链接路径mandatory)）。
 - **L2《系统上下文》**写产品边界（谁用、连谁）；**L3 同名小节**写架构边界（信任、集成、部署）。二者都要时各自落在本层，不要互相复制。各层回答哪一句见 [layer-system.md · 分层问题](../../references/layer-system.md#分层问题对层判据)。
@@ -57,6 +59,7 @@
 | 类型 | 模板名称 | 用途 | 模板位置 |
 |------|----------|------|----------|
 | README | 项目文档索引 | 全局编码索引、文档导航、编码计数器 | [readme-template.md](readme-template.md) ✅ |
+| 术语表 | 全局术语表 | 全项目术语索引与唯一定义位置（无编码、无四态） | [glossary.md](glossary.md) ✅ |
 | 项目注册表 | 项目编码管理 | 多应用模式下 `app_key` / `project_code` 登记片段 | [project-registry.md](project-registry.md) ✅ |
 
 ### 设计文档模板（L0-L6）
