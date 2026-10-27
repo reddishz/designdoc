@@ -89,7 +89,8 @@ LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 # 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
 FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "创建日期", "最后修订日期",
                         "引入版本", "退出版本",
-                        "废弃时间", "废弃原因", "替代方案", "出处", "来源", "依赖")
+                        "废弃时间", "废弃类别", "废弃原因", "替代方案", "复活时间",
+                        "出处", "来源", "依赖")
 FALLBACK_TYPE_ATTRS: Dict[str, Tuple[str, ...]] = {
     "GOL": (), "STK": ("目标",), "SCN": ("参与者",),
     "FR": ("优先级", "处理规则", "验证方式"),
@@ -110,6 +111,13 @@ DOC_STATUSES = ["初稿", "正式", "草案", "废弃"]
 DEFAULT_DOC_STATUS = "初稿"
 ITEM_STATUSES = DOC_STATUSES
 TRACE_STATUSES = ["未追溯", "已追溯", "不适用"]
+# 废弃类别封闭枚举（房规：item-deprecation.md ·《废弃类别（封闭枚举，MANDATORY）》）
+DEPRECATION_CATEGORIES = (
+    "需求变更", "设计优化", "技术升级", "业务重构", "约束解除", "依赖废弃",
+    "重复冗余", "被替代", "评审未通过", "初稿作废", "其他",
+)
+# REF 旧元信息字段 → 新字段（迁移提示，不判错）
+LEGACY_REF_META = {"录入人": "作者", "录入日期": "创建日期"}
 
 # 旧状态值 → 标准四态的迁移兼容层；命中即报 INFO 提示改写，不直接判为无效值。
 # `草稿` 无固定映射（值 None）：按 `变更记录` 判定——有定稿条目 → `草案`，
@@ -234,6 +242,10 @@ FR_NFR_PRIORITY = ("P0", "P1", "P2")
 DEP_EXCLUSIVE_ATTRS = (
     "来源", "处理规则", "所属组件", "参与者", "验证方式", "满足需求",
 )
+# 《本文引用》进表契约位置（coding-system.md ·《本文引用（跨文档钉住）》）
+PIN_ATTRS = {"来源", "依赖", "处理规则", "验证方式", "满足需求",
+             "所属组件", "参与者", "目标", "验收标准"}
+PIN_HEADERS = ("引用对象", "类型", "所在文档", "钉住代际", "钉住日期")
 TBD_MARK = re.compile(r"\b(?:TBD|TBS|TBR)\b|待定(?!稿)|待补充|待填写")
 
 # 《据文档实现》第 3 条：审查 / 校验的定稿提示 MUST 含「不得作为实现依据」这一句。
@@ -697,6 +709,7 @@ class DesignDocChecker:
         self.issues: List[Dict] = []
         self.legacy_hits: Set[Tuple[str, str]] = set()   # (文件, 旧值 → 新值)
         self.dep_forward: Dict[str, List[str]] = {}      # A `依赖` B 的正向边
+        self._code_index_cache: Optional[Dict[Tuple[str, int], Set[str]]] = None
 
     # ------------------------------------------------------------------ 扫描
 
@@ -793,7 +806,7 @@ class DesignDocChecker:
         """取「属性 | 值」或「字段 | 值」两列表格作为文档元信息。
 
         设计文档只取第一张（紧接 H1 的封面表）。README 等索引 `merge_all=True`，
-        合并全部两列表格（先出现的键优先），以便读到 `doc_mode` 与 `产品版本`。
+        合并全部两列表格（先出现的键优先），以便读到 `产品版本` 等项目元信息。
         """
         meta: Dict[str, str] = {}
         for _idx, header, rows in iter_tables(lines):
@@ -939,7 +952,7 @@ class DesignDocChecker:
     def _doc_items(self, doc: DocInfo) -> List[ItemInfo]:
         """本文档的细项，排除与**文档自身编码**同名的那一项。
 
-        `REF-{三位序号}` 既是文档编码格式、`REF` 又是类型码（编码空间重叠），
+        `REF-{序号}` 既是文档编码格式、`REF` 又是类型码（编码空间重叠），
         因此 REF 文档的 H1 会被解析成一个与 `doc_code` 同名的细项。但文档标题
         不是细项：它不进本文档细项编码清单、不适用定义块形态与锚点房规（引用
         ADR / REF 等整份文档用文档链接、不带锚点）。L0-L6 / ADR 的前缀不是类型码，
@@ -1001,6 +1014,51 @@ class DesignDocChecker:
                 known.add(item.code)
         return known
 
+    @staticmethod
+    def _code_key(code: str) -> Tuple[str, int]:
+        """编码的解析键 `(类型码, 数值序号)`：忽略项目前缀与前导零。
+
+        `RUL-004` 与 `CRM-RUL-004`、`FR-01` 与 `FR-001` 得到同一键。
+        """
+        m = re.search(r"([A-Z]{1,5}[0-9]?)-(\d{2,4})$", code)
+        return (m.group(1), int(m.group(2))) if m else ("", 0)
+
+    def _code_index(self) -> Dict[Tuple[str, int], Set[str]]:
+        """解析键 → 已知编码集合（含简写 / 位宽变体）。"""
+        if self._code_index_cache is None:
+            idx: Dict[Tuple[str, int], Set[str]] = defaultdict(set)
+            for code in self._known_item_codes():
+                key = self._code_key(code)
+                if key[0]:
+                    idx[key].add(code)
+            self._code_index_cache = idx
+        return self._code_index_cache
+
+    def _code_target_doc(self, code: str) -> Optional[DocInfo]:
+        return self.item_def_doc.get(code) or self.code_to_doc.get(code)
+
+    @staticmethod
+    def _same_scope(doc: DocInfo, target: Optional[DocInfo]) -> bool:
+        if target is None:
+            return False
+        return Path(doc.path).resolve().parent == Path(target.path).resolve().parent
+
+    def resolve_code(self, code: str, doc: Optional[DocInfo] = None) -> str:
+        """把简写 / 非补零写法解析为已登记编码；无法唯一解析时原样返回。"""
+        if code in self.code_to_doc or code in self.item_def_doc:
+            return code
+        key = self._code_key(code)
+        if not key[0]:
+            return code
+        cands = self._code_index().get(key, set()) - {code}
+        if len(cands) == 1:
+            return next(iter(cands))
+        if doc is not None:
+            same = [c for c in cands if self._same_scope(doc, self._code_target_doc(c))]
+            if len(same) == 1:
+                return same[0]
+        return code
+
     # -------------------------------------------------------------- 检查规则
 
     def check_doc_meta(self) -> None:
@@ -1017,10 +1075,11 @@ class DesignDocChecker:
                                f"{doc.path}: 未找到元信息表 `文档编码`；"
                                "若属词汇表等辅助文件可忽略")
                 continue
-            if not re.fullmatch(PROJECT_PREFIX + r"(?:L[0-6]|ADR|EVAL|REF)-\d{3}", doc.doc_code):
+            if not re.fullmatch(PROJECT_PREFIX + r"(?:L[0-6]|ADR|EVAL|REF)-\d{2,4}", doc.doc_code):
                 self.add_issue("ERROR", "文档编码格式错误",
-                               f"{doc.path}: {doc.doc_code}（应为 L{{层级}}-三位序号 / ADR-三位序号 / "
-                               "EVAL-三位序号 / REF-三位序号；启用项目编码时前缀加在其前，如 `ERP-L2-003`）")
+                               f"{doc.path}: {doc.doc_code}（应为 L{{层级}}-序号 / ADR-序号 / "
+                               "EVAL-序号 / REF-序号；序号默认三位补零、超过 999 自然四位；"
+                               "启用项目编码时前缀加在其前，如 `ERP-L2-003`）")
             if not name.startswith(doc.doc_code + "-"):
                 self.add_issue("WARNING", "文件名与文档编码不一致",
                                f"{doc.path}: 文件名应以 `{doc.doc_code}-` 开头")
@@ -1047,11 +1106,15 @@ class DesignDocChecker:
                                f"{doc.path}: 元信息 `版本` 已改为整数 `修订版本号`；"
                                f"当前仍为 '{legacy_ver}'。仅 `v1.0` 且无解冻 → `1`，"
                                "否则按变更记录解冻顺位映射，MUST NOT 把 `v2.0` 当成修订号 `2`")
+            for old, new in LEGACY_REF_META.items():
+                if doc.meta.get(old):
+                    self.add_issue("INFO", "元信息字段待迁移",
+                                   f"{doc.path}: 字段 `{old}` 应改为 `{new}`（REF 与其他文档统一）")
             if doc.version:
                 if not REV_VALUE.match(doc.version):
                     self.add_issue("WARNING", "修订版本号格式错误",
                                    f"{doc.path}: 文档 `修订版本号` '{doc.version}' "
-                                   "MUST 是单个正整数（新建为 1、每轮解冻 +1）")
+                                   "MUST 是单个正整数（新建为 1、每轮解冻或复活 +1）")
                 elif doc.status == "初稿" and int(doc.version) != 1:
                     self.add_issue("WARNING", "文档修订号与状态不一致",
                                    f"{doc.path}: `状态` 为 `初稿` 而 `修订版本号` 为 "
@@ -1059,7 +1122,8 @@ class DesignDocChecker:
                 elif doc.status == "草案" and int(doc.version) < 2:
                     self.add_issue("WARNING", "文档修订号与状态不一致",
                                    f"{doc.path}: `状态` 为 `草案` 而 `修订版本号` 为 "
-                                   f"{doc.version}；`草案` 必经一轮解冻，rev MUST ≥ 2")
+                                   f"{doc.version}；`草案` 必经解冻或受控复活，"
+                                   "rev MUST ≥ 2")
             elif not legacy_ver:
                 self.add_issue("WARNING", "文档修订版本号缺失",
                                f"{doc.path}: 元信息缺 `修订版本号`；新建为 `1`，"
@@ -1119,8 +1183,14 @@ class DesignDocChecker:
                                f"{code} 在多处定义: {', '.join(sorted(set(sites)))}")
 
     def check_references(self) -> None:
-        """引用存在性：正文出现的编码须在包内有定义或登记。"""
+        """引用存在性：正文编码须有定义/登记；同作用域简写与 2–4 位写法按解析键归一。
+
+        解析键见 `coding-system.md` ·《序号位宽》与《项目编码规则》：`CRM-RUL-004`
+        的全量码、同作用域简写 `RUL-004`、非补零写法 `RUL-04` 可互相解析。简写只有
+        在**同一目录作用域**内唯一时才放行；解析到其他文档或存在歧义均报 WARNING。
+        """
         known = self._known_item_codes()
+        index = self._code_index()
         for doc in self.docs:
             if doc.archived:
                 continue
@@ -1136,9 +1206,143 @@ class DesignDocChecker:
                     start = max(0, m.start() - 2)
                     if "{" in line[start:m.end() + 1]:
                         continue
+                    key = self._code_key(full)
+                    cands = index.get(key, set()) if key[0] else set()
+                    bare = full == f"{type_code}-{m.group(3)}"
+                    if bare and cands:
+                        same = [c for c in cands
+                                if self._same_scope(doc, self._code_target_doc(c))]
+                        if len(cands) == 1 or len(same) == 1:
+                            target = same[0] if len(same) == 1 else next(iter(cands))
+                            if self._code_target_doc(target) is not doc:
+                                reported.add(full)
+                                self.add_issue(
+                                    "WARNING", "跨文档简写",
+                                    f"{doc.path}:{lineno} 使用了编码简写 {full}，"
+                                    f"实际指向他文档的 {target}；跨文档引用 MUST 写全量编码")
+                            continue
+                        reported.add(full)
+                        self.add_issue(
+                            "WARNING", "简写编码歧义",
+                            f"{doc.path}:{lineno} 的简写 {full} 可解析到 "
+                            f"{' / '.join(sorted(cands))}，MUST 写全量编码")
+                        continue
                     reported.add(full)
                     self.add_issue("WARNING", "引用悬空",
                                    f"{doc.path}:{lineno} 引用了未定义/未登记的编码 {full}")
+
+    def check_pin_table(self) -> None:
+        """「本文引用」钉住表：行值与契约位置是否一致。
+
+        房规见 `coding-system.md` ·《本文引用（跨文档钉住，MANDATORY）》。检查
+        对象是否存在、类型、所在文档、代际与日期形态、重复行、同文档行，以及
+        契约位置（`来源` / `依赖` / 链接类属性）的跨文档引用是否都已进表。
+        代际落后是派生状态（不推翻已 `正式` 的本文），不报。
+        """
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            pinned: Dict[str, int] = {}
+            for _idx, header, rows in iter_tables(doc.lines):
+                cols = {norm(h): i for i, h in enumerate(header)}
+                if not all(h in cols for h in PIN_HEADERS):
+                    continue
+                for lineno, cells in rows:
+                    def cell(name: str) -> str:
+                        i = cols[name]
+                        return norm(cells[i]) if i < len(cells) else ""
+                    code_cell = cell("引用对象")
+                    m = CODE_TOKEN.search(code_cell)
+                    if not m:
+                        continue                # 占位行 / 空表体
+                    raw = m.group(1)
+                    code = self.resolve_code(raw, doc)
+                    target = self._code_target_doc(code)
+                    where = f"{doc.path}:{lineno} `{raw}`"
+                    if target is None:
+                        self.add_issue("WARNING", "本文引用对象不存在",
+                                       f"{where}: 表内对象无定义位")
+                        continue
+                    if target is doc:
+                        self.add_issue("WARNING", "本文引用含同文档对象",
+                                       f"{where}: 同文档链接 MUST NOT 进「本文引用」表")
+                    if code in pinned:
+                        self.add_issue("WARNING", "本文引用重复行",
+                                       f"{where}: 与第 {pinned[code]} 行重复")
+                    pinned.setdefault(code, lineno)
+                    is_doc = code in self.code_to_doc and code not in self.item_def_doc
+                    want_type = "文档" if is_doc else "细项"
+                    type_val = cell("类型")
+                    if type_val and "{" not in type_val and type_val != want_type:
+                        self.add_issue("WARNING", "本文引用类型不符",
+                                       f"{where}: `类型` 为 '{type_val}'，应为 `{want_type}`")
+                    loc = cell("所在文档")
+                    if is_doc:
+                        if loc and loc not in ("—", "-", "——") and "{" not in loc:
+                            self.add_issue("WARNING", "文档型引用所在文档应为 —",
+                                           f"{where}: 整份文档引用的 `所在文档` 填 '—'，"
+                                           f"当前为 '{loc[:24]}'")
+                    else:
+                        want_doc = target.doc_code or Path(target.path).stem
+                        if not loc or "{" in loc:
+                            self.add_issue("WARNING", "本文引用缺所在文档",
+                                           f"{where}: 细项引用 MUST 填定义所在文档 `{want_doc}`")
+                        elif self.resolve_code(loc) != want_doc and loc != want_doc:
+                            self.add_issue("WARNING", "本文引用所在文档不符",
+                                           f"{where}: `所在文档` 为 '{loc[:24]}'，"
+                                           f"实际定义于 {want_doc}")
+                    gen = cell("钉住代际")
+                    if gen and "{" not in gen:
+                        if not REV_VALUE.match(gen):
+                            self.add_issue("WARNING", "钉住代际非法",
+                                           f"{where}: `钉住代际` '{gen[:12]}' MUST 为正整数")
+                        elif target.version.isdigit() and int(gen) > int(target.version):
+                            self.add_issue("WARNING", "钉住代际超前",
+                                           f"{where}: 钉住代际 {gen} 大于对方当前 "
+                                           f"{target.version}")
+                    date = cell("钉住日期")
+                    if date and "{" not in date and not DATE_VALUE.match(date):
+                        self.add_issue("WARNING", "钉住日期格式错误",
+                                       f"{where}: `钉住日期` '{date[:12]}' MUST 为 YYYY-MM-DD")
+
+            if doc.is_index:
+                continue
+            required: Dict[str, str] = {}
+            for item in self._doc_items(doc):
+                if not (item.defined and item.path == doc.path):
+                    continue
+                for name, val, _ln in self._attr_group(doc, item.line - 1):
+                    if name not in PIN_ATTRS or not val or "{" in val:
+                        continue
+                    for raw in self._attr_codes(val):
+                        code = self.resolve_code(raw, doc)
+                        target = self._code_target_doc(code)
+                        if target is None or target is doc:
+                            continue
+                        required.setdefault(code, f"`{item.code}` 的 `{name}`")
+            # 正文段（非表格 / 非列表 / 非属性行）里的跨文档标准链接同样进表
+            for lineno, line in enumerate(doc.lines, 1):
+                stripped = line.lstrip()
+                if (not stripped or stripped[0] in "|#>*+-" or ATTR_LINE_OK.match(line)):
+                    continue
+                for m in MD_LINK.finditer(line):
+                    dest = m.group(1)
+                    if dest.startswith("#"):
+                        continue            # 同文档链接不进表
+                    text = m.group(0).split("](")[0][1:]
+                    cm = CODE_TOKEN.search(text)
+                    if not cm:
+                        continue
+                    code = self.resolve_code(cm.group(1), doc)
+                    target = self._code_target_doc(code)
+                    if target is None or target is doc:
+                        continue
+                    required.setdefault(code, f"第 {lineno} 行正文链接")
+            for code, source in sorted(required.items()):
+                if code not in pinned:
+                    self.add_issue("WARNING", "缺本文引用钉住行",
+                                   f"{doc.path}: {source} 指向他文档 {code}，"
+                                   "但「本文引用」表无对应钉住行")
 
     def check_item_status(self) -> None:
         """细项状态、追溯状态取值，第二套枚举迁移提示，以及清单/索引列名合规。"""
@@ -1469,6 +1673,16 @@ class DesignDocChecker:
             return max(dates) if dates else ""
         return ""
 
+    def _is_multi_app_top(self, doc: DocInfo) -> bool:
+        """顶层多应用 README：含应用注册表（app_key + 目录列），不再看 `doc_mode`。"""
+        if not doc.is_index:
+            return False
+        for _idx, header, _rows in iter_tables(doc.lines):
+            heads = [norm(h) for h in header]
+            if "app_key" in heads and any(h in heads for h in ("目录", "directory", "dir")):
+                return True
+        return False
+
     def check_readme_product_version(self) -> None:
         """应用级 README 应有 `产品版本`（`vX.Y`）。多应用顶层 README 不充当来源。
 
@@ -1477,11 +1691,12 @@ class DesignDocChecker:
         for doc in self.docs:
             if not doc.is_index:
                 continue
-            mode = (doc.meta.get("doc_mode") or "").strip()
-            if mode == "multi-app":
+            if self._is_multi_app_top(doc):
+                if (doc.meta.get("doc_mode") or "").strip():
+                    self.add_issue("WARNING", "doc_mode 已移除",
+                                   f"{doc.path}: `doc_mode` 字段已移除；模式由应用注册表与目录结构判定")
                 continue
-            if not (mode in ("single-app", "app")
-                    or doc.meta.get("project_name")
+            if not (doc.meta.get("project_name")
                     or doc.meta.get("project_code")
                     or doc.meta.get("产品版本")):
                 continue
@@ -1500,8 +1715,7 @@ class DesignDocChecker:
         for doc in self.docs:
             if not doc.is_index:
                 continue
-            mode = (doc.meta.get("doc_mode") or "").strip()
-            if mode == "multi-app":
+            if self._is_multi_app_top(doc):
                 continue
             pv = (doc.meta.get("产品版本") or "").strip()
             if not pv or not VERSION_RE.match(pv):
@@ -1721,16 +1935,13 @@ class DesignDocChecker:
         scopes = self._scope_dirs_with_product()
         if not scopes:
             for doc in self.docs:
-                if not doc.is_index:
+                if not doc.is_index or self._is_multi_app_top(doc):
                     continue
-                mode = (doc.meta.get("doc_mode") or "").strip()
-                if mode == "multi-app":
-                    continue
-                if mode in ("single-app", "app") or doc.meta.get("project_name"):
+                if doc.meta.get("project_name") or doc.meta.get("app_key"):
                     scopes.append((Path(doc.path).resolve().parent, "", doc.path))
                     break
         if not scopes:
-            raise RuntimeError("未找到应用级 README（doc_mode=app|single-app）")
+            raise RuntimeError("未找到应用级 README（单应用或应用级目录的 README）")
 
         outs: List[Path] = []
         errors: List[str] = []
@@ -2117,7 +2328,7 @@ class DesignDocChecker:
         《锚点定义位》；本方法只执行校验。仅针对**定义位**（`item.defined`），
         登记表 / 索引行不适用定义块形态。
 
-        文档自身的 H1 跳过（见 `_doc_items`）：`REF-{三位序号}` 既是文档编码格式、
+        文档自身的 H1 跳过（见 `_doc_items`）：`REF-{序号}` 既是文档编码格式、
         `REF` 又是类型码（编码空间重叠），因此 REF 文档的 H1 会被当成定义位；但
         引用 REF / ADR 等**整份文档**时用文档链接、**不带锚点**，文档标题不适用
         细项锚点房规。
@@ -2256,6 +2467,7 @@ class DesignDocChecker:
         self._check_lineage_segment(doc, item, attrs)
         self._check_trace_segment(doc, item, attrs)
         self._check_dep_item(doc, item, attrs)
+        self._check_deprecation_values(doc, item, attrs)
         self._check_replacement_value(doc, item, attrs)
         self._check_attr_whitelist(doc, item, attrs)
         self._check_typed_enums(doc, item, attrs)
@@ -2425,12 +2637,13 @@ class DesignDocChecker:
                     self.add_issue("WARNING", "修订版本号与状态不一致",
                                    f"{doc.path}:{lineno} `{item.code}`: `细项状态` 为 "
                                    f"`初稿` 而 `修订版本号` 为 {rev}；`初稿` = 从未解冻，"
-                                   "rev MUST 为 1（递增唯一时机是 `正式→草案` 解冻）")
+                                   "rev MUST 为 1（递增时机仅 `正式→草案` 解冻与"
+                                   " `废弃→草案` 受控复活）")
                 elif status == "草案" and rev < 2:
                     self.add_issue("WARNING", "修订版本号与状态不一致",
                                    f"{doc.path}:{lineno} `{item.code}`: `细项状态` 为 "
-                                   f"`草案` 而 `修订版本号` 为 {rev}；`草案` 必经一轮解冻，"
-                                   "rev MUST ≥ 2（解冻时 +1）")
+                                   f"`草案` 而 `修订版本号` 为 {rev}；`草案` 必经解冻或"
+                                   "受控复活，rev MUST ≥ 2（进入草案时 +1）")
         if "最后修订日期" in pos:
             val, lineno = attrs[pos["最后修订日期"]][1].strip(), attrs[pos["最后修订日期"]][2]
             m = DATE_IN_TEXT.search(val)
@@ -2487,7 +2700,12 @@ class DesignDocChecker:
                                "`出处` 只写自然语言")
 
     def _attr_codes(self, val: str) -> List[str]:
-        """从属性行值取出编码 token（含文档编码），去重保序。"""
+        """从属性行值取出语义编码 token（含文档编码），去重保序。
+
+        Markdown 链接的**目标路径**先剔除：`](./L2-952-x.md#fr-952)` 里的
+        `L2-952` 是路径不是被引对象，被引对象由链接文本承载。
+        """
+        val = MD_LINK.sub(lambda m: m.group(0).replace(m.group(1), "", 1), val)
         out: List[str] = []
         for m in CODE_TOKEN.finditer(val):
             if m.group(1) not in out:
@@ -2518,7 +2736,7 @@ class DesignDocChecker:
                 has_verify = True
             if blank:
                 continue
-            codes = self._attr_codes(val)
+            codes = [self.resolve_code(c, doc) for c in self._attr_codes(val)]
             if name == "依赖":
                 for c in codes:
                     dep_codes.append((c, lineno))
@@ -2623,6 +2841,55 @@ class DesignDocChecker:
                                "只写裸编码，也 MUST NOT 写替代思路一类的散文（思路归 "
                                "`废弃原因`）")
             return
+
+    def _check_deprecation_values(self, doc: DocInfo, item: ItemInfo,
+                                  attrs: List[Tuple[str, str, int]]) -> None:
+        """废弃类别 / 废弃原因 / 复活时间 的取值与一致性。
+
+        房规见 `references/item-deprecation.md` ·《废弃类别（封闭枚举）》与
+        `references/status-definitions.md` ·《废弃后受控复活》。
+        """
+        vals: Dict[str, Tuple[str, int]] = {}
+        for name, val, lineno in attrs:
+            if name in ("废弃类别", "废弃原因", "废弃时间", "复活时间"):
+                vals.setdefault(name, (val.strip(), lineno))
+
+        if "废弃类别" in vals:
+            val, lineno = vals["废弃类别"]
+            if val and "{" not in val and val not in DEPRECATION_CATEGORIES:
+                self.add_issue("ERROR", "废弃类别非法",
+                               f"{doc.path}:{lineno} `{item.code}`: `废弃类别` '{val[:24]}' "
+                               "不在封闭枚举 "
+                               f"{' / '.join(DEPRECATION_CATEGORIES)} 内")
+
+        if "废弃原因" in vals:
+            val, lineno = vals["废弃原因"]
+            if not val:
+                self.add_issue("ERROR", "废弃原因为空",
+                               f"{doc.path}:{lineno} `{item.code}`: `废弃原因` MUST 非空"
+                               "（可为一句话简述）")
+
+        if "复活时间" in vals:
+            val, lineno = vals["复活时间"]
+            if val and "{" not in val:
+                if not DATE_VALUE.match(val):
+                    self.add_issue("WARNING", "复活时间格式错误",
+                                   f"{doc.path}:{lineno} `{item.code}`: `复活时间` '{val[:24]}' "
+                                   "MUST 为 YYYY-MM-DD")
+                if "废弃时间" not in vals:
+                    self.add_issue("WARNING", "复活时间缺废弃时间",
+                                   f"{doc.path}:{lineno} `{item.code}`: 有 `复活时间` "
+                                   "则 MUST 同时保留原 `废弃时间`")
+                else:
+                    dep = vals["废弃时间"][0]
+                    if DATE_VALUE.match(dep) and DATE_VALUE.match(val) and val < dep:
+                        self.add_issue("WARNING", "复活时间早于废弃时间",
+                                       f"{doc.path}:{lineno} `{item.code}`: `复活时间` "
+                                       f"{val} 早于 `废弃时间` {dep}")
+            if item.item_status == "初稿":
+                self.add_issue("WARNING", "初稿带复活时间",
+                               f"{doc.path}:{lineno} `{item.code}`: `初稿` 从未进入基线，"
+                               "MUST NOT 有 `复活时间`")
 
     def _check_block_contiguity(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
         """定义块前三部分 MUST 连续：标题行与属性行组之间不得插入其他内容。
@@ -2795,7 +3062,9 @@ class DesignDocChecker:
                 if doc.doc_code:
                     deprecated_doc_codes.add(doc.doc_code)
                 text = "\n".join(doc.lines)
-                missing_doc_fields: List[str] = [f for f in ("废弃时间", "废弃原因") if f not in text]
+                missing_doc_fields: List[str] = [
+                    f for f in ("废弃时间", "废弃类别", "废弃原因", "替代方案", "影响范围")
+                    if f not in text]
                 archive_field = "建议归档日期" if "建议归档日期" in text else (
                     "建议移除日期" if "建议移除日期" in text else "")
                 if not doc.archived and not archive_field:
@@ -2821,6 +3090,26 @@ class DesignDocChecker:
                 if missing_doc_fields:
                     self.add_issue("ERROR", "废弃文档缺少必需字段",
                                    f"{doc.path}: 缺少 {'、'.join(missing_doc_fields)}")
+                cat = (doc.meta.get("废弃类别") or "").strip()
+                if cat and "{" not in cat and cat not in DEPRECATION_CATEGORIES:
+                    self.add_issue("ERROR", "废弃类别非法",
+                                   f"{doc.path}: `废弃类别` '{cat[:24]}' 不在封闭枚举 "
+                                   f"{' / '.join(DEPRECATION_CATEGORIES)} 内")
+                reason = (doc.meta.get("废弃原因") or "").strip()
+                if "废弃原因" in text and (not reason or reason.lower() in EMPTY_MARKS):
+                    self.add_issue("ERROR", "废弃原因为空",
+                                   f"{doc.path}: `废弃原因` MUST 非空（可为一句话简述）")
+                rv = (doc.meta.get("复活时间") or "").strip()
+                dep = (doc.meta.get("废弃时间") or "").strip()
+                if rv and "{" not in rv:
+                    if not DATE_VALUE.match(rv):
+                        self.add_issue("WARNING", "复活时间格式错误",
+                                       f"{doc.path}: `复活时间` '{rv[:24]}' "
+                                       "MUST 为 YYYY-MM-DD")
+                    elif DATE_VALUE.match(dep) and rv < dep:
+                        self.add_issue("WARNING", "复活时间早于废弃时间",
+                                       f"{doc.path}: `复活时间` {rv} 早于 "
+                                       f"`废弃时间` {dep}")
                 m = re.search(r"建议(?:归档|移除)日期[^0-9]*(\d{4}-\d{2}-\d{2})", text)
                 if m and not doc.archived:
                     try:
@@ -2832,13 +3121,29 @@ class DesignDocChecker:
                     except ValueError:
                         self.add_issue("WARNING", "建议归档日期格式错误",
                                        f"{doc.path}: '{m.group(1)}' 非 YYYY-MM-DD")
+            else:
+                text = "\n".join(doc.lines)
+                if "复活时间" in text or (doc.meta.get("复活时间") or "").strip():
+                    if "本文档已废弃" in text:
+                        self.add_issue("ERROR", "复活后仍保留废弃横幅",
+                                       f"{doc.path}: 文档已不在 `废弃` 状态，"
+                                       "MUST 删除顶部「本文档已废弃」横幅与标题删除线")
+                    if "废弃时间" not in text:
+                        self.add_issue("WARNING", "文档复活缺废弃时间",
+                                       f"{doc.path}: 有 `复活时间` 则 MUST 保留原 "
+                                       "`废弃时间` 与废弃登记")
+                    if (doc.meta.get("退出版本") or "").strip():
+                        self.add_issue("WARNING", "复活后仍带退出版本",
+                                       f"{doc.path}: 复活后 MUST 清空 `退出版本`，"
+                                       "待下次升版按 `added` 回写")
 
             # ---- 细项级废弃 ----
             for i, line in enumerate(doc.lines):
                 if line.lstrip().startswith("#") and "~~已废弃~~" in line:
                     code = self._heading_code(line)
                     block = self._item_block(doc, code) if code else line
-                    missing = [f for f in ("细项状态", "废弃时间", "废弃原因", "替代方案")
+                    missing = [f for f in ("细项状态", "废弃时间", "废弃类别",
+                                           "废弃原因", "替代方案")
                                if f not in block]
                     if missing:
                         self.add_issue("ERROR", "废弃细项缺少必需字段",
@@ -2855,7 +3160,8 @@ class DesignDocChecker:
                     block = self._item_block(doc, item.code)
                     if not block:
                         continue
-                    missing = [f for f in ("废弃时间", "废弃原因", "替代方案") if f not in block]
+                    missing = [f for f in ("废弃时间", "废弃类别", "废弃原因",
+                                           "替代方案") if f not in block]
                     if missing:
                         self.add_issue("ERROR", "废弃细项缺少必需字段",
                                        f"{doc.path}:{item.line} {item.code} 缺少 "
@@ -3283,22 +3589,47 @@ class DesignDocChecker:
 
     # ------------------------------------------------------------- 引用反查
 
+    def _related_codes(self, code: str) -> List[str]:
+        """反查目标：原码 + 同作用域的简写 / 位宽变体（跨项目不做猜测）。"""
+        codes = {code}
+        target = self._code_target_doc(code)
+        key = self._code_key(code)
+        if key[0]:
+            for c in self._code_index().get(key, set()):
+                if c == code:
+                    continue
+                t = self._code_target_doc(c)
+                if target is not None and t is not None:
+                    if Path(t.path).resolve().parent == Path(target.path).resolve().parent:
+                        codes.add(c)
+                elif code not in self.code_to_doc and code not in self.item_def_doc:
+                    codes.add(c)
+        return sorted(codes, key=len, reverse=True)
+
     def find_references(self, code: str) -> List[Tuple[str, int, str, str]]:
         """反查某编码的全部出现位置：[(文件, 行号, 定义/登记|引用, 原文)]。
 
-        改标题与作废前 MUST 先执行本反查，并一并修改全部引用处。
+        同时命中同作用域的编码简写与非补零写法。改标题与作废前 MUST 先执行本
+        反查，并一并修改全部引用处。
         """
-        pat = re.compile(r"(?<![0-9A-Za-z_-])" + re.escape(code) + r"(?![0-9A-Za-z])")
+        codes = self._related_codes(code)
+        alternation = "|".join(re.escape(c) for c in codes)
+        pat = re.compile(r"(?<![0-9A-Za-z_-])(?:" + alternation
+                         + r")(?![0-9A-Za-z])")
         out: List[Tuple[str, int, str, str]] = []
         for doc in self.docs:
-            own = self._own_lines(doc, code, block=True)
+            own: Set[int] = set()
+            for c in codes:
+                own |= self._own_lines(doc, c, block=True)
             for lineno, line in enumerate(doc.raw_lines, 1):
-                if pat.search(line):
-                    if lineno not in own:
-                        kind = "引用"
-                    else:
-                        kind = "登记" if line.lstrip().startswith("|") else "定义"
-                    out.append((doc.path, lineno, kind, line.strip()))
+                m = pat.search(line)
+                if not m:
+                    continue
+                if lineno not in own:
+                    kind = "引用" if m.group(0) == code else "引用（简写）"
+                else:
+                    kind = "登记" if line.lstrip().startswith("|") else "定义"
+                out.append((doc.path, lineno, kind, line.strip()))
         return out
 
     def collect_dep_graph(self) -> None:
@@ -3318,6 +3649,7 @@ class DesignDocChecker:
                     if (not val) or "{" in val or val.lower() in EMPTY_MARKS:
                         continue
                     for c in self._attr_codes(val):
+                        c = self.resolve_code(c, doc)
                         if c != it.code and c not in targets:
                             targets.append(c)
                 if targets:
@@ -3384,6 +3716,7 @@ class DesignDocChecker:
         self.check_item_status()
         self.check_registration_consistency()
         self.check_references()
+        self.check_pin_table()
         self.check_index_order_and_gaps()
         self.check_counters()
         self.check_version_flow()
@@ -3725,7 +4058,9 @@ def main() -> int:
         print(f"🔎 {args.refs} 共出现 {len(hits)} 处（改标题 / 作废前需一并处理）：")
         for path, lineno, kind, text in hits:
             print(f"  [{kind}] {path}:{lineno}  {text[:120]}")
-        code = args.refs
+        code = checker.resolve_code(args.refs)
+        if code != args.refs:
+            print(f"🔗 简写 {args.refs} 按同作用域解析为 {code}")
         dependents = sorted(a for a, bs in checker.dep_forward.items() if code in bs)
         prereqs = checker.dep_forward.get(code, [])
         print(f"📎 谁依赖我（{len(dependents)}）："

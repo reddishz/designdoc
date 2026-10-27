@@ -2,12 +2,13 @@
 name: design-doc
 description: >
   维护 ued/ 分层设计文档、需求编码、架构决策、验证/EVAL 与产品基线。
+  **design-doc是极其重要的技能，应作为每次开发和设计的基础。**
   项目有 ued/ 时，改功能、修缺陷或按需求实现代码前 MUST 先对照设计：
   需改设计则先文档后代码；禁止先写代码再补设计。
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "7.0"
+  version: "7.1"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -58,6 +59,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 
 | 意图 | MUST 先读 |
 |------|-----------|
+| 首次接入 / 不确定先读哪页 | [decision-card.md](references/decision-card.md) |
 | 增量加功能 / 加需求 | [change-feature.md](references/workflows/change-feature.md) |
 | 创建新设计文档 | [create-document.md](references/workflows/create-document.md) |
 | 分配编码；改 ID/类型码/正式标题或含义 | [allocate-and-lock.md](references/workflows/allocate-and-lock.md) |
@@ -68,6 +70,8 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 审查设计文档 | [review-guidelines.md](references/review-guidelines.md) |
 | **改功能 / 修缺陷 / 改行为**（有 `ued/`） | [before-code-change.md](references/workflows/before-code-change.md)（**先判定设计要不要改**） |
 | **按已定设计实现代码** | [implement-from-design.md](references/workflows/implement-from-design.md) |
+| 维护项目 `AGENTS.md` / 约定文件 | [project-agents-guide.md](references/project-agents-guide.md) |
+| 写流程图 / 判断用 Mermaid 还是箭头 | [flowchart-guide.md](assets/guides/flowchart-guide.md) |
 
 动代码相关意图：**MUST** 先走 `before-code-change`，**MUST NOT** 默认先改业务代码。
 

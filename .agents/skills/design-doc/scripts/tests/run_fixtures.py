@@ -143,6 +143,22 @@ EXPECT = {
     # —— 产品基线 baselines/vX.Y.yaml ——
     "L2-952-baseline-ok":         set(),
     "L2-953-baseline-informal":   {"产品基线成员非正式"},
+    # —— 本文引用钉住表 / 简写解析 ——
+    # 同文档简写（W3T 夹具正文里的 `RUL-929`）不报；跨文档简写与缺钉住行必报
+    "W3T-L2-959-prefix-target":   set(),
+    "L2-960-pin-missing":         {"缺本文引用钉住行"},
+    "L2-961-pin-ok":              set(),
+    "L2-962-shorthand-cross":     {"跨文档简写"},
+    # 序号位宽：2–4 位均可解析（写入默认三位补零，超过 999 自然四位）
+    "L2-963-width-ok":            set(),
+    # —— 废弃类别 / 原因与废弃后受控复活 ——
+    "L2-964-void-bad-category":   {"废弃类别非法"},
+    "L2-965-void-empty-reason":   {"废弃原因为空"},
+    "L2-966-revive-ok":           set(),
+    "L2-967-revive-banner":       {"细项废弃标记与状态不一致"},
+    "L2-968-revive-early":        {"复活时间早于废弃时间"},
+    "L2-969-doc-revive-banner":   {"复活后仍保留废弃横幅"},
+    "L2-970-doc-revive-ok":       set(),
     # —— EVAL 文档级基线评估报告 ——
     "EVAL-901-ok":                set(),
     "EVAL-902-no-scope":          {"EVAL缺少必需章节"},

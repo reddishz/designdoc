@@ -1,6 +1,6 @@
 > **模板：项目设计文档 README**
 >
-> 先确定 `doc_mode`，再复制对应哨兵段（A 单应用 / B 多应用顶层 / C 应用级）。职责切分见 [runtime-config.md](../../references/workflows/runtime-config.md)。
+> 按目录结构选择哨兵段（A 单应用 / B 多应用顶层 / C 应用级）：顶层含应用注册表 → B；`ued/{app-name}/README.md` → C；其余 `ued/README.md` → A。模式不再用字段声明。职责切分见 [runtime-config.md](../../references/workflows/runtime-config.md)。
 >
 > **通用规则**：见 [index.md · 整篇型模板共用](index.md#整篇型模板共用)。
 >
@@ -14,12 +14,6 @@
 
 <!-- TEMPLATE:BEGIN 模板 A：单应用模式 ued/README.md -->
 # {project_name} 设计文档索引
-
-## 文档模式
-
-| 字段 | 值 |
-|------|----|
-| doc_mode | single-app |
 
 ## 项目元信息
 
@@ -126,12 +120,6 @@
 <!-- TEMPLATE:BEGIN 模板 B：多应用模式顶层 ued/README.md -->
 # UED 多应用总览
 
-## 文档模式
-
-| 字段 | 值 |
-|------|----|
-| doc_mode | multi-app |
-
 ## 总览元信息
 
 | 字段 | 值 |
@@ -168,12 +156,6 @@
 
 <!-- TEMPLATE:BEGIN 模板 C：多应用模式应用级 ued/{app-name}/README.md -->
 # {project_name} 设计文档索引
-
-## 文档模式
-
-| 字段 | 值 |
-|------|----|
-| doc_mode | app |
 
 ## 项目元信息
 
