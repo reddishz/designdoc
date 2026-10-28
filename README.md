@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Skill](https://img.shields.io/badge/design--doc-v10.1-blue.svg)](./.agents/skills/design-doc/SKILL.md)
-[![Skill](https://img.shields.io/badge/system--design--doc-v1.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/system--design--doc-v1.2-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。单系统用 `design-doc`；由多个子系统组成的系统另加 `system-design-doc` 管注册表、依赖钉住与系统发布。

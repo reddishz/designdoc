@@ -427,6 +427,16 @@ def main() -> int:
     c = case("release-draft-member", files)
     check("发布包含初稿子系统报错", has(c, "发布包含初稿子系统"))
 
+    files = valid_files(include_shared=True)
+    files["ued/README.md"] = files["ued/README.md"].replace(
+        "| shared-lib | 公共库 | shared-lib/ | LIB | LIB-CMP-001 | 正式 |",
+        "| shared-lib | 公共库 | shared-lib/ | LIB | LIB-CMP-001 | 废弃 |")
+    c = case("release-deprecated-member", files)
+    check("发布含废弃子系统告警",
+          any(i.title == "发布含已废弃子系统" and i.level == "WARNING"
+              for i in c.issues))
+    check("历史清单含废弃不报错", no_errors(c))
+
     files = valid_files()
     files["ued/oms/baselines/v2.5.yaml"] = baseline(
         "v2.5", "v2.5.0", deps=[],

@@ -7,7 +7,7 @@ description: >
   子系统内部的分层设计、编码与产品基线由 design-doc 负责，本技能只做系统级编排。
 license: MIT
 metadata:
-  version: "1.1"
+  version: "1.2"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [system, subsystem, design, documentation, release, dependency]

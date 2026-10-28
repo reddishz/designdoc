@@ -858,6 +858,10 @@ class SystemChecker:
             if sub.status == "初稿":
                 self.add("ERROR", "发布包含初稿子系统",
                          f"{loc}: `{key}` 状态为 `初稿`；未启用子系统 MUST NOT 进入发布")
+            elif sub.status == "废弃":
+                self.add("WARNING", "发布含已废弃子系统",
+                         f"{loc}: `{key}` 当前为 `废弃`；历史清单可保留，"
+                         "新发布 MUST 移除该成员")
             if not VERSION_RE.match(pv):
                 self.add("ERROR", "发布项产品版本格式错误",
                          f"{loc}: `{key}` 的 `{pv}` MUST 为 v主.次")
