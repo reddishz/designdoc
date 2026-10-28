@@ -62,7 +62,7 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-
 
 ## 编码与术语
 
-- [ ] 子系统定义使用自己的前缀；跨子系统引用写全量编码。
+- [ ] 子系统定义使用自己的前缀；子系统内部可简写，跨子系统引用写全量编码。
 - [ ] 同一完整编码只在一个子系统中定义。
 - [ ] `ued/glossary.md` 全系统唯一；子系统没有自己的 glossary。
 - [ ] 术语 `定义位置` 指向的文档存在且唯一。

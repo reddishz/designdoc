@@ -147,11 +147,12 @@ EXPECT = {
     "L2-952-baseline-ok":         set(),
     "L2-953-baseline-informal":   {"产品基线成员非正式"},
     # —— 本文引用钉住表 / 简写解析 ——
-    # 同文档简写（W3T 夹具正文里的 `RUL-929`）不报；跨文档简写与缺钉住行必报
+    # 同一作用域内简写（可跨文档）不报；歧义与缺钉住行必报
     "W3T-L2-959-prefix-target":   set(),
     "L2-960-pin-missing":         {"缺本文引用钉住行"},
     "L2-961-pin-ok":              set(),
-    "L2-962-shorthand-cross":     {"跨文档简写"},
+    "L2-962-shorthand-cross":     set(),
+    "L2-980-shorthand-ambiguous": {"简写编码歧义"},
     # 序号位宽：2–4 位均可解析（写入默认三位补零，超过 999 自然四位）
     "L2-963-width-ok":            set(),
     # —— 废弃类别 / 原因与废弃后受控复活 ——
@@ -649,11 +650,11 @@ def run_single_scope_and_extension_cases():
 |----------|------|------|
 """
 
-    doc = """# L2-001-示例
+    doc = """# SCP-L2-001-示例
 
 | 属性 | 值 |
 |------|----|
-| 文档编码 | L2-001 |
+| 文档编码 | SCP-L2-001 |
 | 层级 | L2 - 系统/产品需求 |
 | 修订版本号 | 1 |
 | 状态 | 初稿 |
@@ -672,8 +673,8 @@ def run_single_scope_and_extension_cases():
 
 ## 需求定义
 
-<a id="fr-001"></a>
-### FR-001：下单
+<a id="scp-fr-001"></a>
+### SCP-FR-001：下单
 
 - **细项状态**：正式
 - **修订版本号**：1
@@ -702,7 +703,7 @@ def run_single_scope_and_extension_cases():
 
 | 中文名称 | 英文名称 | 定义 | 定义位置 |
 |----------|----------|------|----------|
-| 订单 | Order | 客户提交的购买请求。 | L2-001 |
+| 订单 | Order | 客户提交的购买请求。 | SCP-L2-001 |
 
 ## 变更记录
 
@@ -723,7 +724,7 @@ def run_single_scope_and_extension_cases():
         crm = root / "crm"
         crm.mkdir()
         (crm / "README.md").write_text(readme, encoding="utf-8")
-        (crm / "L2-001-sample.md").write_text(doc, encoding="utf-8")
+        (crm / "SCP-L2-001-sample.md").write_text(doc, encoding="utf-8")
         (root / "glossary.md").write_text(glossary, encoding="utf-8")
 
         checker = check_docs.DesignDocChecker(str(root))
@@ -740,6 +741,33 @@ def run_single_scope_and_extension_cases():
         glossary_errors = [i for i in checker.issues
                            if i["title"] in GLOSSARY_TITLES and i["level"] == "ERROR"]
         check("外部术语表可用", not glossary_errors)
+        check("带前缀定义通过",
+              not any(i["title"] in ("定义编码前缀不符", "文档编码前缀不符")
+                      for i in checker.issues))
+
+        bad = doc.replace("SCP-FR-001", "FR-001").replace(
+            "scp-fr-001", "fr-001").replace("SCP-L2-001", "SCP-L2-002")
+        (crm / "SCP-L2-002-bad.md").write_text(bad, encoding="utf-8")
+        checker = check_docs.DesignDocChecker(
+            str(crm), glossary_path=str(root / "glossary.md"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        check("定义使用简写报错",
+              any(i["title"] == "定义编码前缀不符" and i["level"] == "ERROR"
+                  for i in checker.issues))
+        (crm / "SCP-L2-002-bad.md").unlink()
+
+        sample = crm / "SCP-L2-001-sample.md"
+        original = sample.read_text(encoding="utf-8")
+        sample.write_text(original + "\n跨子系统引用 `OTH-FR-001`。\n", encoding="utf-8")
+        checker = check_docs.DesignDocChecker(
+            str(crm), glossary_path=str(root / "glossary.md"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        check("他作用域前缀引用不判悬空",
+              not any(i["title"] == "引用悬空" and "OTH-FR-001" in i["description"]
+                      for i in checker.issues))
+        sample.write_text(original, encoding="utf-8")
 
         (crm / "glossary.md").write_text(glossary, encoding="utf-8")
         checker = check_docs.DesignDocChecker(
@@ -766,7 +794,7 @@ def run_single_scope_and_extension_cases():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         (root / "README.md").write_text(readme, encoding="utf-8")
-        (root / "L2-001-sample.md").write_text(doc, encoding="utf-8")
+        (root / "SCP-L2-001-sample.md").write_text(doc, encoding="utf-8")
 
         def bump(**kw):
             checker = check_docs.DesignDocChecker(str(root))

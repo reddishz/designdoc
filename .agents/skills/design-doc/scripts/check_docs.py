@@ -1081,26 +1081,31 @@ class DesignDocChecker:
         return self.item_def_doc.get(code) or self.code_to_doc.get(code)
 
     @staticmethod
-    def _same_scope(doc: DocInfo, target: Optional[DocInfo]) -> bool:
-        if target is None:
-            return False
-        return Path(doc.path).resolve().parent == Path(target.path).resolve().parent
+    def _code_prefix(code: str) -> str:
+        """取项目前缀；无前缀（含 `L2-001` 一类文档编码）返回空串。"""
+        m = re.match(r"^([A-Z][A-Z0-9]{1,4})-[A-Z]{1,5}[0-9]?-\d{2,4}$", code)
+        return m.group(1) if m else ""
 
-    def resolve_code(self, code: str, doc: Optional[DocInfo] = None) -> str:
-        """把简写 / 非补零写法解析为已登记编码；无法唯一解析时原样返回。"""
+    def _scope_project_code(self) -> str:
+        """当前作用域根 README 声明的 `project_code`；未声明返回空串。"""
+        for doc in self.docs:
+            if doc.is_index and Path(doc.path).resolve().parent == self.ued_path.resolve():
+                return (doc.meta.get("project_code") or "").strip()
+        return ""
+
+    def resolve_code(self, code: str) -> str:
+        """把简写 / 非补零写法解析为已登记编码；无法唯一解析时原样返回。
+
+        解析范围限于本次扫描的单一作用域；多候选时不按文档位置自动选择，
+        由 `check_references` 报歧义。
+        """
         if code in self.code_to_doc or code in self.item_def_doc:
             return code
         key = self._code_key(code)
         if not key[0]:
             return code
         cands = self._code_index().get(key, set()) - {code}
-        if len(cands) == 1:
-            return next(iter(cands))
-        if doc is not None:
-            same = [c for c in cands if self._same_scope(doc, self._code_target_doc(c))]
-            if len(same) == 1:
-                return same[0]
-        return code
+        return next(iter(cands)) if len(cands) == 1 else code
 
     # -------------------------------------------------------------- 术语表 / 术语块
 
@@ -1631,15 +1636,51 @@ class DesignDocChecker:
                 self.add_issue("ERROR", "重复细项编码",
                                f"{code} 在多处定义: {', '.join(sorted(set(sites)))}")
 
+    def check_definition_codes(self) -> None:
+        """定义位 MUST 使用含当前作用域项目前缀的全量编码。
+
+        简写只允许出现在引用中（见 `check_references`）；作用域根 README 声明
+        `project_code` 时，文档编码与细项定义 MUST 带同一前缀。
+        """
+        prefix = self._scope_project_code()
+        if not prefix or "{" in prefix or not re.match(r"^[A-Z][A-Z0-9]{1,4}$", prefix):
+            return
+        for doc in self.docs:
+            if doc.archived or doc.is_index or doc.is_glossary:
+                continue
+            if doc.doc_code:
+                actual = self._code_prefix(doc.doc_code)
+                if actual != prefix:
+                    tail = doc.doc_code.split("-", 1)[1] if actual else doc.doc_code
+                    want = f"{prefix}-{tail}"
+                    self.add_issue(
+                        "ERROR", "文档编码前缀不符",
+                        f"{doc.path}: 文档编码 `{doc.doc_code}` 未使用本作用域前缀 "
+                        f"`{prefix}`；MUST 写 `{want}`")
+            for item in self._doc_items(doc):
+                if not item.defined or item.type_code not in self.type_codes:
+                    continue
+                actual = self._code_prefix(item.code)
+                if actual == prefix:
+                    continue
+                want = f"{prefix}-{item.type_code}-{item.number:03d}"
+                self.add_issue(
+                    "ERROR", "定义编码前缀不符",
+                    f"{doc.path}:{item.line} 定义编码 `{item.code}` 未使用本作用域前缀 "
+                    f"`{prefix}`；定义 MUST 使用全量编码 `{want}`")
+
     def check_references(self) -> None:
         """引用存在性：正文编码须有定义/登记；同作用域简写与 2–4 位写法按解析键归一。
 
-        解析键见 `coding-system.md` ·《序号位宽》与《项目编码规则》：`CRM-RUL-004`
-        的全量码、同作用域简写 `RUL-004`、非补零写法 `RUL-04` 可互相解析。简写只有
-        在**同一目录作用域**内唯一时才放行；解析到其他文档或存在歧义均报 WARNING。
+        解析键见 `coding-system.md` ·《序号位宽》与《正式编码与局部简写》：`CRM-RUL-004`
+        的全量码、同一作用域内的简写 `RUL-004`、非补零写法 `RUL-04` 可互相解析。
+        简写只在本作用域内唯一时放行（可跨文档）；多候选报歧义，不按文档位置
+        自动选择。带其他项目前缀的编码视为他作用域引用，交由系统检查器校验。
         """
         known = self._known_item_codes()
         index = self._code_index()
+        scope_prefix = self._scope_project_code()
+        local_prefixes = {self._code_prefix(c) for c in known if self._code_prefix(c)}
         for doc in self.docs:
             if doc.archived:
                 continue
@@ -1655,30 +1696,32 @@ class DesignDocChecker:
                     start = max(0, m.start() - 2)
                     if "{" in line[start:m.end() + 1]:
                         continue
-                    key = self._code_key(full)
-                    cands = index.get(key, set()) if key[0] else set()
-                    bare = full == f"{type_code}-{m.group(3)}"
-                    if bare and cands:
-                        same = [c for c in cands
-                                if self._same_scope(doc, self._code_target_doc(c))]
-                        if len(cands) == 1 or len(same) == 1:
-                            target = same[0] if len(same) == 1 else next(iter(cands))
-                            if self._code_target_doc(target) is not doc:
-                                reported.add(full)
-                                self.add_issue(
-                                    "WARNING", "跨文档简写",
-                                    f"{doc.path}:{lineno} 使用了编码简写 {full}，"
-                                    f"实际指向他文档的 {target}；跨文档引用 MUST 写全量编码")
-                            continue
+                    prefix = self._code_prefix(full)
+                    if prefix:
+                        local = (prefix == scope_prefix) if scope_prefix \
+                            else (prefix in local_prefixes)
+                        if not local:
+                            continue        # 他作用域引用由 check_system.py 负责
                         reported.add(full)
                         self.add_issue(
-                            "WARNING", "简写编码歧义",
+                            "WARNING", "引用悬空",
+                            f"{doc.path}:{lineno} 引用了本作用域未定义/未登记的编码 {full}")
+                        continue
+                    key = self._code_key(full)
+                    cands = index.get(key, set()) if key[0] else set()
+                    if len(cands) == 1:
+                        continue            # 同作用域唯一简写，允许跨文档
+                    reported.add(full)
+                    if len(cands) > 1:
+                        self.add_issue(
+                            "ERROR", "简写编码歧义",
                             f"{doc.path}:{lineno} 的简写 {full} 可解析到 "
                             f"{' / '.join(sorted(cands))}，MUST 写全量编码")
-                        continue
-                    reported.add(full)
-                    self.add_issue("WARNING", "引用悬空",
-                                   f"{doc.path}:{lineno} 引用了未定义/未登记的编码 {full}")
+                    else:
+                        self.add_issue(
+                            "WARNING", "引用悬空",
+                            f"{doc.path}:{lineno} 引用了未定义/未登记的编码 {full}；"
+                            "同一子系统内简写 MUST 能唯一解析，跨子系统引用 MUST 写全量编码")
 
     def check_pin_table(self) -> None:
         """「本文引用」钉住表：行值与契约位置是否一致。
@@ -1705,7 +1748,7 @@ class DesignDocChecker:
                     if not m:
                         continue                # 占位行 / 空表体
                     raw = m.group(1)
-                    code = self.resolve_code(raw, doc)
+                    code = self.resolve_code(raw)
                     target = self._code_target_doc(code)
                     where = f"{doc.path}:{lineno} `{raw}`"
                     if target is None:
@@ -1764,7 +1807,7 @@ class DesignDocChecker:
                     if name not in PIN_ATTRS or not val or "{" in val:
                         continue
                     for raw in self._attr_codes(val):
-                        code = self.resolve_code(raw, doc)
+                        code = self.resolve_code(raw)
                         target = self._code_target_doc(code)
                         if target is None or target is doc:
                             continue
@@ -1782,7 +1825,7 @@ class DesignDocChecker:
                     cm = CODE_TOKEN.search(text)
                     if not cm:
                         continue
-                    code = self.resolve_code(cm.group(1), doc)
+                    code = self.resolve_code(cm.group(1))
                     target = self._code_target_doc(code)
                     if target is None or target is doc:
                         continue
@@ -3301,7 +3344,7 @@ class DesignDocChecker:
                 has_verify = True
             if blank:
                 continue
-            codes = [self.resolve_code(c, doc) for c in self._attr_codes(val)]
+            codes = [self.resolve_code(c) for c in self._attr_codes(val)]
             if name == "依赖":
                 for c in codes:
                     dep_codes.append((c, lineno))
@@ -4217,7 +4260,7 @@ class DesignDocChecker:
                     if (not val) or "{" in val or val.lower() in EMPTY_MARKS:
                         continue
                     for c in self._attr_codes(val):
-                        c = self.resolve_code(c, doc)
+                        c = self.resolve_code(c)
                         if c != it.code and c not in targets:
                             targets.append(c)
                 if targets:
@@ -4298,6 +4341,7 @@ class DesignDocChecker:
         self.check_doc_meta()
         self.check_glossary()
         self.check_duplicate_codes()
+        self.check_definition_codes()
         self.check_item_status()
         self.check_registration_consistency()
         self.check_references()

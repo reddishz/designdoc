@@ -53,6 +53,11 @@ ITEM_CODE_RE = re.compile(r"^(?:([A-Z][A-Z0-9]{1,4})-)?([A-Z]{1,5}[0-9]?)-\d{2,4
 HEADING_CODE_RE = re.compile(
     r"^\s{0,3}#{1,6}\s+((?:[A-Z][A-Z0-9]{1,4}-)?([A-Z]{1,5}[0-9]?)-\d{2,4})\b")
 REF_CODE_RE = re.compile(r"\b(([A-Z][A-Z0-9]{1,4})-[A-Z]{1,5}[0-9]?-\d{2,4})\b")
+# 无前缀简写：只从链接文字与表格行识别为引用，正文散文里的裸编码不在此校验。
+BARE_CODE_RE = re.compile(
+    r"(?<![A-Za-z0-9_/-])([A-Z]{1,5}[0-9]?-\d{2,4})(?![0-9A-Za-z.])")
+MD_LINK_TEXT_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+INLINE_CODE_RE = re.compile(r"`[^`]*`")
 DOC_META_CODE_RE = re.compile(r"^(?:[A-Z][A-Z0-9]{1,4}-)?(?:L[0-6]|ADR|EVAL|REF)-\d{2,4}$")
 TERM_HEADING_RE = re.compile(r"^###\s+(.+?)\s*$")
 ATTR_RE = re.compile(r"^-\s+\*\*(.+?)\*\*\s*[:：]\s*(.*)$")
@@ -975,7 +980,27 @@ class SystemChecker:
 
     # ---------------------------------------------------------------- 跨作用域
 
+    @staticmethod
+    def _item_key(code: str) -> Tuple[str, int]:
+        """细项编码的解析键 `(类型码, 序号)`：忽略项目前缀与前导零。"""
+        m = re.match(r"^(?:[A-Z][A-Z0-9]{1,4}-)?([A-Z]{1,5}[0-9]?)-(\d{2,4})$", code)
+        return (m.group(1), int(m.group(2))) if m else ("", 0)
+
+    @staticmethod
+    def _reference_texts(line: str) -> List[str]:
+        """引用上下文：Markdown 链接文字与表格行；正文散文不参与简写识别。"""
+        texts = [m.group(1) for m in MD_LINK_TEXT_RE.finditer(line)]
+        if line.lstrip().startswith("|"):
+            texts.append(INLINE_CODE_RE.sub("", line))
+        return texts
+
     def check_cross_scope(self) -> None:
+        """跨子系统编码归属与引用。
+
+        子系统内部的定义/引用前缀由 design-doc 的 `check_docs.py` 按
+        `project_code` 校验；本方法只处理跨子系统：重复定义、定义占用他子系统
+        前缀、跨子系统引用悬空/归属不符、跨作用域简写。
+        """
         if not self.is_system:
             return
         for code, sites in self.definitions.items():
@@ -986,12 +1011,21 @@ class SystemChecker:
                 self.add("ERROR", "跨子系统重复定义编码",
                          f"`{code}` 在多个子系统定义："
                          + " / ".join(f"{p}:{ln}" for _s, p, ln in sites))
+        global_keys = {self._item_key(code) for code in self.definitions}
+        global_keys.discard(("", 0))
         for sub in self.subsystems:
-            if not sub.key or not sub.directory or not sub.prefix:
+            if not sub.key or not sub.directory:
                 continue
             root = self.ued_path / sub.directory.strip("/")
             if not root.is_dir():
                 continue
+            sub_dir = sub.directory.strip("/")
+            local_keys = {
+                self._item_key(code)
+                for code, sites in self.definitions.items()
+                if any(scope == sub_dir for scope, _p, _l in sites)
+            }
+            local_keys.discard(("", 0))
             for path in sorted(root.rglob("*.md")):
                 if "deprecated" in path.parts:
                     continue
@@ -999,6 +1033,25 @@ class SystemChecker:
                     lines = mask_fences(read_text(path))
                 except RuntimeError:
                     continue
+                reported: Set[str] = set()
+                reported_bare: Set[str] = set()
+                for i, line in enumerate(lines):
+                    # 定义行由下方「定义前缀」规则处理，不当作引用
+                    if not HEADING_CODE_RE.match(line):
+                        self._check_cross_refs(path, i, line, sub, reported)
+                    for text in self._reference_texts(line):
+                        for m in BARE_CODE_RE.finditer(text):
+                            bare = m.group(1)
+                            key = self._item_key(bare)
+                            if not key[0] or key in local_keys:
+                                continue        # 本子系统简写，交给 check_docs.py
+                            if key not in global_keys or bare in reported_bare:
+                                continue        # 无同键定义 → 悬空，由 check_docs.py 报
+                            reported_bare.add(bare)
+                            self.add("ERROR", "跨作用域简写",
+                                     f"{self.rel(path)}:{i + 1}: `{bare}` 在本子系统"
+                                     "无定义，其他子系统有同键编码；跨子系统引用 MUST "
+                                     "写全量编码")
                 for i, line in enumerate(lines):
                     m = HEADING_CODE_RE.match(line)
                     if not m:
@@ -1010,42 +1063,42 @@ class SystemChecker:
                     if not cm:
                         continue
                     prefix = cm.group(1) or ""
-                    if prefix and prefix != sub.prefix and prefix in self.prefix_owner:
+                    if prefix == sub.prefix:
+                        continue
+                    if prefix and prefix in self.prefix_owner:
                         self.add("ERROR", "定义了他子系统前缀",
                                  f"{self.rel(path)}:{i + 1}: `{full}` 使用前缀 `{prefix}`，"
                                  f"属于 {self.prefix_owner[prefix].key}；本子系统前缀为 `{sub.prefix}`")
-                    elif not prefix:
-                        self.add("WARNING", "子系统编码未带前缀",
-                                 f"{self.rel(path)}:{i + 1}: 本子系统前缀为 `{sub.prefix}`，"
-                                 f"但定义了 `{full}`；启用前缀时 SHOULD 全量使用")
-        # 跨作用域引用悬空
-        for sub in self.subsystems:
-            if not sub.key or not sub.directory or not sub.prefix:
-                continue
-            root = self.ued_path / sub.directory.strip("/")
-            if not root.is_dir():
-                continue
-            for path in sorted(root.rglob("*.md")):
-                if "deprecated" in path.parts:
-                    continue
-                try:
-                    lines = mask_fences(read_text(path))
-                except RuntimeError:
-                    continue
-                reported: Set[str] = set()
-                for i, line in enumerate(lines):
-                    for m in REF_CODE_RE.finditer(line):
-                        code, prefix = m.group(1), m.group(2)
-                        if prefix == sub.prefix or prefix not in self.prefix_owner:
-                            continue
-                        if code in reported:
-                            continue
-                        reported.add(code)
-                        if code not in self.definitions:
-                            self.add("WARNING", "跨子系统引用悬空",
-                                     f"{self.rel(path)}:{i + 1}: `{code}` 在 "
-                                     f"{self.prefix_owner[prefix].key} 内无定义")
+                    else:
+                        self.add("ERROR", "定义前缀与子系统不符",
+                                 f"{self.rel(path)}:{i + 1}: `{full}` 的前缀 `{prefix or '（空）'}` "
+                                 f"与本子系统登记前缀 `{sub.prefix or '（空）'}` 不符")
         self._check_glossary()
+
+    def _check_cross_refs(self, path: Path, i: int, line: str, sub: Subsystem,
+                          reported: Set[str]) -> None:
+        """跨子系统全量引用：目标须存在，且归属被引用前缀的子系统。"""
+        for m in REF_CODE_RE.finditer(line):
+            code, prefix = m.group(1), m.group(2)
+            if prefix == sub.prefix or prefix not in self.prefix_owner:
+                continue
+            if code in reported:
+                continue
+            reported.add(code)
+            owner = self.prefix_owner[prefix]
+            item_sites = self.definitions.get(code, [])
+            doc_paths = self.doc_code_map.get(code, [])
+            loc = f"{self.rel(path)}:{i + 1}: `{code}`"
+            if not item_sites and not doc_paths:
+                self.add("WARNING", "跨子系统引用悬空",
+                         f"{loc} 在 {owner.key} 内无定义")
+                continue
+            owner_dir = owner.directory.strip("/")
+            scopes = {s for s, _p, _l in item_sites}
+            scopes |= {self._scope_of(p) for p in doc_paths}
+            if owner_dir not in scopes:
+                self.add("ERROR", "跨子系统引用前缀与定义不符",
+                         f"{loc} 使用前缀 `{prefix}`，但定义不在 {owner.key} 子系统内")
 
     def _check_glossary(self) -> None:
         glos = self.ued_path / "glossary.md"

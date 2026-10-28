@@ -464,6 +464,64 @@ def main() -> int:
     check("定义他子系统前缀报错", has(c, "定义了他子系统前缀"))
 
     files = valid_files()
+    files["ued/oms/L2-001-req.md"] += (
+        "\n跨子系统引用 `CRM-CMP-001` 与 `CRM-L2-001`。\n")
+    c = case("cross-scope-ref-ok", files)
+    check("跨子系统全量细项引用可解析",
+          not any(i.title == "跨子系统引用悬空" and "CRM-CMP-001" in i.detail
+                  for i in c.issues))
+    check("跨子系统全量文档引用可解析",
+          not any(i.title == "跨子系统引用悬空" and "CRM-L2-001" in i.detail
+                  for i in c.issues))
+
+    files = valid_files()
+    files["ued/crm/L2-001-req.md"] += "\n跨子系统引用 `OMS-FR-999`。\n"
+    c = case("cross-scope-dangling", files)
+    check("跨子系统引用悬空告警",
+          any(i.title == "跨子系统引用悬空" and i.level == "WARNING"
+              and "OMS-FR-999" in i.detail for i in c.issues))
+
+    files = valid_files()
+    files["ued/oms/L2-001-req.md"] += (
+        "\n# OMS-RUL-001-跨域规则\n\n- **细项状态**：正式\n")
+    files["ued/crm/L2-001-req.md"] += (
+        "\n见 [RUL-001（跨域规则）](../oms/L2-001-req.md#oms-rul-001)。\n")
+    c = case("cross-scope-shorthand", files)
+    check("跨作用域简写报错",
+          any(i.title == "跨作用域简写" and i.level == "ERROR"
+              and "RUL-001" in i.detail for i in c.issues))
+
+    files = valid_files()
+    files["ued/crm/L2-001-req.md"] += (
+        "\n见 [CMP-001（客户关系）](./L3-001-arch.md#crm-cmp-001)。\n")
+    c = case("local-shorthand", files)
+    check("本子系统简写不报跨作用域",
+          not any(i.title == "跨作用域简写" for i in c.issues))
+
+    files = valid_files()
+    files["ued/crm/L2-001-req.md"] += "\n# FR-002-无前缀定义\n\n- **细项状态**：正式\n"
+    c = case("definition-no-prefix", files)
+    check("子系统定义缺前缀报错",
+          any(i.title == "定义前缀与子系统不符" and i.level == "ERROR"
+              and "FR-002" in i.detail for i in c.issues))
+
+    files = valid_files()
+    files["ued/crm/L2-001-req.md"] += "\n# XYZ-FR-003-未知前缀\n\n- **细项状态**：正式\n"
+    c = case("definition-unknown-prefix", files)
+    check("子系统定义未知前缀报错",
+          any(i.title == "定义前缀与子系统不符" and "XYZ-FR-003" in i.detail
+              for i in c.issues))
+
+    files = valid_files()
+    files["ued/oms/L2-001-req.md"] += (
+        "\n# CRM-CMP-009-越界定义\n\n- **细项状态**：正式\n\n"
+        "引用 `CRM-CMP-009`。\n")
+    c = case("foreign-prefix-ref", files)
+    check("跨子系统引用归属不符报错",
+          any(i.title == "跨子系统引用前缀与定义不符" and i.level == "ERROR"
+              and "CRM-CMP-009" in i.detail for i in c.issues))
+
+    files = valid_files()
     files["ued/crm/glossary.md"] = "# 局部术语表\n"
     c = case("subsidiary-glossary", files)
     check("子系统自建术语表报错", has(c, "子系统不得自建术语表"))
