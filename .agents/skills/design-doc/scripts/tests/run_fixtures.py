@@ -162,6 +162,18 @@ EXPECT = {
     "L2-968-revive-early":        {"复活时间早于废弃时间"},
     "L2-969-doc-revive-banner":   {"复活后仍保留废弃横幅"},
     "L2-970-doc-revive-ok":       set(),
+    # —— 维护性变更：`变更记录` 维护行与 `曾用名` 记录 ——
+    # 维护行沿用当前修订号（全角括号、无空格），位于同号语义行之上，说明带批次号与
+    # `；语义不变` 收尾；`曾用名` 紧随治理段、值为 `旧称（至 YYYY-MM-DD）`
+    "L2-971-maint-row-ok":        set(),
+    "L2-972-maint-row-misplaced": {"维护行未置于同号语义行之上"},
+    "L2-973-maint-row-ghost":     {"维护行引用的修订号不存在"},
+    "L2-974-maint-row-badmark":   {"维护行标记格式错误"},
+    "L2-975-maint-row-desc":      {"维护行说明格式错误"},
+    "L2-976-oldname-bad":         {"曾用名格式错误"},
+    "L2-977-oldname-pos":         {"维护段位置错乱"},
+    "L2-978-maint-lineage-ok":    set(),
+    "L2-979-maint-order-bad":     {"维护行未按日期倒序"},
     # —— EVAL 文档级基线评估报告 ——
     "EVAL-901-ok":                set(),
     "EVAL-902-no-scope":          {"EVAL缺少必需章节"},
@@ -184,6 +196,7 @@ GLOSSARY_TITLES = {
     "术语定义位置非法", "术语定义位置错误", "术语定义未找到", "术语未登记",
     "所用术语含链接或编码", "所用术语无法解析", "所用术语重复本文定义",
     "README未登记术语表", "文档修订号与变更记录不一致",
+    "曾用名格式错误", "曾用名位置错误",
 }
 
 # 场景目录名 → 期望命中的问题名（空集 = 正例，MUST 零命中）。
@@ -218,6 +231,9 @@ GLOSSARY_EXPECT = {
     "rev-mismatch":              {"文档修订号与变更记录不一致"},
     "readme-no-link":            {"README未登记术语表"},
     "app-glossary":              {"术语表位置非法"},
+    "maint-ok":                  set(),
+    "term-oldname-bad":          {"曾用名格式错误"},
+    "term-oldname-pos":          {"曾用名位置错误"},
 }
 
 

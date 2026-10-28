@@ -9,7 +9,9 @@ DesignDoc 文档检查工具
 - 旧状态值（`草稿` / `提议` / `采纳` / `登记中` / `使用中` / `验证状态` 等）的迁移提示
 - 正文定义 / 本文档清单 / 作用域 README 全局索引三方的编码与状态一致
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
-- 修订号递增时机（仅 `正式→草案` 解冻时 +1）、修订号不得改小、变更记录倒序
+- 修订号递增时机（仅 `正式→草案` 解冻或 `废弃→草案` 复活时 +1）、修订号不得改小、变更记录倒序
+- 维护性变更：`变更记录` 中的 `N（维护）` 行（批次号 / 类型 / `；语义不变`）、与同号语义行的位置、文档修订号只与最新语义行比对
+- `曾用名`：细项定义块的维护段位置与 `旧称（至 YYYY-MM-DD）` 形态；术语块同名可选属性行
 - 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项且可重算 added/removed/changed
 - 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；升版时对 added/removed 回写；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
@@ -20,7 +22,7 @@ DesignDoc 文档检查工具
 - 零章节编号引用门禁、文件名与结构合规
 - 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、属性名白名单
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
-- 属性行组段位：治理段（`细项状态` / `修订版本号` / `创建日期` / `最后修订日期`）齐备且居首、发版谱系段（有则紧随治理段）、追溯段居末
+- 属性行组段位：治理段（`细项状态` / `修订版本号` / `创建日期` / `最后修订日期`）齐备且居首、维护段（有则紧随治理段）、发版谱系段（有则次之）、追溯段居末
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期；细项 `草案` 而文档 `正式` 为门控违规
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
@@ -88,6 +90,7 @@ LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 # 缺省快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
 # 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
 FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "创建日期", "最后修订日期",
+                        "曾用名",
                         "引入版本", "退出版本",
                         "废弃时间", "废弃类别", "废弃原因", "替代方案", "复活时间",
                         "出处", "来源", "依赖")
@@ -147,6 +150,17 @@ LEGACY_ROLLBACK_KW = re.compile(r"回退|撤回修订")
 BUSINESS_ROLLBACK_KW = re.compile(
     r"回退路径|回退策略|失败或回退|如何回退|异常处理与回退|有跳转或回退")
 INIT_KW = re.compile(r"初始|新建|创建|初稿")
+
+# 维护性变更（房规：status-definitions.md ·《维护性变更（第三维度，MANDATORY）》）。
+# 维护行首列固定为 `N（维护）`（全角括号、无空格），说明以批次号开头并以
+# `；语义不变` 收尾；维护行不参与状态 / 修订号推断。
+MAINT_MARK_RE = re.compile(r"^(\d+)（维护）$")
+MAINT_MARK_HINT_RE = re.compile(r"维护")
+MAINT_DESC_RE = re.compile(
+    r"^MNT-(\d{4}-\d{2}-\d{2})-(\d{2})\s+"
+    r"(命名维护|文字维护|引用维护|结构维护)：(.+?)；语义不变$")
+OLD_NAME_RE = re.compile(r"^.+（至 \d{4}-\d{2}-\d{2}）$")
+MAINT_SEGMENT = ("曾用名",)
 
 
 def is_legacy_rollback_action(desc: str) -> bool:
@@ -675,6 +689,9 @@ class TermInfo:
     zh: str = ""
     en: str = ""
     definition: str = ""
+    old_names: str = ""
+    old_name_line: int = 0
+    attr_names: Tuple[str, ...] = ()
 
 
 @dataclass
@@ -876,7 +893,7 @@ class DesignDocChecker:
         rows = self._changelog_rows(doc)
         if not rows:
             return "草案"
-        for _ver, desc in rows:
+        for _ver, desc, _date in rows:
             if FINALIZE_KW.search(desc):
                 return "草案"
         return "初稿"
@@ -1078,7 +1095,7 @@ class DesignDocChecker:
         r"^\s{0,3}(#{1,6})\s+(?:\d+(?:[.．]\d+)*[.、]?\s*)?"
         r"(术语和概念|术语与概念)(?:\s*[（(][^）)]*[）)])?\s*$")
     TERM_ATTR_RE = re.compile(
-        r"^\s*[-*+]\s*\*\*(中文名称|英文名称|英文标识符|定义来源)\*\*\s*[：:]\s*(.*)$")
+        r"^\s*[-*+]\s*\*\*(中文名称|英文名称|英文标识符|定义来源|曾用名)\*\*\s*[：:]\s*(.*)$")
     TERM_DEF_RE = re.compile(r"^\s*(?:[-*+]\s*)?\*\*定义\*\*\s*[：:]\s*(.*)$")
     TERM_COLUMNS = ("中文名称", "英文名称", "定义", "定义位置")
 
@@ -1090,11 +1107,16 @@ class DesignDocChecker:
                           heading: str) -> TermInfo:
         fields: Dict[str, str] = {}
         definition = ""
+        old_line = 0
+        attr_names: List[str] = []
         for j in range(start + 1, end):
             line = doc.lines[j]
             m = self.TERM_ATTR_RE.match(line)
             if m:
                 fields[m.group(1)] = norm(m.group(2))
+                attr_names.append(m.group(1))
+                if m.group(1) == "曾用名" and not old_line:
+                    old_line = j + 1
                 continue
             dm = self.TERM_DEF_RE.match(line)
             if dm and not definition:
@@ -1111,6 +1133,9 @@ class DesignDocChecker:
             zh=fields.get("中文名称", ""),
             en=fields.get("英文名称", ""),
             definition=definition,
+            old_names=fields.get("曾用名", ""),
+            old_name_line=old_line,
+            attr_names=tuple(attr_names),
         )
 
     def _term_sections(self, doc: DocInfo) -> List[Tuple[int, str, str, List[TermInfo]]]:
@@ -1244,6 +1269,22 @@ class DesignDocChecker:
                             self.add_issue("ERROR", "术语标题与名称不一致",
                                            f"{doc.path}:{term.line} 标题「{term.heading}」"
                                            f"应等于中文名称「{term.zh}」或英文名称「{term.en}」")
+                    if term.old_names and not self._is_placeholder(term.old_names):
+                        parts = [p.strip() for p in term.old_names.split("；") if p.strip()]
+                        if not parts or any(not OLD_NAME_RE.match(p) for p in parts):
+                            self.add_issue("WARNING", "曾用名格式错误",
+                                           f"{doc.path}:{term.old_name_line} 术语"
+                                           f"「{term.zh or term.heading}」的 `曾用名` "
+                                           f"'{term.old_names[:30]}' MUST 为 "
+                                           "`旧称（至 YYYY-MM-DD）`，多个旧称用 `；` 分隔"
+                                           "并按时间倒序")
+                    if "曾用名" in term.attr_names and "英文名称" in term.attr_names \
+                            and term.attr_names.index("曾用名") \
+                            < term.attr_names.index("英文名称"):
+                        self.add_issue("WARNING", "曾用名位置错误",
+                                       f"{doc.path}:{term.old_name_line} 术语"
+                                       f"「{term.zh or term.heading}」的 `曾用名` 排在 "
+                                       "`英文名称` 之前；术语块内 MUST 位于 `英文名称` 之后")
                     doc_terms.append(term)
             if doc_terms:
                 seen: Dict[Tuple[str, str], TermInfo] = {}
@@ -2026,8 +2067,8 @@ class DesignDocChecker:
                 start = i
         return start
 
-    def _changelog_rows(self, doc: DocInfo) -> List[Tuple[str, str]]:
-        """取变更记录表，返回 [(修订号, 变更说明)]，按文件中的顺序（应为倒序）。"""
+    def _changelog_rows(self, doc: DocInfo) -> List[Tuple[str, str, str]]:
+        """取变更记录表，返回 [(修订号, 变更说明, 日期)]，按文件中的顺序（应为倒序）。"""
         start = self._changelog_start(doc)
         if start is None:
             return []
@@ -2038,14 +2079,16 @@ class DesignDocChecker:
             if ver_col is None:
                 ver_col = col_index(header, "版本")
             desc_col = col_index(header, "变更说明", "说明", "内容")
+            date_col = col_index(header, "日期", "变更日期", "时间")
             if ver_col is None:
                 return []
-            out: List[Tuple[str, str]] = []
+            out: List[Tuple[str, str, str]] = []
             for _r, cells in rows:
                 ver = norm(cells[ver_col]) if ver_col < len(cells) else ""
                 desc = norm(cells[desc_col]) if desc_col is not None and desc_col < len(cells) else ""
+                date = norm(cells[date_col]) if date_col is not None and date_col < len(cells) else ""
                 if ver:
-                    out.append((ver, desc))
+                    out.append((ver, desc, date))
             return out
         return []
 
@@ -2542,9 +2585,22 @@ class DesignDocChecker:
                 )
         readme.write_text(text, encoding="utf-8")
 
+    @staticmethod
+    def _is_iso_date(text: str) -> bool:
+        try:
+            datetime.strptime(text, "%Y-%m-%d")
+            return True
+        except ValueError:
+            return False
+
     def check_version_flow(self) -> None:
         """修订号机制：起始 1、初稿期与定稿不变号、解冻才 +1、不得改小、
-        变更记录倒序。状态机已无回退动作，变更记录若声明回退则告警。"""
+        变更记录倒序。维护行 `N（维护）` 只占同号代际块，不参与状态 / 修订号推断。
+
+        房规见 `references/status-definitions.md` ·《变更流程与版本号》与
+        《维护性变更》：文档 `修订版本号` 与**最新语义行**比对；维护行归入其修订号
+        所在的代际块，位于同号语义行之上。
+        """
 
         def key(ver: str) -> Optional[int]:
             return int(ver) if ver.isdigit() else None
@@ -2553,58 +2609,118 @@ class DesignDocChecker:
             rows = self._changelog_rows(doc)
             if not rows:
                 continue
-            if any(VERSION_RE.match(v) for v, _d in rows):
+            if any(VERSION_RE.match(v) for v, _d, _t in rows):
                 self.add_issue("WARNING", "变更记录仍用语义化版本",
                                f"{doc.path}: 变更记录首列已改为整数 `修订版本号`；"
                                "按解冻顺位映射为 1, 2, 3…，MUST NOT 把 `v2.0` 写成 `2`")
-            versions = [key(v) for v, _d in rows]
-            if doc.version and doc.version.isdigit() and versions[0] is not None:
-                if int(doc.version) != versions[0]:
+
+            semantic: List[Tuple[int, int]] = []          # (行下标, 修订号)
+            maint: List[Tuple[int, int, str, str]] = []   # (行下标, 修订号, 日期列, 说明)
+            for idx, (ver, desc, date) in enumerate(rows):
+                m = MAINT_MARK_RE.match(ver)
+                if m:
+                    maint.append((idx, int(m.group(1)), date, desc))
+                    continue
+                if MAINT_MARK_HINT_RE.search(ver) and not VERSION_RE.match(ver) \
+                        and not ver.startswith("{"):
+                    self.add_issue("WARNING", "维护行标记格式错误",
+                                   f"{doc.path}: 变更记录首列 '{ver[:24]}'；维护行 MUST 写 "
+                                   "`{当前修订号}（维护）`（全角括号、括号前不留空格）")
+                    continue
+                k = key(ver)
+                if k is not None:
+                    semantic.append((idx, k))
+                elif ver and not ver.startswith("{") and not VERSION_RE.match(ver):
+                    self.add_issue("WARNING", "修订版本号格式错误",
+                                   f"{doc.path}: 变更记录修订号 '{ver}' MUST 是正整数")
+
+            if doc.version and doc.version.isdigit() and semantic:
+                latest = semantic[0][1]
+                if int(doc.version) != latest:
                     self.add_issue("WARNING", "文档修订号与变更记录不一致",
                                    f"{doc.path}: 元信息 `修订版本号` {doc.version} != "
-                                   f"变更记录最新行 {rows[0][0]}")
+                                   f"变更记录最新语义行 {latest}")
+
+            sem_values = {k for _i, k in semantic}
+            sem_first: Dict[int, int] = {}
+            for i, k in semantic:
+                sem_first.setdefault(k, i)
+
+            last_maint_date: Dict[int, str] = {}
+            for idx, num, date_cell, desc in maint:
+                if num not in sem_values:
+                    self.add_issue("WARNING", "维护行引用的修订号不存在",
+                                   f"{doc.path}: 维护行 `{rows[idx][0]}` 的修订号 {num} "
+                                   "未出现在本对象语义行；维护 MUST 沿用当前修订号，"
+                                   "MUST NOT 凭空造号")
+                elif idx > sem_first[num]:
+                    self.add_issue("WARNING", "维护行未置于同号语义行之上",
+                                   f"{doc.path}: 维护行 `{rows[idx][0]}` 排在修订号 {num} "
+                                   "的语义行之下；同一代际块内维护行 MUST 在语义行之上"
+                                   "（发生更晚）")
+                m = MAINT_DESC_RE.match(desc)
+                if not m:
+                    self.add_issue("WARNING", "维护行说明格式错误",
+                                   f"{doc.path}: '{desc[:32]}'；MUST 为 "
+                                   "`MNT-YYYY-MM-DD-NN {类型}：{说明}；语义不变`，"
+                                   "类型取 命名维护 / 文字维护 / 引用维护 / 结构维护")
+                    continue
+                batch_date = m.group(1)
+                if not self._is_iso_date(batch_date):
+                    self.add_issue("WARNING", "维护行说明格式错误",
+                                   f"{doc.path}: 批次号日期 '{batch_date}' 不是有效日期")
+                cell_date = DATE_IN_TEXT.search(date_cell or "")
+                if cell_date and cell_date.group(0) != batch_date:
+                    self.add_issue("WARNING", "维护行日期与批次号不一致",
+                                   f"{doc.path}: 日期列 {cell_date.group(0)} 与批次号 "
+                                   f"{batch_date} 不一致")
+                prev_date = last_maint_date.get(num)
+                if prev_date and batch_date > prev_date:
+                    self.add_issue("WARNING", "维护行未按日期倒序",
+                                   f"{doc.path}: 修订号 {num} 下维护行日期 {batch_date} "
+                                   f"晚于其上一行 {prev_date}；最新维护应置顶")
+                last_maint_date[num] = batch_date
 
             prev = None
-            for idx, ver in enumerate(versions):
-                if ver is None:
-                    cell = rows[idx][0]
-                    if cell and not cell.startswith("{") and not VERSION_RE.match(cell):
-                        self.add_issue("WARNING", "修订版本号格式错误",
-                                       f"{doc.path}: 变更记录修订号 '{cell}' MUST 是正整数")
+            for ver, _desc, _date in rows:
+                m = MAINT_MARK_RE.match(ver)
+                k = int(m.group(1)) if m else key(ver)
+                if k is None:
                     continue
-                if prev is not None and ver > prev:
+                if prev is not None and k > prev:
                     self.add_issue("WARNING", "变更记录未按修订号倒序",
-                                   f"{doc.path}: {rows[idx][0]} 晚于其上一行，最新记录应置顶")
-                prev = ver
+                                   f"{doc.path}: {ver} 晚于其上一行，最新记录应置顶")
+                prev = k
 
-            for idx in range(len(rows)):
-                ver, desc = rows[idx]
+            for _idx, desc, _date in rows:
                 if is_legacy_rollback_action(desc):
                     self.add_issue("WARNING", "变更记录声明回退",
                                    f"{doc.path}: '{desc[:28]}' 状态机已取消回退；放弃本轮须在"
                                    "草案期内改正文再定稿，或走 `草案→废弃`。修订号不得改回解冻前")
-                older = rows[idx + 1] if idx + 1 < len(rows) else None
-                if older is None:
-                    if INIT_KW.search(desc) and ver and ver.isdigit() and int(ver) != 1:
+
+            for pos, (idx, cur) in enumerate(semantic):
+                ver, desc, _date = rows[idx]
+                if pos + 1 >= len(semantic):
+                    if INIT_KW.search(desc) and cur != 1:
                         self.add_issue("INFO", "起始修订号非 1",
                                        f"{doc.path}: 历史起始修订号 {ver}（新建文档应从 1 + `初稿` 起）")
                     continue
-                cur_key, old_key = key(ver), key(older[0])
-                history_max = max((k for k in versions[idx + 1:] if k is not None), default=None)
-                if FINALIZE_KW.search(desc) and cur_key is not None and old_key is not None \
-                        and cur_key != old_key:
+                _older_idx, old = semantic[pos + 1]
+                older_ver = rows[_older_idx][0]
+                history_max = max((k for _i, k in semantic[pos + 1:]), default=None)
+                if FINALIZE_KW.search(desc) and cur != old:
                     self.add_issue("WARNING", "定稿时递增了修订号",
                                    f"{doc.path}: '{desc[:28]}' 定稿不应变号"
-                                   "（{old} -> {new}）".replace("{old}", older[0]).replace("{new}", ver))
-                if UNFREEZE_KW.search(desc) and cur_key is not None and old_key is not None:
-                    if cur_key == old_key:
+                                   "（{old} -> {new}）".replace("{old}", older_ver).replace("{new}", ver))
+                if UNFREEZE_KW.search(desc):
+                    if cur == old:
                         self.add_issue("WARNING", "解冻未递增修订号",
                                        f"{doc.path}: `正式→草案` 解冻是修订号唯一正规递增时机，"
-                                       f"应从 {older[0]} +1，当前仍为 {ver}")
-                    elif cur_key != old_key + 1:
+                                       f"应从 {older_ver} +1，当前仍为 {ver}")
+                    elif cur != old + 1:
                         self.add_issue("WARNING", "解冻修订号跳号",
-                                       f"{doc.path}: 解冻 MUST +1 且不得跳号（{older[0]} → {ver}）")
-                    elif history_max is not None and cur_key <= history_max:
+                                       f"{doc.path}: 解冻 MUST +1 且不得跳号（{older_ver} → {ver}）")
+                    elif history_max is not None and cur <= history_max:
                         self.add_issue("WARNING", "递增未基于历史最大修订号",
                                        f"{doc.path}: 解冻递增到 {ver}，但历史已出现过不低于它的修订号；"
                                        "递增基准 = 该对象当前修订号（单调、不得改小）")
@@ -2865,7 +2981,7 @@ class DesignDocChecker:
         return out
 
     def _check_attr_segments(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
-        """属性行组段位校验：治理段齐备且居首、发版谱系紧随其后、追溯段居末。
+        """属性行组段位校验：治理段齐备且居首，维护段 / 发版谱系段有则依次紧随，追溯段居末。
 
         房规单点承载于 `references/coding-system.md` ·《细项定义块形态》与
         《追溯类属性行命名》；本方法只执行校验。废弃登记字段的值形态一并在此判，
@@ -2875,6 +2991,7 @@ class DesignDocChecker:
         if not attrs:
             return                      # 整组缺失属「缺属性行」，不在本方法职责内
         self._check_gov_segment(doc, item, attrs)
+        self._check_maint_segment(doc, item, attrs)
         self._check_lineage_segment(doc, item, attrs)
         self._check_trace_segment(doc, item, attrs)
         self._check_dep_item(doc, item, attrs)
@@ -2900,7 +3017,7 @@ class DesignDocChecker:
                 "ERROR", "属性名未在定义集内",
                 f"{doc.path}:{lineno} `{item.code}` 定义块的属性行 `{name}` 未在"
                 "《属性行定义集（封闭）》登记；该类型码允许的自有属性为 "
-                f"{hint}（固定属性为治理段 / 发版谱系段 / 废弃登记段 / 追溯段）。"
+                f"{hint}（固定属性为治理段 / 维护段 / 发版谱系段 / 废弃登记段 / 追溯段）。"
                 "未登记的语义 MUST 改写进正文段（属性行组后空一行，形态自由），"
                 "MUST NOT 自造属性名")
 
@@ -2960,6 +3077,42 @@ class DesignDocChecker:
                                f"'{val[:24]}' {msg}")
         self._check_rev_invariants(doc, item, attrs, pos)
 
+    def _check_maint_segment(self, doc: DocInfo, item: ItemInfo,
+                             attrs: List[Tuple[str, str, int]]) -> None:
+        """维护段：`曾用名` 有则紧随治理段、位于谱系段与内容段之前。
+
+        维护段属记录型（MAY）：仅命名维护后出现，随维护追加、不解冻不加号；
+        房规见 `references/coding-system.md` ·《细项定义块形态》与
+        `references/status-definitions.md` ·《曾用名（记录型，MAY）》。
+        """
+        names = [n for n, _v, _l in attrs]
+        hits = [(i, n) for i, n in enumerate(names) if n in MAINT_SEGMENT]
+        if not hits:
+            return
+        if len(hits) > 1:
+            self.add_issue("ERROR", "维护段重复",
+                           f"{doc.path}:{attrs[hits[1][0]][2]} `{item.code}`: `曾用名` "
+                           "只写一行，多个旧称用 `；` 分隔（按时间倒序）")
+        gov_idxs = [i for i, n in enumerate(names) if n in GOV_SEGMENT]
+        start = (max(gov_idxs) + 1) if gov_idxs else 0
+        for k, (i, n) in enumerate(hits):
+            if i != start + k:
+                self.add_issue("ERROR", "维护段位置错乱",
+                               f"{doc.path}:{attrs[i][2]} `{item.code}`: `{n}` 排在第 "
+                               f"{i + 1} 行，MUST 紧随治理段（第 {start + 1} 行起）、"
+                               "位于发版谱系段与内容段之前")
+                break
+        for i, _n in hits:
+            val, lineno = attrs[i][1], attrs[i][2]
+            if not val or "{" in val or val.lower() in EMPTY_MARKS:
+                continue
+            parts = [p.strip() for p in val.split("；") if p.strip()]
+            if not parts or any(not OLD_NAME_RE.match(p) for p in parts):
+                self.add_issue("WARNING", "曾用名格式错误",
+                               f"{doc.path}:{lineno} `{item.code}`: `曾用名` 的值 "
+                               f"'{val[:30]}' MUST 为 `旧称（至 YYYY-MM-DD）`，"
+                               "多个旧称用 `；` 分隔并按时间倒序")
+
     def _lineage_present(self, val: str) -> bool:
         return bool(val) and "{" not in val and val.lower() not in EMPTY_MARKS
 
@@ -3007,6 +3160,11 @@ class DesignDocChecker:
         if hits:
             gov_idxs = [pos[n] for n in GOV_SEGMENT if n in pos]
             start = (max(gov_idxs) + 1) if gov_idxs else 0
+            # 维护段（`曾用名`）位于治理段与谱系段之间；仅当它按序紧随治理段时
+            # 才为谱系段让位，避免一处错位连带报两条 ERROR。
+            maint_hits = [i for i, n in enumerate(names) if n in MAINT_SEGMENT]
+            if maint_hits and all(i == start + k for k, i in enumerate(maint_hits)):
+                start += len(maint_hits)
             misplaced = False
             for k, (i, n) in enumerate(hits):
                 if i != start + k:
@@ -3769,7 +3927,8 @@ class DesignDocChecker:
         """锁定矩阵·标题：引用处标题 MUST 与定义位一致。
 
         `初稿` 期改标题 MUST 先扫描全部引用处并同步（`--refs CODE` 可反查）；
-        `正式` / `草案` 期标题锁定，不一致即意味着发生了未经废弃流程的标题漂移。
+        `正式` / `草案` / `废弃` 期标题锁定：非语义命名维护走维护性变更
+        （`N（维护）` 行 + `曾用名`），语义变更 MUST 先废弃再新建编码。
         """
         titles: Dict[str, Tuple[str, str]] = {}
         for doc in self.docs:
@@ -3797,7 +3956,9 @@ class DesignDocChecker:
                     self.add_issue("WARNING", "引用标题与定义标题不一致",
                                    f"{doc.path}:{lineno} 引用 {code} 写作「{raw_title}」，"
                                    f"定义位为「{expect}」（{site}）；`初稿` 期改标题 MUST 同步"
-                                   "全部引用处，`正式` / `草案` 期标题锁定不得修改")
+                                   "全部引用处；`正式` / `草案` / `废弃` 期标题锁定，"
+                                   "非语义命名维护 MUST 走维护性变更（`N（维护）` 行 + "
+                                   "`曾用名`），语义变更 MUST 先废弃再新建编码")
 
     def check_ref_freshness(self) -> None:
         """REF 时效字段齐备性与复查周期：超期未核验提示复核（WARNING，不阻断）。"""

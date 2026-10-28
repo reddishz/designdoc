@@ -40,6 +40,8 @@
 | 已退出正式集 | 基线有、当前已非正式 → 升版时进 `removed` |
 | revision 落后 | 两处都有，但活正式 `修订版本号` > 基线 `revision` → 补丁/升版时进 `changed` |
 
+标题差异（维护性改名）不计入漂移，见[维护性变更与基线快照](#维护性变更与基线快照)。
+
 无待建且三类漂移皆空 → 不必为发版打扰用户。
 
 ## 产品基线（MANDATORY）
@@ -111,6 +113,13 @@ items:
 | **MAJOR** | 见[询问规则](#何时询问) | **新建** `v(X+1).0.yaml` | README→`v(X+1).0`；`full_version`=`v(X+1).0.0` |
 
 工具：`check_docs.py --bump-product --patch|--minor|--major`（见脚本帮助）。
+
+### 维护性变更与基线快照
+
+- **不动基线**：非语义文字维护（改名、统一用语等）**MUST NOT** 改动 `baselines/vX.Y.yaml`。成员集合与 `revision` 均不变，`added` / `removed` / `changed` 均由 `code` 与 `revision` 计算，标题维护不会进入 `changed`。见 [status-definitions.md · 维护性变更](status-definitions.md#维护性变更第三维度mandatory)。
+- **标题是快照**：`items.title` 记录写基线当时的标题，允许暂时落后于现行标题；标题滞后**不构成**漂移，**MUST NOT** 为刷新标题单独发版或 PATCH。
+- **自然刷新**：下一次 PATCH / MINOR 重写 `items` 时按现行标题更新；历史基线文件仍为只读快照。
+- **实现门禁**：只比对 `code` 是否存在、`revision` 是否对齐，**不比对标题**。
 
 ## 升产品版本（MANDATORY）
 
