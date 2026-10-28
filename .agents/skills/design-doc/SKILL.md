@@ -11,7 +11,7 @@ description: >
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.0"
+  version: "10.1"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -60,7 +60,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 ## 运行时步骤
 
 1. 确认当前作用域存在设计树：单系统为 `ued/`，系统内为 `ued/{subsystem}/`；解析配置见 [runtime-config.md](references/workflows/runtime-config.md)。
-2. 若 `ued/README.md` 含**子系统注册表**，说明这是系统根而非单作用域：系统级用 [system-design-doc](../system-design-doc/SKILL.md)，本技能只对每个 `ued/{subsystem}/` 运行。
+2. 若 `ued/README.md` 含**子系统注册表**，说明这是系统根而非单作用域：系统级用 [system-design-doc](../system-design-doc/SKILL.md)，本技能只对每个 `ued/{subsystem}/` 运行。若含 `应用注册表` / `app_key` / `doc_mode`，说明是 9.x 旧多应用结构：停止并指向 system-design-doc 的迁移流程，**MUST NOT** 当单系统继续。
 3. 按下方**任务路由**加载对应 workflow（**MUST read**）；仅在流程分支需要时再打开所列 rule。
 4. 解冻、废弃、批量编码或动基线前：先短计划，人审停点见各 workflow 的 Checkpoint。
 5. 改完跑 `check_docs.py`；通过≠语义正确。子系统校验用 `--glossary ued/glossary.md`。

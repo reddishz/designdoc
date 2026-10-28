@@ -7,7 +7,7 @@ description: >
   子系统内部的分层设计、编码与产品基线由 design-doc 负责，本技能只做系统级编排。
 license: MIT
 metadata:
-  version: "1.0"
+  version: "1.1"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [system, subsystem, design, documentation, release, dependency]
@@ -44,7 +44,7 @@ compatibility: 需能访问 `ued/` 系统根；子系统内部校验需 design-d
 |------|------|------|
 | **系统** | `ued/README.md` | 子系统注册表、角色 / 边界 / 交互约束、系统发布清单；**无** `产品版本`，**无** `baselines/` |
 | **子系统** | `ued/{目录}/` | 完整的 design-doc 作用域：自有 README、计数器、索引、`产品版本` 与 `baselines/` |
-| **系统发布** | `ued/releases/sys-vX.Y.yaml` | 组合锁：钉住当时全部 `正式` 子系统与外部依赖的精确版本；不是设计基线 |
+| **系统发布** | `ued/releases/sys-vX.Y.yaml` | 组合锁：钉住本次纳入的子系统与外部依赖的精确版本；不是设计基线，也不要求覆盖全部 `正式` 成员 |
 | **共享库** | 普通子系统 | 与业务子系统同规则；可有零个或多个；**不设固定 `shared/`** |
 
 - 子系统之间通过**完整编码**引用，不共享同一个文档作用域。
@@ -121,6 +121,7 @@ python3 .agents/skills/system-design-doc/scripts/tests/run_fixtures.py
 - **单系统还是系统？** → 根 README 有子系统注册表才是系统；否则用 design-doc。
 - **共享库怎么建？** → 按普通子系统登记；需要几个建几个；不设固定 `shared/`。
 - **系统要不要产品版本？** → 不要；系统版本写在 `releases/sys-vX.Y.yaml`。
+- **系统发布必须包含全部正式子系统吗？** → 不必。发布是可选快照；纳入项须为 `正式` 且依赖闭合，未纳入的正式子系统只是不在该组合内。
 - **A v3.1 必须配 D v2.5 怎么表达？** → A 的基线写 `depends_on: [{subsystem: d, product_version: v2.5}]`；系统发布同时钉住两者。
 - **依赖变了怎么办？** → 立新子系统基线（MINOR/MAJOR），再发新系统版本；不能 PATCH。
 - **系统级文档放哪？** → 放到承担该职责的普通子系统，或写在根 README 摘要表；不新建特殊根作用域。

@@ -750,6 +750,20 @@ def run_single_scope_and_extension_cases():
               any(i["title"] == "术语表位置非法" for i in checker.issues))
 
     with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "ued"
+        root.mkdir()
+        (root / "README.md").write_text(
+            "# 旧结构\n\n| 字段 | 值 |\n|------|----|\n| doc_mode | multi_app |\n\n"
+            "## 应用注册表\n\n| app_key | 应用名称 | 目录 |\n"
+            "|---------|----------|------|\n| crm | CRM | crm/ |\n",
+            encoding="utf-8")
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        check("旧多应用结构被拒",
+              any(i["title"] == "旧多应用结构需迁移" for i in checker.issues))
+
+    with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         (root / "README.md").write_text(readme, encoding="utf-8")
         (root / "L2-001-sample.md").write_text(doc, encoding="utf-8")

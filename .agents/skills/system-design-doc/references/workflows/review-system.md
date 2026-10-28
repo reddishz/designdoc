@@ -2,6 +2,12 @@
 
 先跑检查器，再按本清单人审。检查器通过不代表角色划分、边界与接口语义正确。
 
+## 验证职责边界
+
+- **结构验证**：注册表、目录、状态、版本钉住、发布闭合、编码唯一性——由 `check_system.py` 自动完成。
+- **契约验证**：接口字段、类型、行为与兼容性——由子系统 `IF` / `ACT` 定义、评审与测试完成；checker 不判断语义。
+- **集成验证**：特定版本组合的实际运行结果——由 L6 / EVAL 与发布说明记录；checker 不代替。
+
 ```bash
 python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued
 python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-member-commands
@@ -45,13 +51,14 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-
 
 ## 系统发布
 
-- [ ] 发布清单包含当时全部 `正式` 子系统，且不含 `初稿`。
+- [ ] 发布清单每项在发布时均为 `正式`，且不含 `初稿`；不要求覆盖全部正式成员。
 - [ ] `product_version` 与 `full_version` 一致，后者在 `patch_log` 中。
 - [ ] `depends_on` 目标在清单中且版本一致。
-- [ ] `external_deps` 全覆盖且无冲突。
+- [ ] 清单内子系统的 `external_deps` 全覆盖且无冲突。
 - [ ] 文件名、`release` 字段、README 发布索引一致。
 - [ ] 历史发布清单未被修改。
 - [ ] MAJOR 接口变更的消费者均已适配并更新钉住。
+- [ ] 若声称已验证，发布说明指向覆盖本次组合的 EVAL / L6 证据。
 
 ## 编码与术语
 
@@ -67,5 +74,5 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-
 - 共享库被建成特殊 `shared/` 作用域。
 - 子系统依赖只写 README 口头说明，基线没有 `depends_on`。
 - 用 PATCH 改了依赖钉住。
-- 系统发布漏掉某个 `正式` 子系统，或版本与依赖不一致。
+- 系统发布纳入 `初稿` 子系统，或发布项版本与依赖钉住不一致。
 - 发布后直接改清单。

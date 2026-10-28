@@ -2115,6 +2115,21 @@ class DesignDocChecker:
             return max(dates) if dates else ""
         return ""
 
+    def _is_legacy_multi_app(self) -> bool:
+        """9.x 多应用结构（应用注册表 / `app_key` / `doc_mode`）需先迁移。"""
+        readme = self.ued_path / "README.md"
+        if not readme.is_file():
+            return False
+        try:
+            text = readme.read_text(encoding="utf-8")
+        except OSError:
+            return False
+        for _idx, header, _rows in iter_tables(text.splitlines()):
+            if "app_key" in [norm(h) for h in header]:
+                return True
+        return bool(re.search(r"^#{1,6}\s*应用注册表", text, re.M)
+                    or re.search(r"^\s*\|\s*doc_mode\s*\|", text, re.M))
+
     def _is_system_root(self) -> bool:
         """`ued/README.md` 含子系统注册表 → 系统根，应交给 system-design-doc。"""
         readme = self.ued_path / "README.md"
@@ -4265,6 +4280,14 @@ class DesignDocChecker:
                 f"{self.ued_path}: `README.md` 含子系统注册表；本检查器一次只校验"
                 "单一作用域。请对每个 `ued/{subsystem}` 分别运行本脚本，"
                 "系统级改用 system-design-doc/scripts/check_system.py")
+            return self.issues
+
+        if self._is_legacy_multi_app():
+            self.add_issue(
+                "ERROR", "旧多应用结构需迁移",
+                f"{self.ued_path}: 检测到 `应用注册表` / `app_key` / `doc_mode`；"
+                "10.0 起只支持单一作用域。请按 system-design-doc 的 "
+                "migration-from-design-doc.md 迁移为系统 + 子系统结构后再校验")
             return self.issues
 
         print("🔍 开始扫描文档...")

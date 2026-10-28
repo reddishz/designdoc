@@ -46,7 +46,7 @@ ued/
 6. **角色文档**：为每个子系统补 `CMP` 角色 / 边界 / 交互；在注册表 `角色文档` 列引用。没有合适 L3 文档的，先建。
 7. **依赖钉住**：在各子系统当前基线补 `depends_on` / `external_deps`；目标版本按现有基线填写。基线已是 `正式` 的，这一动作属于系统协作字段补全，不改 `items`；若需改依赖，立新基线。
 8. **术语表**：保留 `ued/glossary.md`；删除子系统内的 `glossary.md`，把条目合并到全局表。检查 `定义位置` 是否仍指向正确文档编码。
-9. **系统发布**：为当前组合创建首个 `releases/sys-vX.Y.yaml`，钉住全部 `正式` 子系统与外部依赖。
+9. **系统发布**：为当前组合创建首个 `releases/sys-vX.Y.yaml`，钉住纳入本次组合的子系统与外部依赖；可一次纳入全部正式成员，但不强制。
 10. **校验**：
     ```bash
     python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued

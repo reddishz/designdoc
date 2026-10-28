@@ -412,6 +412,21 @@ def main() -> int:
     c = case("release-closure", files)
     check("发布依赖未闭合报错", has(c, "发布依赖未闭合"))
 
+    files = valid_files(include_shared=True)
+    files["ued/releases/sys-v1.0.yaml"] = release_text(
+        [{"subsystem": "crm", "product_version": "v1.0", "full_version": "v1.0.0"},
+         {"subsystem": "oms", "product_version": "v2.5", "full_version": "v2.5.0"}],
+        [{"name": "identity-provider", "product_version": "v4.0"}])
+    c = case("release-subset", files)
+    check("发布可不覆盖全部正式子系统", no_errors(c))
+
+    files = valid_files()
+    files["ued/README.md"] = files["ued/README.md"].replace(
+        "| oms | 订单中心 | oms/ | OMS | OMS-CMP-001 | 正式 |",
+        "| oms | 订单中心 | oms/ | OMS | OMS-CMP-001 | 初稿 |")
+    c = case("release-draft-member", files)
+    check("发布包含初稿子系统报错", has(c, "发布包含初稿子系统"))
+
     files = valid_files()
     files["ued/oms/baselines/v2.5.yaml"] = baseline(
         "v2.5", "v2.5.0", deps=[],
