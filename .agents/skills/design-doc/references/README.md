@@ -25,7 +25,7 @@
 | [type-profiles.md](type-profiles.md) | IF/ACT/PLN、UC/FR/FLW、ADR/DEC、EVAL 分界 |
 | [eval-report-profile.md](eval-report-profile.md) | EVAL 正文自包含口径 |
 | [layer-system.md](layer-system.md) | L0–L6、按需启用、目录命名 |
-| [status-definitions.md](status-definitions.md) | 四态、门控、修订号、维护性变更、存量迁移 |
+| [status-definitions.md](status-definitions.md) | 四态、门控、修订号、维护性变更与实质变更、存量迁移 |
 | [product-version.md](product-version.md) | 产品版本、基线、PATCH/MINOR/MAJOR |
 | [item-deprecation.md](item-deprecation.md) | 细项废弃 |
 | [doc-deprecation.md](doc-deprecation.md) | 整份文档废弃与归档 |
