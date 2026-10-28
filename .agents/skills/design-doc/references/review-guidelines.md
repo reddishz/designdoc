@@ -27,7 +27,7 @@
 - [ ] 修订号字段检查：**L0-L6 / ADR / EVAL / REF 均 MUST 有 `修订版本号`**（正整数，新建为 `1`）；**MUST NOT** 再写元信息 `版本 | vX.Y`（`vX.Y` 留给 README `产品版本`，见 [product-version.md](product-version.md)）
 - [ ] **修订号递增时机**：仅在对象 `正式→草案` 解冻或 `废弃→草案` 受控复活时 `+1`；新建 `1` + `初稿`、初稿期、定稿、作废均不变号；文档与细项 `修订版本号` **均不得改小**（判定表见 [status-definitions.md · 变更流程与版本号](status-definitions.md#变更流程与版本号统一mandatory)）
 - [ ] **流转伴随字段不被单独改动**：文档 / 细项 `修订版本号`、文档与细项 `创建日期`、细项 `最后修订日期` 由状态转换写入（创建时取初值；号与最后修订日期此后只在 `正式→草案` 解冻或 `废弃→草案` 复活写），**MUST NOT** 作为独立修改请求单独调整；细项号与 `最后修订日期` **MUST** 成对；同轮文档开锁只 `+1` 一次（见 [status-definitions.md · 流转伴随字段](status-definitions.md#流转伴随字段只随指定转换写入)）
-- [ ] **产品版本 / 产品基线**：README `产品版本` 为两段 `vX.Y`；`baselines/{产品版本}.yaml` 有 `full_version`（tip SemVer）与 `patch_log`；历史文件只读。首份基线可用 PATCH 增删成员；其他基线仅可 PATCH 同步 revision，成员进出须立新基线。实现门禁：编码在当前 `items` 且 revision 已对齐
+- [ ] **产品版本 / 产品基线**：README `产品版本` 为两段 `vX.Y`；`baselines/{产品版本}.yaml` 有 `full_version`（tip SemVer）与 `patch_log`；历史文件只读。首份基线可用 PATCH 增删成员（只改 `items`，`added`/`removed`/`changed` 恒空）；其他基线仅可 PATCH 同步 revision，成员进出须立新基线。实现门禁：编码在当前 `items` 且 revision 已对齐
 - [ ] 状态字段检查：`状态` / `细项状态` 为必备字段；缺失时按 `变更记录` 判定（有定稿条目 → `草案`；从未定稿 → `初稿`；无法判定 → `草案`）并纳入定稿确认，不作为阻断性错误
 - [ ] 作者或录入人字段非空
 - [ ] 日期字段完整：L0-L6 / ADR / EVAL / REF 的文档元信息统一用 `创建日期` 与 `最后更新`，作者字段统一为 `作者`（ADR/EVAL **MUST NOT** 用单一的 `日期` 字段同时承担两个语义）；EVAL 另需 `评估日期`；REF 另需**最近核验日期**；`创建日期` 属流转伴随字段，创建时写入一次后 **MUST NOT** 修改；本轮改过的文档 `最后更新` **MUST** 已刷为当天（记录型字段，任何一次编辑都动，即使不解冻、不加修订号）。作用域 `README.md` 的 `author` / `last_updated` 是配置字段，可保留英文键

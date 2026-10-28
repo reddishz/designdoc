@@ -36,9 +36,9 @@
 | 类 | 含义 |
 |----|------|
 | 尚无基线文件 | 无 `baselines/{当前产品版本}.yaml`（及尚无任何 `baselines/v*.yaml`）→「待建首份基线」 |
-| 未入基线 | 正式细项编码不在当前基线 `items` 中 |
-| 已退出正式集 | 基线有、当前已非正式 → PATCH/MINOR 时进 `removed` |
-| revision 落后 | 两处都有，但活正式 `修订版本号` > 基线 `revision` → PATCH/MINOR 时进 `changed` |
+| 未入基线 | 正式细项编码不在当前基线 `items` 中 → 首份 PATCH 纳入；非首份须立新基线 |
+| 已退出正式集 | 基线有、当前已非正式 → 首份 PATCH 从 `items` 移除；非首份立新基线时进 `removed` |
+| revision 落后 | 两处都有，但活正式 `修订版本号` > 基线 `revision` → 首份 PATCH 直接同步 `items.revision`（增量字段仍空）；非首份 PATCH 计入 `changed` |
 
 标题差异（维护性名称调整）不计入漂移，见[维护性变更与基线快照](#维护性变更与基线快照)。
 
@@ -102,9 +102,9 @@ patch_log:
   - full_version: v5.26.2
     date: 2026-10-13
     note: "纠错说明"
-added:   [CODE, ...]            # 相对 prev 文件 items
+added:   [CODE, ...]            # 相对 prev 冻结基线的成员差异；首份恒空
 removed: [CODE, ...]
-changed: [CODE, ...]
+changed: [CODE, ...]            # 相对 prev 的 revision 增补；首份恒空
 items:
   - code: FR-001
     type: FR
@@ -119,8 +119,8 @@ items:
 | `created` / `updated` | MUST；新建时相同；PATCH 只改 `updated` |
 | `prev` | 首版 `null`；否则 MUST 为完整 SemVer，且 `baselines/{其两段}.yaml` 存在；**MUST NOT** 按 patch 建文件名 |
 | `patch_log` | MUST；每升一次 tip（含 `.0`）追加一条；**MUST NOT** 改写旧条；只记版本/日期/说明，不保存当次 `items` |
-| `added`/`removed`/`changed` | 相对 **`prev` 指向的冻结基线** 的 `items` 重算（累计值，不是相对上一 PATCH） |
-| `items` | 首份基线的 PATCH 可增删成员；其他基线创建后成员不变；按 `code` 字典序 |
+| `added`/`removed`/`changed` | 只表达**基线版本之间**的成员与 revision 差异；相对 `prev` 指向的冻结基线重算（累计值，不是相对上一 PATCH），首份基线无前驱、三块恒空；**MUST NOT** 记录开发期操作历史 |
+| `items` | 首份基线的 PATCH 可增删成员（只改 `items`，不写增量字段）；其他基线创建后成员不变；按 `code` 字典序 |
 
 存量缺 `full_version` 时检查器 WARNING，并按 `vX.Y.0` 理解；`prev` 若仍为两段 `vX.Y`，按该文件解析，WARNING 建议改为当时 tip。
 
@@ -128,7 +128,7 @@ items:
 
 | 动作 | 何时 | 文件 | 版本号 |
 |------|------|------|--------|
-| **PATCH** | 首份基线：revision 同步、成员增删、澄清纠错；其他基线：仅 revision 同步与澄清纠错；均不冻结基线 | **更新当前** `vX.Y.yaml` | `full_version` 的 Z+1；README 两段号不变 |
+| **PATCH** | 首份基线：revision 同步、成员增删、澄清纠错（成员增删只改 `items`，增量字段恒空）；其他基线：仅 revision 同步与澄清纠错；均不冻结基线 | **更新当前** `vX.Y.yaml` | `full_version` 的 Z+1；README 两段号不变 |
 | **MINOR** | 首份之后成员集合需变化（**MUST**）；或需要冻结独立参考点（对外发版、里程碑、评估基线等） | **新建** `vX.(Y+1).yaml`；旧文件冻结 | README→新两段；`full_version`=`vX.(Y+1).0`；`prev`=旧 tip |
 | **MAJOR** | 见[询问规则](#何时询问) | **新建** `v(X+1).0.yaml` | README→`v(X+1).0`；`full_version`=`v(X+1).0.0` |
 
@@ -152,7 +152,7 @@ items:
 定稿与提交提示阶段（Checkpoint 5）只要用户未选「暂不提交」，**MUST** 呈现[漂移](#相对当前基线的漂移)短表。然后：
 
 1. **询问首份基线（MUST，尚无 `baselines/v*.yaml`）**：默认建议沿用 README 当前 `vX.Y` 生成文件（`full_version`=`vX.Y.0`），**MUST NOT** 因尚无文件就默认劝升次版本。
-2. **首份基线有漂移 → 建议 PATCH（MUST 问）**：默认把首份工作集更新到最新正式集（revision 同步、成员增删；`full_version` Z+1），不改 README 两段号。用户否决 → 不改基线，变动仍不可实现。
+2. **首份基线有漂移 → 建议 PATCH（MUST 问）**：默认把首份工作集更新到最新正式集（revision 同步、成员增删；`full_version` Z+1），不改 README 两段号。PATCH 是同步动作，不是成员变更审批；成员增删只改 `items`，不写 `added`/`removed`。用户否决 → 不改基线，变动仍不可实现。
 3. **非首份基线的漂移**：
    - 仅 revision 落后 → 建议 PATCH（MUST 问）。
    - 有未入基线或已退出正式集 → **MUST** 建议 MINOR 立新基线（成员集合不能原地改）；用户否决 → 新编码不可实现、退出仍未反映。
@@ -170,21 +170,21 @@ items:
 
 1. 打开当前 `baselines/{README 产品版本}.yaml`。
 2. 判首份：`prev` 为空即首份。首份允许成员增删；非首份若扫描出相对当前 `items` 的成员进出，**MUST** 停下改走 MINOR/MAJOR。
-3. `added` / `removed` / `changed` 按相对 `prev` 冻结基线重算（累计值，不是相对上一次 PATCH）。
+3. 增量字段：首份基线无前驱，`added` / `removed` / `changed` **MUST** 均为空；其他基线按相对 `prev` 冻结基线重算（累计值，不是相对上一次 PATCH）。
 4. `full_version` Z+1；刷 `updated`；追加 `patch_log`；重写 `items` 与增量三块。
 5. **MUST NOT** 改 README `产品版本`；MAY 在发版记录追加一行（完整版本号写入说明）。
-6. **MUST NOT** 改谱系缓存：PATCH 只同步 revision；首份的成员进出在其首次冻结时回写，其他基线的成员变化在立新基线时回写。
+6. **MUST NOT** 改谱系缓存：PATCH 只同步 revision；首份的成员在其首次冻结时按冻结 `items` 回写，其他基线的成员变化在立新基线时按 `added` / `removed` 回写。
 
 **MINOR / MAJOR（立新基线）**
 
 1. 定号：MINOR `vX.(Y+1)`，MAJOR `v(X+1).0`；首份 MAY 沿用当前两段号。
 2. 新建 `baselines/{新 vX.Y}.yaml`（已存在则停下）；`full_version`=`{新}.0`；`prev`=当前文件 tip；`created`=`updated`=当天。当前文件自此成为历史基线，**MUST NOT** 再改。
-3. 回写谱系：首份基线工作期的累计 `added` / `removed` 归属**首份两段**；本次相对 prev 的漂移归属**新两段**；`退出版本` 只写给当前已 `废弃` 的条目。
+3. 回写谱系：冻结首份时，其 `items` 中的成员归属**首份两段**（开发期增删不另记）；本次相对 prev 的 `added` / `removed` 归属**新两段**；`退出版本` 只写给当前已 `废弃` 的条目。
 4. 更新 README `产品版本` 与发版记录。**MUST NOT** 写 git / svn / 构建号 / 包路径。
 
 ## 据文档实现与产品基线
 
-改功能/修缺陷须先走 [before-code-change.md](workflows/before-code-change.md)。实现门禁见 [implement-from-design.md](workflows/implement-from-design.md)：目标细项 MUST `正式` 且出现在**当前** `baselines/{产品版本}.yaml` 的 `items` 中，且 revision 对齐（落后则先 PATCH）。新编码未入基线 → **MUST NOT** 实现（须先 PATCH 纳入）。
+改功能/修缺陷须先走 [before-code-change.md](workflows/before-code-change.md)。实现门禁见 [implement-from-design.md](workflows/implement-from-design.md)：目标细项 MUST `正式` 且出现在**当前** `baselines/{产品版本}.yaml` 的 `items` 中，且 revision 对齐（落后则先 PATCH）。新编码未入基线 → **MUST NOT** 实现：首份基线先 PATCH 同步当前工作集（不是成员变更审批）；已有前驱的基线 MUST 立新基线后再实现。
 
 **运行中版本展示（SHOULD）**：发运或改行为时，SHOULD 使 `--version` / 启动日志 / 关于页等可见版本与当前基线 `full_version`（`vX.Y.Z`）一致；与 git SHA 正交。设计文档 **MUST NOT** 登记构建号或包路径。
 
@@ -193,14 +193,15 @@ items:
 | 项 | 规则 |
 |----|------|
 | 真源 | `baselines/*.yaml` |
-| 写入者 | 仅 MINOR/MAJOR 立新基线时回写（首份工作期累计 + 本次漂移）；PATCH 不改 |
+| 写入者 | 仅 MINOR/MAJOR 立新基线时回写（首份按冻结 `items` 归属 + 本次 `added` / `removed`）；PATCH 不改 |
 | 取值 | 两段 `vX.Y` |
 | 禁止 | 定稿/解冻/日常编辑手填；`初稿` 不得带谱系 |
 
-首份基线工作期的成员进出不落谱系，但记入首份文件的累计 `added` / `removed`，在其首次冻结时按首份版本回写；首份之后的成员变化都发生在立新基线时，直接按新版本回写，不重复归属旧版本。PATCH 只同步 revision，不写谱系。
+首份基线的成员增删只改 `items`，`added` / `removed` 恒空，不承担开发期变更日志；首次冻结时按冻结 `items` 把成员归属首份版本。首份之后的成员变化只发生在立新基线时，按 `added` / `removed` 归属新版本，不重复归属旧版本。PATCH 只同步 revision，不写谱系。
 
 ## 存量迁移
 
 1. 补 README `产品版本`（若缺）。
 2. 首份或存量文件补 `full_version`（缺则视为 `vX.Y.0`）、`created`/`updated`、`patch_log`；`prev` 两段式可逐步改为 tip SemVer。
-3. **MUST NOT** 把历史 `vX.Y.yaml` 拆成多个 `vX.Y.Z.yaml`。
+3. 首份基线若带非空 `added` / `removed` / `changed`（旧口径把开发期成员记入增量），置空；`items` 不变。
+4. **MUST NOT** 把历史 `vX.Y.yaml` 拆成多个 `vX.Y.Z.yaml`。

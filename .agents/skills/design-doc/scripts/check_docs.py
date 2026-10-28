@@ -11,8 +11,8 @@ DesignDoc 文档检查工具
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
 - 修订号递增时机（仅 `正式→草案` 解冻或 `废弃→草案` 复活时 +1）、修订号不得改小、变更记录倒序
 - 维护性变更：`变更记录` 中的 `N（维护）` 行（批次号 / 类型 / `；语义不变`）、与同号语义行的位置、文档修订号只与最新语义行比对
-- 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项且可重算 added/removed/changed
-- 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；立新基线时按 added/removed 回写；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
+- 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项；增量字段相对冻结前驱复算，首份恒空
+- 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；立新基线时按成员归属回写（首份取 `items`，其余取 `added` / `removed`）；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
@@ -2304,7 +2304,8 @@ class DesignDocChecker:
 
         prev_ver = data.get("prev")
         if prev_ver in (None, "null", ""):
-            expect_added = codes
+            # 首份基线无前驱：增量字段恒空，不承担开发期变更日志。
+            expect_added: List[str] = []
             expect_removed: List[str] = []
             expect_changed: List[str] = []
         else:
@@ -2333,13 +2334,18 @@ class DesignDocChecker:
             expect_added, expect_removed, expect_changed = compute_delta(
                 prev_items, items)
 
+        first_baseline = prev_ver in (None, "null", "")
         for key, expect in (("added", expect_added),
                             ("removed", expect_removed),
                             ("changed", expect_changed)):
             got = [str(x) for x in (data.get(key) or [])]
             if got != list(expect):
-                self.add_issue("ERROR", "产品基线增量不一致",
-                               f"{rel}: `{key}` 与相对 prev 的重算不一致")
+                if first_baseline:
+                    self.add_issue("ERROR", "产品基线增量不一致",
+                                   f"{rel}: 首份基线无前驱，`{key}` MUST 为空")
+                else:
+                    self.add_issue("ERROR", "产品基线增量不一致",
+                                   f"{rel}: `{key}` 与相对 prev 的重算不一致")
 
     def bump_product_version(
         self,
@@ -2510,17 +2516,23 @@ class DesignDocChecker:
         )
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_baseline(snap), encoding="utf-8")
-        # 冻结时回写谱系：首份基线（通常 v1.0）工作期内的成员进出按首份版本回写；
-        # 冻结瞬间的漂移按新版本回写。非首份基线的成员集合创建即固定，其累计
-        # added/removed 已在创建时盖章，不能按旧版本重复归属。
+        # 谱系按成员归属回写，不依赖开发期操作记录：首份基线创建时其 items 即
+        # 首份成员；冻结首份时取其 items 归属首份两段；本次相对 prev 的
+        # added/removed 归属新两段。非首份基线的成员集合创建即固定，已在创建时
+        # 盖章，不能按旧版本重复归属。
         old_pv = str((prev_data or {}).get("product_version") or "").strip()
         old_initial = prev_data is not None and (
             prev_data.get("prev") in (None, "null", ""))
         lineage_added = []
         lineage_removed = []
-        if old_initial and old_pv:
-            lineage_added += [(c, old_pv) for c in prev_data.get("added") or []]
-            lineage_removed += [(c, old_pv) for c in prev_data.get("removed") or []]
+        if prev_data is None:
+            lineage_added += [(str(it.get("code") or "").strip(), new_pv)
+                              for it in snap.get("items") or []
+                              if str(it.get("code") or "").strip()]
+        elif old_initial and old_pv:
+            lineage_added += [(str(it.get("code") or "").strip(), old_pv)
+                              for it in prev_data.get("items") or []
+                              if str(it.get("code") or "").strip()]
         lineage_added += [(c, new_pv) for c in snap.get("added") or []]
         lineage_removed += [(c, new_pv) for c in snap.get("removed") or []]
         stamp_lineage_cache(
@@ -3651,7 +3663,7 @@ class DesignDocChecker:
                     if (doc.meta.get("退出版本") or "").strip():
                         self.add_issue("WARNING", "复活后仍带退出版本",
                                        f"{doc.path}: 复活后 MUST 清空 `退出版本`，"
-                                       "待下次升版按 `added` 回写")
+                                       "待下次立新基线时按成员归属回写")
 
             # ---- 细项级废弃 ----
             for i, line in enumerate(doc.lines):

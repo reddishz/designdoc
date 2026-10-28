@@ -258,8 +258,8 @@ def build_snapshot(
     prev_items = list((prev_data or {}).get("items") or [])
     added, removed, changed = compute_delta(prev_items, curr_items)
     if not prev_data:
-        added = [it["code"] for it in curr_items]
-        removed, changed = [], []
+        # 首份基线没有前驱：增量字段表示版本间差异，不记开发期操作历史。
+        added, removed, changed = [], [], []
         tip_prev = None
     else:
         tip_prev = prev_tip
