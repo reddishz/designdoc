@@ -344,14 +344,27 @@ def set_item_attr(lines: List[str], item_line: int, field: str, value: str) -> b
 
 def stamp_lineage_cache(
     docs,
-    added: List[str],
-    removed: List[str],
-    version: str,
+    added,
+    removed,
+    version: str = "",
 ) -> List[Path]:
-    """立新基线时回写 `引入版本` / `退出版本`（值为两段 `vX.Y`）。"""
+    """立新基线时回写 `引入版本` / `退出版本`（值为两段 `vX.Y`）。
+
+    条目可写编码或 `(编码, 版本)`；冻结时用后者把工作期内的成员进出
+    归属到其实际所在的产品版本。`退出版本` 只写给当前已 `废弃` 的条目。
+    """
     from collections import defaultdict
 
-    code_loc: Dict[str, Tuple[Path, int]] = {}
+    def _pairs(entries) -> List[Tuple[str, str]]:
+        out: List[Tuple[str, str]] = []
+        for entry in entries or []:
+            if isinstance(entry, (tuple, list)) and len(entry) == 2:
+                out.append((str(entry[0]), str(entry[1])))
+            else:
+                out.append((str(entry), version))
+        return out
+
+    code_loc: Dict[str, Tuple[Path, int, str]] = {}
     for doc in docs:
         path = Path(getattr(doc, "path", "") or "")
         if not path:
@@ -361,18 +374,21 @@ def stamp_lineage_cache(
                 continue
             code = getattr(item, "code", "") or ""
             line = getattr(item, "line", 0) or 0
+            status = (getattr(item, "item_status", "")
+                      or getattr(item, "def_status", "")).strip()
             if code and line:
-                code_loc[code] = (path, line)
+                code_loc[code] = (path, line, status)
 
     jobs: Dict[Path, List[Tuple[int, str, str]]] = defaultdict(list)
-    for code in added or []:
-        if code in code_loc:
-            path, line = code_loc[code]
-            jobs[path].append((line, "引入版本", version))
-    for code in removed or []:
-        if code in code_loc:
-            path, line = code_loc[code]
-            jobs[path].append((line, "退出版本", version))
+    for code, ver in _pairs(added):
+        if code in code_loc and ver:
+            path, line, _ = code_loc[code]
+            jobs[path].append((line, "引入版本", ver))
+    for code, ver in _pairs(removed):
+        if code in code_loc and ver:
+            path, line, status = code_loc[code]
+            if status == "废弃":
+                jobs[path].append((line, "退出版本", ver))
 
     changed: List[Path] = []
     for path, ops in jobs.items():

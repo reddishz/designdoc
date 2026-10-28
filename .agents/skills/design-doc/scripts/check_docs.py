@@ -12,7 +12,7 @@ DesignDoc 文档检查工具
 - 修订号递增时机（仅 `正式→草案` 解冻或 `废弃→草案` 复活时 +1）、修订号不得改小、变更记录倒序
 - 维护性变更：`变更记录` 中的 `N（维护）` 行（批次号 / 类型 / `；语义不变`）、与同号语义行的位置、文档修订号只与最新语义行比对
 - 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项且可重算 added/removed/changed
-- 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；升版时对 added/removed 回写；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
+- 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；立新基线时按 added/removed 回写；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
 - REF 时效字段齐备性与复查周期（超期提示复核）
 - PLN 闭环：`落实情况` 与 `落实记录` 一致、已落实者被目标细项 `来源` 回指；未落实者的 `建议复审日期`（到期提示）
@@ -2424,16 +2424,24 @@ class DesignDocChecker:
         out = find_baseline_dir(scope) / f"{cur_pv}.yaml"
         if not out.is_file():
             raise RuntimeError(f"PATCH 找不到当前基线 {out}；请先立首份或 MINOR")
+        latest = latest_baseline(scope)
+        if latest is not None and latest.name != out.name:
+            raise RuntimeError(
+                f"{out.name} 已有后继 {latest.name}，历史基线只读；"
+                "请先把 README `产品版本` 对齐到后继")
         cur_data = load_baseline(out)
         scoped = self._scoped_docs(scope)
         curr_items = collect_formal_items(scoped or self.docs)
-        old_items = list(cur_data.get("items") or [])
-        added_vs_cur, removed_vs_cur, _ = compute_delta(old_items, curr_items)
-        if added_vs_cur or removed_vs_cur:
-            raise RuntimeError(
-                "相对当前基线存在成员 added/removed，不能 PATCH；请改用 --minor/--major："
-                f" added={added_vs_cur[:8]} removed={removed_vs_cur[:8]}"
-            )
+        # 仅有首份基线（通常是 v1.0）在开发期允许成员增删；其余基线的成员集合
+        # 在创建时确定，成员进出 MUST 立新基线。
+        if cur_data.get("prev") not in (None, "null", ""):
+            added_vs_cur, removed_vs_cur, _ = compute_delta(
+                list(cur_data.get("items") or []), curr_items)
+            if added_vs_cur or removed_vs_cur:
+                raise RuntimeError(
+                    "当前基线已有前驱，成员进出不能 PATCH；请改用 --minor/--major："
+                    f" added={added_vs_cur[:8]} removed={removed_vs_cur[:8]}"
+                )
         prev_tip = cur_data.get("prev")
         prev_path = resolve_prev_path(out.parent, prev_tip) if prev_tip not in (
             None, "null", "") else None
@@ -2502,11 +2510,23 @@ class DesignDocChecker:
         )
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_baseline(snap), encoding="utf-8")
+        # 冻结时回写谱系：首份基线（通常 v1.0）工作期内的成员进出按首份版本回写；
+        # 冻结瞬间的漂移按新版本回写。非首份基线的成员集合创建即固定，其累计
+        # added/removed 已在创建时盖章，不能按旧版本重复归属。
+        old_pv = str((prev_data or {}).get("product_version") or "").strip()
+        old_initial = prev_data is not None and (
+            prev_data.get("prev") in (None, "null", ""))
+        lineage_added = []
+        lineage_removed = []
+        if old_initial and old_pv:
+            lineage_added += [(c, old_pv) for c in prev_data.get("added") or []]
+            lineage_removed += [(c, old_pv) for c in prev_data.get("removed") or []]
+        lineage_added += [(c, new_pv) for c in snap.get("added") or []]
+        lineage_removed += [(c, new_pv) for c in snap.get("removed") or []]
         stamp_lineage_cache(
             scoped or self.docs,
-            snap.get("added") or [],
-            snap.get("removed") or [],
-            new_pv,
+            lineage_added,
+            lineage_removed,
         )
         self._append_readme_release_row(
             readme_path, new_pv, note or "升产品版本", out,
@@ -4507,9 +4527,9 @@ def main() -> int:
     parser.add_argument("--segment", metavar="NAME",
                         help="配合 --instantiate：只输出指定段名的那一段")
     parser.add_argument("--bump-product", action="store_true",
-                        help="更新/新建产品基线：默认 MINOR 新建 vX.Y；见 --patch/--major")
+                        help="更新/新建产品基线：默认 MINOR 新建 vX.Y 并冻结当前文件；见 --patch/--major")
     parser.add_argument("--patch", action="store_true",
-                        help="配合 --bump-product：PATCH 更新当前基线 tip（full_version Z+1，不改 README 两段号）")
+                        help="配合 --bump-product：PATCH 原地更新当前基线（tip Z+1）；仅首份基线可增删成员，其余仅 revision 同步")
     parser.add_argument("--minor", action="store_true",
                         help="配合 --bump-product：显式 MINOR（与默认相同；与 --patch/--major 互斥）")
     parser.add_argument("--major", action="store_true",

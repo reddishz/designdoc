@@ -132,7 +132,7 @@ python3 .agents/skills/design-doc/scripts/tests/run_fixtures.py
 
 - **编码怎么分？** → [allocate-and-lock.md](references/workflows/allocate-and-lock.md)  
 - **能改正式标题/含义吗？** → 语义不能就地改；不改含义的措辞维护走 [maintenance-change.md](references/workflows/maintenance-change.md)，其余见锁定矩阵与 allocate-and-lock  
-- **定稿要升基线吗？** → 定稿不自动写基线；Checkpoint 5 按漂移问 PATCH/MINOR/MAJOR  
+- **定稿要升基线吗？** → 定稿不自动写基线；Checkpoint 5 首份基线有漂移问 PATCH，非首份仅 revision 落后问 PATCH、成员进出问 MINOR/MAJOR  
 - **正式就能实现吗？** → 还须在当前基线 `items` 且 revision 对齐  
 - **加功能只写 L4/L5？** → 已有上层则先 [change-feature.md](references/workflows/change-feature.md) 向上核对  
 - **改功能/修 bug 直接改代码？** → 有 `ued/` 时否；先 [before-code-change.md](references/workflows/before-code-change.md)  

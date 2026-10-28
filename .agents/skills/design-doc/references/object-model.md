@@ -76,7 +76,7 @@
 | `本文引用` | 文档 |
 | `引入版本` / `退出版本` | 文档与全部编码细项（**基线缓存**；切片 SSoT 为 `baselines/`） |
 | `产品版本` | 作用域 README |
-| 产品基线快照 | 作用域 `baselines/vX.Y.yaml`（MINOR/MAJOR 新建；PATCH 更新当前 tip） |
+| 产品基线快照 | 作用域 `baselines/vX.Y.yaml`（仅首份基线可在无后继时 PATCH 增删成员；其他基线 PATCH 只同步 revision；有后继即只读） |
 | `状态`（注册表列） | 应用注册表行 |
 
 `创建日期` / `修订版本号` / `最后修订日期` **不是**记录型。
@@ -139,6 +139,6 @@
 | 解冻 | `正式→草案` | 文档 `+1`；被改细项 `+1` | 对象负责人，须确认 |
 | 作废 | `初稿→废弃` / `正式→废弃` / `草案→废弃` | 不递增；初稿作废保持 `1` | 见 [status-definitions.md · 状态变更权限](status-definitions.md#状态变更权限) |
 | 落实 | 不改 `细项状态` | 不变号 | 写 PLN 记录型字段；新增目标细项仍受层级门控 |
-| 升产品版本 / 基线 PATCH | 不改四态 | 不变号；PATCH 更新当前 yaml tip；MINOR/MAJOR 新建文件 + 改 README + 回写谱系 | 见 [product-version.md](product-version.md) |
+| 升产品版本 / 基线 PATCH | 不改四态 | 不变号；PATCH 更新当前 yaml（成员增删仅限首份基线）；MINOR/MAJOR 新建文件 + 改 README + 回写谱系 | 见 [product-version.md](product-version.md) |
 
 以上动作没有任何一项能**删除**已分配编码或已建档文档。

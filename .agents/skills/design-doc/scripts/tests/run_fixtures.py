@@ -352,6 +352,175 @@ def run_glossary_fixtures(verbose):
     return 1 if (fails or orphan or stale) else 0
 
 
+def run_baseline_bump_cases():
+    """产品基线动作：首份基线 PATCH 可增删成员；非首份成员变化须立新基线；
+    冻结时把首份工作期累计进出回写谱系。"""
+    import tempfile
+    import yaml
+
+    check_docs = _load_checker()
+    readme_text = """# 基线测试
+
+## 项目元信息
+
+| 字段 | 值 |
+|------|----|
+| project_name | 基线测试 |
+| project_code | BASE |
+| 产品版本 | v1.0 |
+
+## 发版记录
+
+| 产品版本 | 日期 | 说明 |
+|----------|------|------|
+"""
+
+    def doc_text(code, num, title, status):
+        return f"""# L2-{num:03d}-bump
+
+## 文档信息
+
+| 属性 | 值 |
+| ---- | -- |
+| 文档编码 | L2-{num:03d} |
+| 层级 | L2 - 系统需求 |
+| 修订版本号 | 1 |
+| 状态 | 初稿 |
+| 作者 | 测试 |
+| 创建日期 | 2026-01-15 |
+| 最后更新 | 2026-01-15 |
+
+## 需求定义
+
+<a id="{code.lower()}"></a>
+### {code}：{title}
+
+- **细项状态**：{status}
+- **修订版本号**：1
+- **创建日期**：2026-01-15
+- **最后修订日期**：2026-01-15
+- **优先级**：P1
+- **验证方式**：单元测试
+"""
+
+    fails = []
+
+    def check(name, cond):
+        if not cond:
+            fails.append(name)
+
+    def load(root, pv):
+        return yaml.safe_load((root / "baselines" / f"{pv}.yaml").read_text(
+            encoding="utf-8"))
+
+    def bump(root, **kw):
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.bump_product_version(**kw)
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "README.md").write_text(readme_text, encoding="utf-8")
+        a = root / "L2-901-bump.md"
+        b = root / "L2-902-bump.md"
+        c = root / "L2-903-bump.md"
+        a.write_text(doc_text("FR-901", 901, "甲", "正式"), encoding="utf-8")
+        b.write_text(doc_text("FR-902", 902, "乙", "草案"), encoding="utf-8")
+        c.write_text(doc_text("FR-903", 903, "丙", "草案"), encoding="utf-8")
+
+        bump(root, note="首份")
+        v10 = load(root, "v1.0")
+        check("首份 items", [i["code"] for i in v10["items"]] == ["FR-901"])
+        check("首份 prev", v10.get("prev") in (None, "null"))
+        check("首份回写引入版本", "**引入版本**：v1.0" in a.read_text(encoding="utf-8"))
+
+        b.write_text(b.read_text(encoding="utf-8").replace(
+            "**细项状态**：草案", "**细项状态**：正式"), encoding="utf-8")
+        bump(root, patch=True, note="首份纳入 FR-902")
+        v10 = load(root, "v1.0")
+        check("首份 PATCH 纳入 items",
+              [i["code"] for i in v10["items"]] == ["FR-901", "FR-902"])
+        check("首份 PATCH 纳入增量",
+              v10["added"] == ["FR-901", "FR-902"] and v10["removed"] == [])
+        check("首份 PATCH 升 tip", v10["full_version"] == "v1.0.1")
+        check("首份 PATCH 不回写谱系",
+              "**引入版本**" not in b.read_text(encoding="utf-8"))
+        check("PATCH 不改 README 两段号",
+              "| 产品版本 | v1.0 |" in (root / "README.md").read_text(encoding="utf-8"))
+
+        bump(root, note="冻结 v1.0")
+        v11 = load(root, "v1.1")
+        check("v1.1 prev", str(v11.get("prev")) == "v1.0.1")
+        check("v1.1 无增量",
+              v11["added"] == [] and v11["removed"] == [] and v11["changed"] == [])
+        check("冻结回写首份工作期引入",
+              "**引入版本**：v1.0" in b.read_text(encoding="utf-8"))
+
+        c.write_text(c.read_text(encoding="utf-8").replace(
+            "**细项状态**：草案", "**细项状态**：正式"), encoding="utf-8")
+        try:
+            bump(root, patch=True, note="非首份纳入 FR-903")
+            check("非首份拒绝成员 PATCH", False)
+        except RuntimeError as exc:
+            check("非首份拒绝成员 PATCH", "成员进出不能 PATCH" in str(exc))
+        c.write_text(c.read_text(encoding="utf-8").replace(
+            "**细项状态**：正式", "**细项状态**：草案"), encoding="utf-8")
+
+        b.write_text(
+            b.read_text(encoding="utf-8")
+            .replace("- **修订版本号**：1", "- **修订版本号**：2")
+            .replace("- **最后修订日期**：2026-01-15", "- **最后修订日期**：2026-02-01"),
+            encoding="utf-8")
+        bump(root, patch=True, note="同步 revision")
+        v11 = load(root, "v1.1")
+        check("非首份 PATCH revision items",
+              [i["code"] for i in v11["items"]] == ["FR-901", "FR-902"])
+        check("非首份 PATCH revision 增量",
+              v11["added"] == [] and v11["removed"] == [] and v11["changed"] == ["FR-902"])
+        check("非首份 PATCH 升 tip", v11["full_version"] == "v1.1.1")
+
+        a.write_text(a.read_text(encoding="utf-8").replace(
+            "**细项状态**：正式", "**细项状态**：废弃"), encoding="utf-8")
+        bump(root, note="冻结 v1.1")
+        v12 = load(root, "v1.2")
+        check("v1.2 items", [i["code"] for i in v12["items"]] == ["FR-902"])
+        check("v1.2 漂移增量",
+              v12["added"] == [] and v12["removed"] == ["FR-901"])
+        check("冻结回写漂移退出",
+              "**退出版本**：v1.2" in a.read_text(encoding="utf-8"))
+        check("非首份不重复归属引入版本",
+              "**引入版本**：v1.0" in b.read_text(encoding="utf-8")
+              and "**引入版本**：v1.1" not in b.read_text(encoding="utf-8"))
+        check("历史基线只读",
+              [i["code"] for i in load(root, "v1.0")["items"]] == ["FR-901", "FR-902"])
+
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        baseline_noise = [
+            i for i in checker.issues
+            if any(k in i["title"] for k in ("基线", "谱系", "产品版本"))
+        ]
+        check("冻结结果通过基线校验", not baseline_noise)
+
+        readme = root / "README.md"
+        readme.write_text(readme.read_text(encoding="utf-8").replace(
+            "| 产品版本 | v1.2 |", "| 产品版本 | v1.1 |"), encoding="utf-8")
+        try:
+            bump(root, patch=True, note="越权")
+            check("历史基线拒绝 PATCH", False)
+        except RuntimeError as exc:
+            check("历史基线拒绝 PATCH", "历史基线只读" in str(exc))
+
+    if fails:
+        print("FAIL 产品基线 PATCH/冻结用例未通过")
+        for name in fails:
+            print(f"     未通过：{name}")
+        return 1
+    print("产品基线 PATCH/冻结用例通过")
+    return 0
+
+
 def run_template_body_hygiene_cases():
     """哨兵内写作约束 / 技能包路径 MUST 报；干净正文 MUST 不报。"""
     import importlib.util
@@ -469,6 +638,7 @@ def main():
     rc = 1 if (fails or orphan or stale) else 0
     rc |= run_glossary_fixtures(verbose)
     rc |= run_skill_link_fixtures(verbose)
+    rc |= run_baseline_bump_cases()
     rc |= run_template_body_hygiene_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
