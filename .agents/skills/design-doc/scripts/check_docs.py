@@ -740,11 +740,20 @@ class DesignDocChecker:
         self.legacy_hits: Set[Tuple[str, str]] = set()   # (文件, 旧值 → 新值)
         self.dep_forward: Dict[str, List[str]] = {}      # A `依赖` B 的正向边
         self._code_index_cache: Optional[Dict[Tuple[str, int], Set[str]]] = None
+        # 系统根术语表的只读辅助作用域：仅用于解析 `定义位置` 与术语存在性
+        self.aux_docs: List[DocInfo] = []
+        self.aux_code_to_doc: Dict[str, DocInfo] = {}
+        self.aux_terms_by_doc: Dict[str, List[TermInfo]] = {}
+        self._glossary_aux_loaded = False
 
     # ------------------------------------------------------------------ 扫描
 
     def scan_docs(self) -> None:
         """扫描所有文档"""
+        self.aux_docs = []
+        self.aux_code_to_doc = {}
+        self.aux_terms_by_doc = {}
+        self._glossary_aux_loaded = False
         if not self.ued_path.exists():
             self.add_issue("CRITICAL", "UED目录不存在", f"未找到 {self.ued_path} 目录")
             return
@@ -804,8 +813,12 @@ class DesignDocChecker:
                 self.legacy_hits.discard((doc.path, stale))
                 item.item_status = fixed
 
-    def parse_doc_info(self, path: str, content: str) -> DocInfo:
-        """解析文档信息：元信息表、细项定义、细项清单/索引表、计数器表。"""
+    def parse_doc_info(self, path: str, content: str, report: bool = True) -> DocInfo:
+        """解析文档信息：元信息表、细项定义、细项清单/索引表、计数器表。
+
+        `report=False` 用于术语表的只读辅助作用域：只提取编码与术语块，
+        不把该文档的字段告警混入当前作用域报告。
+        """
         raw_lines = content.splitlines()
         lines = mask_fences(content)
         doc = DocInfo(
@@ -824,7 +837,7 @@ class DesignDocChecker:
         doc.status_present = bool(doc.meta.get("状态") or doc.meta.get("文档状态"))
         doc.status = self._norm_status(doc.meta.get("状态") or doc.meta.get("文档状态") or "", doc)
         doc.version = doc.meta.get("修订版本号") or ""
-        if "文档编号" in doc.meta:
+        if "文档编号" in doc.meta and report:
             self.add_issue("WARNING", "元信息字段名不规范",
                            f"{path}: 字段 `文档编号` 应用 `文档编码`（与索引表列名、编码体系术语一致）")
 
@@ -1207,12 +1220,95 @@ class DesignDocChecker:
     def _term_key_value(value: str) -> str:
         return value.casefold()
 
+    def _load_glossary_aux(self) -> None:
+        """按系统根注册表加载同级子系统，只读辅助术语定位。
+
+        仅当 `--glossary` 指向系统根 `glossary.md`、且 `-p` 是该根 README
+        注册表中登记的子系统目录时启用。辅助文档不进入 `self.docs`，只建
+        编码与术语块索引；`废弃` 子系统与 `deprecated/` 归档目录不参与。
+        """
+        if self._glossary_aux_loaded:
+            return
+        self._glossary_aux_loaded = True
+        if self.glossary_path is None:
+            return
+        glos = self.glossary_path.resolve()
+        if glos.name.lower() != "glossary.md":
+            return
+        root = glos.parent
+        readme = root / "README.md"
+        if not readme.is_file():
+            return
+        try:
+            lines = mask_fences(readme.read_text(encoding="utf-8"))
+        except OSError:
+            return
+
+        registry: List[Tuple[str, str]] = []
+        for _idx, header, rows in iter_tables(lines):
+            heads = [norm(h) for h in header]
+            if not all(h in heads for h in ("subsystem_key", "目录", "状态")):
+                continue
+            col = {h: i for i, h in enumerate(heads)}
+            for _lineno, cells in rows:
+                def cell(name: str) -> str:
+                    i = col[name]
+                    return norm(cells[i]) if i < len(cells) else ""
+                directory = Path(cell("目录").strip().strip("/")).as_posix()
+                if directory and directory != ".":
+                    registry.append((directory, cell("状态")))
+            break
+        if not registry:
+            return
+
+        scope = self.ued_path.resolve()
+        try:
+            rel = scope.relative_to(root).as_posix()
+        except ValueError:
+            return
+        if rel == "." or rel not in {d for d, _s in registry}:
+            return
+
+        seen = {Path(d.path).resolve() for d in self.docs}
+        for directory, status in registry:
+            if status == "废弃" or directory == rel:
+                continue
+            sub = (root / directory).resolve()
+            if sub.parent != root or not sub.is_dir():
+                continue
+            for md in sorted(sub.rglob("*.md")):
+                if "deprecated" in md.parts or md.name.lower() == "glossary.md":
+                    continue
+                real = md.resolve()
+                if real in seen:
+                    continue
+                try:
+                    content = md.read_text(encoding="utf-8")
+                except OSError:
+                    continue
+                doc = self.parse_doc_info(str(md), content, report=False)
+                # 只读：解析期归一旧状态时的命中不得进入迁移报告
+                self.legacy_hits = {hit for hit in self.legacy_hits
+                                    if hit[0] != doc.path}
+                if not doc.doc_code:
+                    continue
+                seen.add(real)
+                self.aux_docs.append(doc)
+                self.aux_code_to_doc.setdefault(doc.doc_code, doc)
+                blocks = [t for _start, _title, _hashes, terms in self._term_sections(doc)
+                          for t in terms]
+                if blocks:
+                    self.aux_terms_by_doc[doc.path] = blocks
+
     def check_glossary(self) -> None:
         """全局术语表与文档术语块：唯一定义、固定四列、定义位置可解析。
 
         房规见 `references/glossary-conventions.md`：术语表固定 `ued/glossary.md`，
         不分配编码、不参与四态；文档用顶层 `## 术语和概念` 承载本文引入的术语。
+        系统根术语表跨子系统的 `定义位置` 由只读辅助作用域解析。
         """
+        self._load_glossary_aux()
+        aux_terms = [t for terms in self.aux_terms_by_doc.values() for t in terms]
         glos = [d for d in self.docs if d.is_glossary]
         terms_by_doc: Dict[str, List[TermInfo]] = {}
         all_terms: List[TermInfo] = []
@@ -1438,7 +1534,7 @@ class DesignDocChecker:
                                "完整文档编码（不得写路径、文件名、锚点或章节号）")
                 continue
             code = m.group(1)
-            target = self.code_to_doc.get(code)
+            target = self.code_to_doc.get(code) or self.aux_code_to_doc.get(code)
             if target is None:
                 key = self._code_key(code)
                 cands = sorted({c for c in self.code_to_doc if self._code_key(c) == key}) \
@@ -1451,9 +1547,13 @@ class DesignDocChecker:
                     self.add_issue("ERROR", "术语定义位置非法",
                                    f"{g.path}:{lineno + 1} `定义位置` {code} 指向的文档不存在")
                 continue
-            target_terms = terms_by_doc.get(target.path, [])
+            target_terms = (terms_by_doc.get(target.path)
+                            or self.aux_terms_by_doc.get(target.path, []))
             if not any(self._term_names_strict(t, zh, en) for t in target_terms):
                 elsewhere = [t for t in all_terms if self._term_names_strict(t, zh, en)]
+                if not elsewhere:
+                    elsewhere = [t for t in aux_terms
+                                 if self._term_names_strict(t, zh, en)]
                 if elsewhere:
                     self.add_issue("ERROR", "术语定义位置错误",
                                    f"{g.path}:{lineno + 1} 术语「{zh}」定义在 "

@@ -835,6 +835,158 @@ def run_single_scope_and_extension_cases():
     return 0
 
 
+def run_cross_scope_glossary_cases():
+    """系统根术语表的跨子系统 `定义位置`：只读辅助作用域的启停与隔离边界。"""
+    import tempfile
+
+    check_docs = _load_checker()
+    fails = []
+
+    def check(name, cond):
+        if not cond:
+            fails.append(name)
+
+    def scope_doc(code, prefix, zh, en, definition, terms=True, changelog=True,
+                  status="正式"):
+        term_block = (
+            "## 术语和概念\n\n"
+            f"### {zh}\n\n"
+            f"- **中文名称**：{zh}\n"
+            f"- **英文名称**：{en}\n\n"
+            f"**定义**：{definition}\n\n"
+        ) if terms else ""
+        changelog_block = (
+            "## 变更记录\n\n"
+            "| 修订版本号 | 日期 | 作者 | 变更说明 |\n"
+            "|------------|------|------|----------|\n"
+            "| 1 | 2026-01-01 | tester | 初稿创建 |\n"
+        ) if changelog else ""
+        return (
+            f"# {code}-示例\n\n"
+            "| 属性 | 值 |\n|------|----|\n"
+            f"| 文档编码 | {code} |\n"
+            "| 层级 | L2 - 系统/产品需求 |\n"
+            "| 修订版本号 | 1 |\n"
+            f"| 状态 | {status} |\n"
+            "| 作者 | tester |\n"
+            "| 创建日期 | 2026-01-01 |\n"
+            "| 最后更新 | 2026-01-01 |\n\n"
+            f"{term_block}"
+            "## 需求定义\n\n"
+            f'<a id="{prefix.lower()}-fr-001"></a>\n'
+            f"### {prefix}-FR-001：示例\n\n"
+            "- **细项状态**：正式\n"
+            "- **修订版本号**：1\n"
+            "- **创建日期**：2026-01-01\n"
+            "- **最后修订日期**：2026-01-01\n\n"
+            f"{changelog_block}"
+        )
+
+    def build(root, *, registry=True, scope_registered=True,
+              oms_status="正式", oms_terms=True, oms_loc="OMS-L2-001",
+              oms_deprecated_dir=False, oms_changelog=True,
+              oms_doc_status="正式"):
+        root.mkdir(parents=True, exist_ok=True)
+        if registry:
+            rows = []
+            if scope_registered:
+                rows.append("| crm | CRM | `crm/` | CRM | CMP-01 | 正式 |")
+            if oms_status:
+                rows.append(f"| oms | OMS | `oms/` | OMS | CMP-02 | {oms_status} |")
+            (root / "README.md").write_text(
+                "# 系统\n\n## 子系统注册表\n\n"
+                "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 角色文档 | 状态 |\n"
+                "|---------------|------------|------|----------|----------|------|\n"
+                + "\n".join(rows) + "\n",
+                encoding="utf-8")
+        else:
+            (root / "README.md").write_text(
+                "# 单系统\n\n[全局术语表](glossary.md)\n", encoding="utf-8")
+
+        crm = root / "crm"
+        crm.mkdir()
+        (crm / "README.md").write_text(
+            "# CRM\n\n[全局术语表](../glossary.md)\n", encoding="utf-8")
+        (crm / "CRM-L2-001-order.md").write_text(
+            scope_doc("CRM-L2-001", "CRM", "订单", "Order", "客户提交的购买请求。"),
+            encoding="utf-8")
+
+        oms_dir = root / "oms" / ("deprecated" if oms_deprecated_dir else "")
+        oms_dir.mkdir(parents=True)
+        (oms_dir / "OMS-L2-001-waybill.md").write_text(
+            scope_doc("OMS-L2-001", "OMS", "运单", "Waybill", "物流运输单据。",
+                      terms=oms_terms, changelog=oms_changelog,
+                      status=oms_doc_status),
+            encoding="utf-8")
+
+        rows = ["| 订单 | Order | 客户提交的购买请求。 | CRM-L2-001 |"]
+        if oms_loc:
+            rows.append(f"| 运单 | Waybill | 物流运输单据。 | {oms_loc} |")
+        (root / "glossary.md").write_text(
+            "# 全局术语表\n\n"
+            "| 属性 | 值 |\n|------|----|\n"
+            "| 修订版本号 | 1 |\n| 作者 | tester |\n"
+            "| 创建日期 | 2026-01-01 |\n| 最后更新 | 2026-01-01 |\n\n"
+            "## 术语\n\n"
+            "| 中文名称 | 英文名称 | 定义 | 定义位置 |\n"
+            "|----------|----------|------|----------|\n"
+            + "\n".join(rows) + "\n\n"
+            "## 变更记录\n\n"
+            "| 修订版本号 | 日期 | 作者 | 变更说明 |\n"
+            "|------------|------|------|----------|\n"
+            "| 1 | 2026-01-01 | tester | 初稿创建 |\n",
+            encoding="utf-8")
+
+    @contextlib.contextmanager
+    def scenario(**opts):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "ued"
+            build(root, **opts)
+            checker = check_docs.DesignDocChecker(
+                str(root / "crm"), glossary_path=str(root / "glossary.md"))
+            with contextlib.redirect_stdout(io.StringIO()):
+                checker.run_checks()
+            yield checker, root
+
+    def errors(checker):
+        return {i["title"] for i in checker.issues
+                if i["title"] in GLOSSARY_TITLES and i["level"] == "ERROR"}
+
+    with scenario(oms_changelog=False, oms_doc_status="草稿") as (checker, root):
+        oms_dir = str(root / "oms")
+        check("跨子系统定义位置可解析", not errors(checker))
+        check("辅助文档不进入当前作用域",
+              all(oms_dir not in d.path for d in checker.docs))
+        check("辅助文档缺陷不混入报告",
+              not any(oms_dir in i["description"] for i in checker.issues))
+
+    with scenario(oms_terms=False) as (checker, _root):
+        check("辅助文档缺术语报未找到", "术语定义未找到" in errors(checker))
+
+    with scenario(oms_loc="OMS-L2-999") as (checker, _root):
+        check("辅助作用域不存在的编码报非法", "术语定义位置非法" in errors(checker))
+
+    with scenario(oms_status="废弃") as (checker, _root):
+        check("废弃子系统不参与解析", "术语定义位置非法" in errors(checker))
+
+    with scenario(scope_registered=False) as (checker, _root):
+        check("未登记作用域不启用辅助解析", "术语定义位置非法" in errors(checker))
+
+    with scenario(oms_deprecated_dir=True) as (checker, _root):
+        check("归档目录不参与解析", "术语定义位置非法" in errors(checker))
+
+    with scenario(registry=False, oms_loc="") as (checker, _root):
+        check("无系统注册表时单系统行为不变", not errors(checker))
+
+    if fails:
+        print("FAIL 跨子系统术语表用例未通过")
+        for name in fails:
+            print(f"     未通过：{name}")
+        return 1
+    print("跨子系统术语表用例通过")
+    return 0
+
+
 def run_template_body_hygiene_cases():
     """哨兵内写作约束 / 技能包路径 MUST 报；干净正文 MUST 不报。"""
     import importlib.util
@@ -954,6 +1106,7 @@ def main():
     rc |= run_skill_link_fixtures(verbose)
     rc |= run_baseline_bump_cases()
     rc |= run_single_scope_and_extension_cases()
+    rc |= run_cross_scope_glossary_cases()
     rc |= run_template_body_hygiene_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
