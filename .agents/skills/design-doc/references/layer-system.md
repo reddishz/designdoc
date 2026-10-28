@@ -40,13 +40,13 @@
 
 **术语**：模板中「概念架构」与目录名 `L3-architecture` 指同一层级（`architecture` 表示架构蓝图，非代码实现）。
 
-**业务与领域用语**：术语在项目内只有一个权威定义。全局索引固定为 `ued/glossary.md`（单应用、多应用、含 `shared/` 都只有这一份），文档在顶层「术语和概念」章节定义本文引入的术语；定义、登记与校验规则见 [glossary-conventions.md](glossary-conventions.md)。
+**业务与领域用语**：术语在项目内只有一个权威定义。全局索引固定为项目根 `ued/glossary.md`（单系统与多子系统共用这一份），文档在顶层「术语和概念」章节定义本文引入的术语；定义、登记与校验规则见 [glossary-conventions.md](glossary-conventions.md)。
 
 ## 目录结构规范
 
-### 单层模式（默认）
+### 单系统模式（默认）
 
-单应用项目直接在 `ued/` 根下维护文档；`ued/README.md` 同时承担项目元信息、文档入口、编码计数器与全局索引。
+单系统项目直接在 `ued/` 根下维护文档；`ued/README.md` 同时承担项目元信息、文档入口、编码计数器与全局索引。
 
 ```
 ued/
@@ -63,44 +63,34 @@ ued/
 └── assets/                  # 图片、附件等资源
 ```
 
-### 多应用模式
+### 多子系统结构（由 system-design-doc 编排）
 
-当同一个 `ued/` 下需要维护多个独立应用时，**MUST** 将应用拆分到 `ued/{app-name}/` 子目录。顶层 `ued/README.md` 只承担总入口、应用注册表、公共规则与跨应用导航；每个应用目录的 `README.md` 才是该应用的元信息与编码索引真值源。
+当项目由多个子系统组成时，本技能为**每个子系统**维护一份独立作用域；`ued/README.md` 变为系统根，只承担结构说明、子系统注册表与系统发布索引，由 [system-design-doc](../../system-design-doc/SKILL.md) 管理。**本技能 MUST NOT** 在系统根写层级文档或产品版本。
 
 ```
 ued/
-├── README.md                # 多应用总入口 + 应用注册表 + 跨应用规则
-├── glossary.md              # 可选：全局术语表（全项目唯一，跨应用共用）
-├── shared/                  # 可选，共享文档域
-│   ├── README.md            # 共享文档索引
-│   ├── L0-vision/
-│   ├── L1-stakeholder/
-│   └── references/
-├── crm/                     # 应用目录
-│   ├── README.md            # 应用元信息 + 应用索引 + 编码计数器 + 应用级全局编码索引
+├── README.md                # 系统根：结构 + 子系统注册表 + 系统发布（system-design-doc）
+├── glossary.md              # 全局术语表（全项目唯一）
+├── crm/                     # 子系统作用域（普通 design-doc 目录）
+│   ├── README.md            # 元信息 + 索引 + 计数器 + 产品版本
 │   ├── L2-requirements/
 │   ├── L3-architecture/
-│   ├── L4-system-design/
-│   ├── L5-detail-design/
-│   └── L6-verification/
-└── oms/                     # 另一个应用（按需裁剪层级）
+│   └── baselines/
+└── oms/                     # 另一个子系统（按需裁剪层级）
     ├── README.md
     ├── L2-requirements/
-    └── L4-system-design/
+    └── baselines/
 ```
 
-**裁剪原则**：层级目录按需创建，不必每级都有。空目录不必预建。
-
-**顶层 README 约束（多应用模式）**：
-- **MUST** 包含应用注册表，至少列出 `app_key`、应用名称、目录、项目编码、状态（取标准四态：`初稿` 已登记未启用 / `正式` 在用 / `废弃` 已停用）。**MUST NOT** 用 `doc_mode` 一类字段声明模式——模式由注册表与目录结构判定
-- **MUST NOT** 作为某个具体应用的 `project_code` 真值源，也 **MUST NOT** 承载某应用的产品版本或 `baselines/`
-- **SHOULD** 仅登记共享文档和跨应用规则，不维护每个应用的细项级全量索引
-- `shared/`（可选）**MUST** 自带 `README.md`，自成一个作用域：独立 `project_code`、产品版本与 `baselines/`，不归任何单应用
+**要点**：
+- 子系统划分、编码前缀、角色文档与状态以系统根注册表为真值源；子系统 README 与之对齐。
+- 共享库**没有**固定目录与特殊规则：需要时按普通子系统登记（如 `foundation/`），也可有多个；不需要时就不建。
+- 层级目录按需创建，不必每级都有；空目录不必预建。
 
 ## 命名规则
 
 - **层级目录**：`L{N}-{英文短名}/`，如 `L3-architecture/`
-- **应用目录**：小写英文，短横线分隔，如 `crm/`、`order-center/`
+- **子系统目录**（仅多子系统结构）：小写英文，短横线分隔，与系统根注册表登记一致，如 `crm/`、`order-center/`
 - **文件名格式**：`{文档编码}-{描述}.md`，文档编码含项目前缀（若启用）。目录内文件与元信息 `文档编码` **MUST** 一致，如 `CRM-L2-003-user-req.md`；默认三位序号、超过 999 自然四位（位宽规则见 [coding-system.md · 序号位宽](coding-system.md#细项编码)）
 - **ADR 文件名**：`{项目编码-}ADR-{序号}-{描述}.md`，存放于 `L3-architecture/`（ADR 归属 L3，见《层级定义》），**MUST NOT** 单设 `adr/` 子目录
 - **EVAL 文件名**：`{项目编码-}EVAL-{序号}-{描述}.md`，存放于 `L6-verification/`（EVAL 归属 L6 证据槽，见《层级定义》），**MUST NOT** 单设 `eval/` 子目录

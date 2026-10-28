@@ -39,11 +39,11 @@
 | EVAL | `EVAL-{序号}`（不含层级） | 元信息表 `状态` | `L6-verification/` 独立文件 | 基线评估报告（证据）；一事一档；见 [type-profiles.md · EVAL](type-profiles.md#eval-与-adr--ref--tc--met) |
 | REF 文档 | `REF-{序号}` | 元信息表 `状态` | `ued/references/` | 外部资料档案；内含 REF 细项时细项仍用 `细项状态` |
 | 产品规划总览 | 所属层级的文档编码（默认 L1） | 元信息表 `状态` | 独立文件，只登记不定义 PLN | PLN 定义块在所属层级文档 |
-| 应用注册表行 | 无细项编码 | 列 `状态`（取四态，记录型） | 多应用顶层 `ued/README.md` 的表格行 | 应用是否在用；**不是**可引用的设计细项，不进全局编码索引 |
 | L6 追溯矩阵行 | 无独立编码 | 列 `追溯状态`（记录型：未追溯/已追溯/不适用） | L6 文档内表格行 | 覆盖关系；**不是**测试执行结果，不进全局编码索引 |
 | 全局术语表 | 无编码 | 无（辅助文档） | 固定 `ued/glossary.md` | 全项目术语索引；有 `修订版本号` 与变更记录，不参与四态 |
 | 文档术语块 | 无编码 | 无（不是细项） | 文档顶层 `## 术语和概念` | 术语的权威定义；不进细项清单与全局编码索引 |
 
+- **子系统注册表行不是本技能对象**：系统根 `ued/README.md` 的注册表由 [system-design-doc](../../system-design-doc/references/registry.md) 定义与校验；本技能只维护注册表登记的单个子系统作用域。
 - 文档状态与其内细项的 `细项状态` **各自取值**；解冻自顶向下、定稿与整份废止自底向上，见 [status-definitions.md · 层级门控](status-definitions.md#层级门控文档状态--细项状态mandatory) / [doc-deprecation.md · 整份废弃的前置](doc-deprecation.md#整份废弃的前置mandatory)。
 - 术语与术语表**不是设计细项**：不分配编码、不设 `细项状态`，也不进入细项清单与全局编码索引；定义与冲突规则见 [glossary-conventions.md](glossary-conventions.md)。
 - ADR / EVAL / REF 的层级不写进编码，由存放目录 + 元信息 `层级`（或类别）+ `关联文档` 共同表达。
@@ -75,9 +75,9 @@
 | `追溯状态` | L6 追溯矩阵 |
 | `本文引用` | 文档 |
 | `引入版本` / `退出版本` | 文档与全部编码细项（**基线缓存**；切片 SSoT 为 `baselines/`） |
-| `产品版本` | 作用域 README |
+| `产品版本` | 作用域 README（单系统 `ued/` 或子系统 `ued/{subsystem}/`） |
 | 产品基线快照 | 作用域 `baselines/vX.Y.yaml`（仅首份基线可在无后继时 PATCH 增删成员；其他基线 PATCH 只同步 revision；有后继即只读） |
-| `状态`（注册表列） | 应用注册表行 |
+| `depends_on` / `external_deps` | 子系统基线（`baselines/`）的扩展块；由 system-design-doc 写入，本技能升版原样保留 |
 
 `创建日期` / `修订版本号` / `最后修订日期` **不是**记录型。
 

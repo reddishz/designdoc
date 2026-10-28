@@ -1,0 +1,22 @@
+# 模板：系统发布清单
+# 路径：ued/releases/sys-vX.Y.yaml
+# 规则见 references/workflows/system-release.md
+# TEMPLATE:BEGIN 系统发布清单
+
+release: sys-v1.0
+created: 2026-01-01
+note: "首个产品集发布"
+
+subsystems:
+  - subsystem: crm
+    product_version: v3.1
+    full_version: v3.1.0
+  - subsystem: oms
+    product_version: v2.5
+    full_version: v2.5.0
+
+external_deps:
+  - name: identity-provider
+    product_version: v4.0
+
+# TEMPLATE:END

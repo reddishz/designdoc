@@ -1,14 +1,17 @@
 ---
 name: design-doc
 description: >
-  维护 ued/ 分层设计文档、需求编码、架构决策、验证/EVAL、术语表与产品基线。
+  维护**单一作用域**的 ued/ 分层设计文档、需求编码、架构决策、验证/EVAL、
+  术语表与产品基线。作用域可以是单系统 `ued/`，也可以是系统内的一个子系统
+  `ued/{subsystem}/`；由多个子系统组成的系统级注册表、依赖钉住与发布由
+  system-design-doc 负责。
   **design-doc是极其重要的技能，应作为每次开发和设计的基础。**
   项目有 ued/ 时，改功能、修缺陷或按需求实现代码前 MUST 先对照设计：
   需改设计则先文档后代码；禁止先写代码再补设计。
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "9.1"
+  version: "10.0"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -56,16 +59,18 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 
 ## 运行时步骤
 
-1. 确认作用域存在 `ued/`（或应用级设计树）；解析配置见 [runtime-config.md](references/workflows/runtime-config.md)。
-2. 按下方**任务路由**加载对应 workflow（**MUST read**）；仅在流程分支需要时再打开所列 rule。
-3. 解冻、废弃、批量编码或动基线前：先短计划，人审停点见各 workflow 的 Checkpoint。
-4. 改完跑 `check_docs.py`；通过≠语义正确。
-5. **仅当**本轮改过 `ued/`、要定稿/提交、或有基线漂移须询问时，再加载 [lifecycle.md](references/workflows/lifecycle.md) 走 Checkpoint 5；未改设计文档则不必读 lifecycle。
+1. 确认当前作用域存在设计树：单系统为 `ued/`，系统内为 `ued/{subsystem}/`；解析配置见 [runtime-config.md](references/workflows/runtime-config.md)。
+2. 若 `ued/README.md` 含**子系统注册表**，说明这是系统根而非单作用域：系统级用 [system-design-doc](../system-design-doc/SKILL.md)，本技能只对每个 `ued/{subsystem}/` 运行。
+3. 按下方**任务路由**加载对应 workflow（**MUST read**）；仅在流程分支需要时再打开所列 rule。
+4. 解冻、废弃、批量编码或动基线前：先短计划，人审停点见各 workflow 的 Checkpoint。
+5. 改完跑 `check_docs.py`；通过≠语义正确。子系统校验用 `--glossary ued/glossary.md`。
+6. **仅当**本轮改过 `ued/`、要定稿/提交、或有基线漂移须询问时，再加载 [lifecycle.md](references/workflows/lifecycle.md) 走 Checkpoint 5；未改设计文档则不必读 lifecycle。
 
 ## 任务路由
 
 | 意图 | MUST 先读 |
 |------|-----------|
+| **多子系统结构**（`ued/README.md` 含子系统注册表） | [system-design-doc](../system-design-doc/SKILL.md)；本技能只对单个 `ued/{subsystem}/` 运行 |
 | 首次接入 / 不确定先读哪页 | [decision-card.md](references/decision-card.md) |
 | 增量加功能 / 加需求 | [change-feature.md](references/workflows/change-feature.md) |
 | 创建新设计文档 | [create-document.md](references/workflows/create-document.md) |
@@ -93,7 +98,8 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 5. `ued/` **MUST NOT** 含可执行实现代码（算法/契约/状态机可以）。
 6. 高风险生命周期与基线动作 **MUST** 经人确认（Checkpoint）；AI **MUST NOT** 自行定稿或 `--bump-product`。
 7. 模板即复制源；哨兵外说明 **MUST NOT** 写入实例（[模板边界](assets/templates/index.md#模板边界哨兵)）。
-8. 术语在项目内**只有一个权威定义**；全局索引固定为 `ued/glossary.md`，同名冲突 **MUST** 当轮收口，**MUST NOT** 用第二张表并存。
+8. 术语在项目内**只有一个权威定义**；全局索引固定为 `ued/glossary.md`（子系统校验用 `--glossary` 指向它），同名冲突 **MUST** 当轮收口，**MUST NOT** 用第二张表并存。
+9. 本技能只处理**单一作用域**（`ued/` 或 `ued/{subsystem}/`）；系统根的子系统注册表、跨子系统依赖钉住与系统发布 **MUST** 交给 [system-design-doc](../system-design-doc/SKILL.md)，**MUST NOT** 在作用域 README 里另建注册表或系统级版本。
 
 细则单点（按需打开，勿在任务开始时整包预读）：
 
@@ -110,26 +116,32 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 
 ## 范围与工具
 
+作用域根记为 `{scope}`：单系统为 `ued/`，系统内为 `ued/{subsystem}/`。本技能不处理系统根 `ued/` 的注册表与发布清单。
+
 | 目录 | 范围 |
 |------|------|
-| `ued/L0`–`L6` | 战略→验证；`EVAL-*` 在 L6；`ADR-*` 在 L3 |
-| `ued/references/` 内 `REF-*` | 外部资料 |
+| `{scope}/L0`–`L6` | 战略→验证；`EVAL-*` 在 L6；`ADR-*` 在 L3 |
+| `{scope}/references/` 内 `REF-*` | 外部资料 |
+| `{scope}/baselines/` | 该作用域的产品基线 |
 
 模板：[assets/templates/index.md](assets/templates/index.md)。
 
 ```bash
-python3 .agents/skills/design-doc/scripts/check_docs.py -p <ued路径>
-python3 .agents/skills/design-doc/scripts/check_docs.py -p <ued路径> --bump-product --patch|--minor|--major --note '…'
-python3 .agents/skills/design-doc/scripts/check_docs.py -p <ued路径> --refs {编码}
+python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径>
+python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径> --glossary <项目术语表路径>
+python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径> --bump-product --patch|--minor|--major --note '…'
+python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径> --refs {编码}
 python3 .agents/skills/design-doc/scripts/tests/run_fixtures.py
 ```
 
 `--check-templates` / `--instantiate` 见脚本帮助。静态检查不代替人工审查与定稿确认。
 
-**适用**：设计文档全生命周期；有 `ued/` 时变更代码前的设计对照与据文档实现门禁（**不代替**编写业务代码）。**不适用**：与 `ued/` 无关的纯环境琐事、用户/运维手册。
+**适用**：单一作用域（单系统 `ued/` 或一个子系统 `ued/{subsystem}/`）的设计文档全生命周期；有 `ued/` 时变更代码前的设计对照与据文档实现门禁（**不代替**编写业务代码）。多子系统结构、跨子系统依赖与系统发布由 [system-design-doc](../system-design-doc/SKILL.md) 编排。**不适用**：与 `ued/` 无关的纯环境琐事、用户/运维手册。
 
 ## 常见问题（短答）
 
+- **原来的「多应用」怎么处理？** → 统一称子系统，由 system-design-doc 管注册表与系统发布；本技能只维护单个作用域  
+- **系统根 `ued/README.md` 要产品版本或基线吗？** → 不要；由各子系统各自持有  
 - **编码怎么分？** → [allocate-and-lock.md](references/workflows/allocate-and-lock.md)  
 - **能改正式标题/含义吗？** → 语义不能就地改；不改含义的措辞维护走 [maintenance-change.md](references/workflows/maintenance-change.md)，其余见锁定矩阵与 allocate-and-lock  
 - **定稿要升基线吗？** → 定稿不自动写基线；Checkpoint 5 首份基线有漂移问 PATCH，非首份仅 revision 落后问 PATCH、成员进出问 MINOR/MAJOR  

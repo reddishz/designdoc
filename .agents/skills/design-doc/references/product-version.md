@@ -22,8 +22,8 @@
 | 承载 | 当前作用域 `README.md` 项目元信息字段 `产品版本`，取值 `vX.Y` |
 | 初值 | `v1.0`（尚无基线文件时） |
 | 写入 | 仅[三种动作](#三种动作)中的 MINOR/MAJOR 时改两段号；**PATCH 不改** README `产品版本` |
-| 多应用 | 每个应用级 README 各自一份；顶层多应用 README **MUST NOT** 充当某一应用的产品版本源 |
-| 共享作用域 | `ued/shared/` 有独立 `README.md` 时自成一个作用域，拥有自己的 `产品版本` 与 `baselines/`；**MUST NOT** 并入任一应用，也 **MUST NOT** 由顶层 README 代管 |
+| 多子系统 | 每个子系统 README 各自一份；系统根 `ued/README.md` **MUST NOT** 充当子系统产品版本源（系统发布清单见 [system-design-doc](../../system-design-doc/references/version-alignment.md)） |
+| 共享库 | 无特殊规则：按普通子系统持有自己的 `产品版本` 与 `baselines/`；**MUST NOT** 设固定 `shared/` 作用域 |
 
 立新基线（MINOR/MAJOR）**不解冻**任何设计文档，**不改**修订号，**不改**本文引用钉住表；同时回写 `引入版本` / `退出版本` 缓存（首份基线在其首次冻结时回写，见[基线谱系缓存](#基线谱系缓存)）。PATCH 只更新当前工作集，不回写谱系；成员增删仅限首份基线。`引入`/`退出` 取值仍为两段 `vX.Y`（成员归属文件），不是 `vX.Y.Z`。
 
@@ -82,7 +82,7 @@
 ### 文件布局
 
 ```text
-ued/{app}/baselines/
+ued/baselines/                 # 单系统；多子系统结构为 ued/{subsystem}/baselines/
   v5.25.yaml          # 历史：只读
   v5.26.yaml          # 当前：可 PATCH revision（首份基线另可增删成员）
 ```
@@ -111,6 +111,13 @@ items:
     title: "..."
     revision: 2
     doc: L2-001
+# 以下为可选扩展块，仅多子系统结构由 system-design-doc 写入；本技能 MUST 原样保留
+# depends_on:
+#   - subsystem: oms
+#     product_version: v2.5
+# external_deps:
+#   - name: identity-provider
+#     product_version: v4.0
 ```
 
 | 块 | 规则 |
@@ -121,6 +128,7 @@ items:
 | `patch_log` | MUST；每升一次 tip（含 `.0`）追加一条；**MUST NOT** 改写旧条；只记版本/日期/说明，不保存当次 `items` |
 | `added`/`removed`/`changed` | 只表达**基线版本之间**的成员与 revision 差异；相对 `prev` 指向的冻结基线重算（累计值，不是相对上一 PATCH），首份基线无前驱、三块恒空；**MUST NOT** 记录开发期操作历史 |
 | `items` | 首份基线的 PATCH 可增删成员（只改 `items`，不写增量字段）；其他基线创建后成员不变；按 `code` 字典序 |
+| `depends_on` / `external_deps` | 可选扩展块；仅多子系统结构由 system-design-doc 写入。本技能升版 **MUST** 原样保留，**MUST NOT** 删除或改写；依赖变化走子系统 MINOR/MAJOR，不走 PATCH。语义见 [system-design-doc · 版本对齐](../../system-design-doc/references/version-alignment.md) |
 
 存量缺 `full_version` 时检查器 WARNING，并按 `vX.Y.0` 理解；`prev` 若仍为两段 `vX.Y`，按该文件解析，WARNING 建议改为当时 tip。
 

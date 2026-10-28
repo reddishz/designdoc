@@ -20,8 +20,8 @@
 ## 核心原则
 
 **1. 只归档、不删除**：废弃文档**永不 `rm` 删除**；所谓"归档"仅指把文档移入本作用域的 `deprecated/` 目录继续留存，历史仍可追溯。
-**2. 作用域隔离**：每个作用域拥有**各自独立**的 `deprecated/` 子目录，**不使用顶层共享目录**。单应用模式为 `ued/deprecated/`，多应用模式为 `ued/{app-name}/deprecated/`。
-**3. 无 `active/` 目录**：活跃文档与"原地废弃"文档共同存放于作用域目录（`ued/` 或 `ued/{app-name}/`），不存在也不需要 `active/`。
+**2. 作用域隔离**：每个作用域拥有**各自独立**的 `deprecated/` 子目录，**不使用系统根共享目录**。单系统为 `ued/deprecated/`，多子系统结构为 `ued/{subsystem}/deprecated/`。
+**3. 无 `active/` 目录**：活跃文档与"原地废弃"文档共同存放于作用域目录（`ued/` 或 `ued/{subsystem}/`），不存在也不需要 `active/`。
 **4. 两阶段**：先**原地标注废弃**（不移动，仅加状态与字段）；到达建议归档日期后再**归档**入 `deprecated/`。
 **5. 标注与追溯**：清晰标注废弃状态、类别、一句话原因、替代方案与影响范围，并同步处理引用。
 **6. 整份废弃自底向上**：文档 `→废弃` 是收口，不是改封面。前置见 [整份废弃的前置](#整份废弃的前置mandatory)。
@@ -62,7 +62,7 @@
 
 废弃文档始终归属于**它所在作用域**的 `deprecated/` 子目录，并保持原有相对结构。文件名 **MUST** 遵守 [命名规则](layer-system.md#命名规则)（`L{N}-{序号}-{英文描述}.md`，**不含中文**；序号默认三位补零、超过 999 自然四位），移入 `deprecated/` 时**保持原文件名不变**。
 
-**单应用模式**：
+**单系统**：
 
 ```
 ued/
@@ -74,13 +74,13 @@ ued/
     └── L2-001-user-mgmt-req.md       # 保持原文件名，镜像原相对结构
 ```
 
-**多应用模式**（每个应用各自独立，互不共用顶层）：
+**多子系统结构**（每个子系统各自独立，系统根不设共享 `deprecated/`）：
 
 ```
 ued/
-├── README.md                    # 顶层：应用注册表、公共规则
+├── README.md                    # 系统根：子系统注册表、系统发布（system-design-doc）
 ├── crm/
-│   ├── README.md                # 应用级：元信息、索引、计数器
+│   ├── README.md                # 子系统：元信息、索引、计数器
 │   ├── L2-001-user-req.md
 │   └── deprecated/              # 属于 crm 的废弃文档
 │       ├── README.md
@@ -125,7 +125,7 @@ ued/
 在**本作用域目录**内搜索引用（不存在 `active/`，活跃文档就在作用域目录）：
 
 ```bash
-# 单应用；多应用则把 ued/ 换成 ued/{app-name}/
+# 单系统；多子系统结构则把 ued/ 换成 ued/{subsystem}/
 grep -rn "L2-001" ued/ | grep -v "ued/deprecated/"
 grep -rn "用户管理系统需求" ued/ | grep -v "ued/deprecated/"
 ```
@@ -200,11 +200,11 @@ grep -rl "建议归档日期" ued/deprecated 2>/dev/null
 归档 = 移动文件，**不删除、不改名**。
 
 ```bash
-# 单应用
+# 单系统
 mkdir -p ued/deprecated
 mv ued/L2-001-user-mgmt-req.md ued/deprecated/
 
-# 多应用（移入该应用自己的 deprecated，不动其他应用）
+# 多子系统结构（移入该子系统自己的 deprecated，不动其他子系统）
 mkdir -p ued/crm/deprecated
 mv ued/crm/L2-001-user-mgmt-req.md ued/crm/deprecated/
 ```
@@ -287,8 +287,8 @@ mv ued/crm/L2-001-user-mgmt-req.md ued/crm/deprecated/
 - ✅ 到期后移入本作用域 `deprecated/`，永久留痕
 
 **2. 作用域独立**：
-- ❌ 多个应用共用顶层 `ued/deprecated/`
-- ✅ 每个应用各自维护 `ued/{app-name}/deprecated/`
+- ❌ 多个子系统共用系统根 `ued/deprecated/`
+- ✅ 每个子系统各自维护 `ued/{subsystem}/deprecated/`
 
 **3. 移动（归档）前先排查引用**（MANDATORY）：
 - ✅ 在作用域目录内排查全部引用，记录后再处理

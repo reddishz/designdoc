@@ -30,6 +30,12 @@ ATTR_FIELD = re.compile(
     r"^(\s*[-*+]\s+\*\*(.+?)\*\*\s*[:：]\s*)(.*)$"
 )
 _LINEAGE_AFTER = ("最后修订日期", "创建日期", "修订版本号", "细项状态")
+# 本模块自有的顶层字段；其余顶层字段（如系统级扩展 depends_on /
+# external_deps）不属于 design-doc，升版时必须原样保留。
+KNOWN_BASELINE_KEYS = {
+    "product_version", "full_version", "created", "updated", "date",
+    "prev", "patch_log", "note", "added", "removed", "changed", "items",
+}
 
 
 def version_key(ver: str) -> Tuple[int, int]:
@@ -137,6 +143,13 @@ def dump_baseline(data: Dict[str, Any]) -> str:
             lines.append(f"{key}:")
             for c in vals:
                 lines.append(f"  - {c}")
+    extras = {k: v for k, v in data.items() if k not in KNOWN_BASELINE_KEYS}
+    if extras:
+        lines.append("")
+        for key in sorted(extras):
+            block = yaml.safe_dump(
+                {key: extras[key]}, allow_unicode=True, sort_keys=False)
+            lines.extend(block.rstrip().splitlines())
     lines.append("")
     lines.append("items:")
     for it in data.get("items") or []:
@@ -254,6 +267,7 @@ def build_snapshot(
     prev_tip: Any = None,
     created: str = "",
     patch_log: Optional[List[Dict[str, str]]] = None,
+    extras: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     prev_items = list((prev_data or {}).get("items") or [])
     added, removed, changed = compute_delta(prev_items, curr_items)
@@ -282,6 +296,7 @@ def build_snapshot(
         "removed": removed,
         "changed": changed,
         "items": deepcopy(curr_items),
+        **deepcopy(extras or {}),
     }
 
 

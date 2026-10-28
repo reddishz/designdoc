@@ -4,26 +4,29 @@
 
 额外配置文件 **已移除且 MUST NOT 继续创建或使用**。按当前作用域 `README.md` 解析。
 
-## 作用域与模式（按结构判定，无 `doc_mode` 字段）
+## 作用域（单系统 or 子系统）
 
-模式**不再由字段声明**，按目录结构判定：
+本技能一次只处理**一个**设计作用域。按目录结构判定：
 
 | 结构 | 判定 | 职责 |
 |------|------|------|
-| `ued/` 下有业务文档，`ued/README.md` 无应用注册表 | 单应用 | `ued/README.md` 承担入口、元信息、计数器与全局索引 |
-| `ued/README.md` 含**应用注册表**（`app_key` + 目录 + `project_code`） | 多应用顶层 | 仅总入口、注册表与跨应用规则；**MUST NOT** 充当某应用的项目编码 / 产品版本 / 细项索引来源 |
-| `ued/{app-name}/README.md`，且顶层注册表登记了该 `app_key` | 应用级 | 该应用的元信息、计数器、导航与索引，独立 `产品版本` 与 `baselines/` |
-| `ued/shared/README.md`（可选） | 共享作用域 | 自成一个作用域，拥有自己的 `project_code`、产品版本与基线；不归任何单应用 |
+| `ued/` 内有业务文档，`ued/README.md` 无**子系统注册表** | 单系统 | `ued/README.md` 承担入口、元信息、计数器与全局索引 |
+| `ued/README.md` 含**子系统注册表**，各子系统目录各有 `README.md` | 多子系统 | 本技能只对每个 `ued/{subsystem}/` 运行；系统根由 [system-design-doc](../../../system-design-doc/SKILL.md) 负责 |
+| `ued/{subsystem}/README.md` 存在且顶层注册表登记了它 | 子系统作用域 | 该子系统的元信息、计数器、导航与索引，独立 `产品版本` 与 `baselines/` |
 
-- 顶层 README **MUST** 含应用注册表，而不是模式字段；应用级 README **MUST** 含 `app_key`，且与注册表一致。
-- 同一作用域内模式不一致（如顶层有注册表、子目录却无 README）→ 停下提示补齐，**MUST NOT** 猜一个模式继续。
+- 判定顺序：先看 `ued/README.md` 是否含子系统注册表；含 → 多子系统，**MUST NOT** 把系统根当单系统作用域。
+- 子系统的 `project_code`（若配置）**MUST** 与注册表 `编码前缀` 一致。
+- 注册表缺失登记、或注册了目录却无 `README.md` → 停下提示，**MUST NOT** 猜一个作用域继续。
+- 共享库不是特殊作用域：它就是注册表里的普通子系统，按同样规则处理。
 
 ## 解析顺序
 
 **作者**：作用域 README 的 `author`/`maintainer` → 运行环境主体标识 → 默认 `[designdoc](https://github.com/reddishz/designdoc)`。
 
-**项目编码**：作用域 `project_code` →（多应用）顶层注册表交叉校验 → 默认无（简洁编码）。**MUST NOT** 启用前缀，除非已配置且请求方确认。
+**项目编码**：作用域 `project_code` →（系统内）注册表 `编码前缀` 交叉校验 → 默认无（简洁编码）。**MUST NOT** 启用前缀，除非已配置且请求方确认。
 
-**提示（MANDATORY）**：多应用迹象 → 提示迁入子目录并注册；未配置 `project_code` 不得擅自加前缀。缺 README 字段时用解析链末位默认值继续，并 SHOULD 提醒补元信息。
+**术语表**：项目术语表固定在系统根 `ued/glossary.md`；子系统校验时用 `--glossary` 指向它，**MUST NOT** 在各子系统内另建术语表。
 
-项目编码形态与消歧见 [coding-system.md · 项目编码规则](../coding-system.md#项目编码规则)。README 最小字段（RECOMMENDED）：`project_name`、`project_code`、`app_key`（仅应用级）、`scope`、`author`/`maintainer`、`last_updated`、`产品版本`（仅应用级 / 单应用）。**MUST NOT** 写 `doc_mode`。
+**提示（MANDATORY）**：出现多子系统迹象 → 提示按子系统登记并迁入子目录；未配置 `project_code` 不得擅自加前缀。缺 README 字段时用解析链末位默认值继续，并 SHOULD 提醒补元信息。
+
+项目编码形态与消歧见 [coding-system.md · 项目编码规则](../coding-system.md#项目编码规则)。README 最小字段（RECOMMENDED）：`project_name`、`project_code`、`scope`、`author`/`maintainer`、`last_updated`、`产品版本`（仅作用域 README）。**MUST NOT** 写 `doc_mode`。

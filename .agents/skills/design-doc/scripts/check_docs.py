@@ -59,6 +59,7 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from baseline_ops import (  # noqa: E402
     FULL_VERSION_RE,
+    KNOWN_BASELINE_KEYS,
     VERSION_RE as BASELINE_VER_RE,
     bump_full_patch,
     build_snapshot,
@@ -77,6 +78,11 @@ from baseline_ops import (  # noqa: E402
     stamp_lineage_cache,
     xy_of,
 )
+
+
+def _baseline_extras(data: Dict) -> Dict:
+    """返回不属于 design-doc 的顶层扩展字段（system-design-doc 写入）。"""
+    return {k: v for k, v in (data or {}).items() if k not in KNOWN_BASELINE_KEYS}
 
 # 缺省快照：与 references/coding-system.md 的类型码表保持一致
 FALLBACK_TYPE_CODES = {
@@ -297,7 +303,7 @@ TPL_SKILL_PATH = re.compile(
     r"|scripts/check_docs\.py")
 TPL_PLACEHOLDER = re.compile(r"\{[^{}]*\}")
 # 片段型模板：正文是嵌入宿主文档的片段，容器保留自身标题结构
-TPL_FRAGMENT_FILES = {"project-registry.md"}
+TPL_FRAGMENT_FILES: Set[str] = set()
 # 目录内的索引文件，不是模板，不含哨兵
 TPL_NON_FILES = {"index.md"}
 
@@ -717,8 +723,9 @@ class DocInfo:
 class DesignDocChecker:
     """设计文档检查器"""
 
-    def __init__(self, ued_path: str = "./ued"):
+    def __init__(self, ued_path: str = "./ued", glossary_path: str = ""):
         self.ued_path = Path(ued_path)
+        self.glossary_path = Path(glossary_path) if glossary_path else None
         self.type_codes = load_type_codes()
         self.known_types = self.type_codes | DOC_CODE_PREFIXES | LEGACY_TYPE_CODES
         self.fixed_attrs, self.type_attrs = load_attr_whitelist()
@@ -749,6 +756,18 @@ class DesignDocChecker:
                 self.add_issue("ERROR", "读取文档失败", f"{md_file}: {exc}")
                 continue
             self.docs.append(self.parse_doc_info(str(md_file), content))
+        if self.glossary_path is not None:
+            gp = self.glossary_path.resolve()
+            if not any(Path(d.path).resolve() == gp for d in self.docs):
+                if gp.is_file():
+                    try:
+                        self.docs.append(self.parse_doc_info(
+                            str(gp), gp.read_text(encoding="utf-8")))
+                    except Exception as exc:  # noqa: BLE001
+                        self.add_issue("ERROR", "读取术语表失败", f"{gp}: {exc}")
+                else:
+                    self.add_issue("CRITICAL", "术语表不存在",
+                                   f"指定了 --glossary {gp}，但文件不存在")
         self._build_code_maps()
 
     def _build_code_maps(self) -> None:
@@ -1296,26 +1315,34 @@ class DesignDocChecker:
                            f"术语「{group[0].zh or group[0].en}」在多个文档定义："
                            f"{' / '.join(paths)}；项目内 MUST 只有一个权威定义")
 
+        expected = (self.glossary_path.resolve() if self.glossary_path is not None
+                    else (self.ued_path / "glossary.md").resolve())
+
         if not glos:
             if all_terms:
                 for path in sorted(terms_by_doc):
                     self.add_issue("ERROR", "缺少全局术语表",
-                                   f"{path}: 定义了术语但缺少 `ued/glossary.md`；"
+                                   f"{path}: 定义了术语但缺少 `{expected}`；"
                                    "术语 MUST 登记在唯一全局术语表")
             for path in sorted(used_by_doc):
                 self.add_issue("ERROR", "缺少全局术语表",
-                               f"{path}: 使用了 `所用术语` 但缺少 `ued/glossary.md`")
+                               f"{path}: 使用了 `所用术语` 但缺少 `{expected}`")
             return
 
-        expected = (self.ued_path / "glossary.md").resolve()
         if len(glos) > 1:
             self.add_issue("ERROR", "术语表位置非法",
                            "只允许一份全局术语表，当前找到："
                            + " / ".join(sorted(d.path for d in glos)))
-        g = next((d for d in glos if Path(d.path).resolve() == expected), glos[0])
-        if Path(g.path).resolve() != expected:
+        g = next((d for d in glos if Path(d.path).resolve() == expected), None)
+        if g is None:
             self.add_issue("ERROR", "术语表位置非法",
-                           f"{g.path}: 全局术语表 MUST 固定在 `{expected}`")
+                           f"未找到 `{expected}`；全局术语表 MUST 位于该路径")
+            return
+        for d in glos:
+            if Path(d.path).resolve() != expected:
+                self.add_issue("ERROR", "术语表位置非法",
+                               f"{d.path}: 全局术语表 MUST 固定在 `{expected}`，"
+                               "作用域内 MUST NOT 另放 glossary.md")
 
         # 元信息与修订
         ver = (g.meta.get("修订版本号") or "").strip()
@@ -1795,8 +1822,7 @@ class DesignDocChecker:
                 if col_index(header, "细项状态") is not None:
                     continue
                 # 仅当该列承载的确实是细项状态枚举时才要求改名：
-                # 文档索引表的 `状态` 指文档状态、应用注册表的 `状态` 列、
-                # 追溯矩阵的 `追溯状态`，均合规
+                # 文档索引表的 `状态` 指文档状态、追溯矩阵的 `追溯状态`，均合规
                 carries_item_code = False
                 values: Set[str] = set()
                 for _r, cells in rows:
@@ -1814,7 +1840,7 @@ class DesignDocChecker:
                 if carries_item_code and values and values <= set(ITEM_STATUSES):
                     self.add_issue("WARNING", "索引/清单列名不规范",
                                    f"{doc.path}: 表头 {header} 承载细项状态的列应为 `细项状态`"
-                                   "（`状态` 专用于文档元信息与应用注册表）")
+                                   "（`状态` 专用于文档元信息）")
             for item in doc.items:
                 if item.item_status and item.item_status not in ITEM_STATUSES:
                     self.add_issue("WARNING", "细项状态值无效",
@@ -1956,16 +1982,8 @@ class DesignDocChecker:
                                    "MUST NOT 让后续分配跳过")
 
     def _scope_of(self, path: str) -> str:
-        """作用域 = `ued/` 下的顶层目录；多应用模式为应用目录，单应用模式归并为根（`""`）。"""
-        try:
-            rel = Path(path).resolve().relative_to(self.ued_path.resolve())
-        except ValueError:
-            return ""
-        parents = rel.parts[:-1]
-        if not parents:
-            return ""
-        top = parents[0]
-        return "" if re.fullmatch(r"L[0-6](-.*)?", top) else top
+        """单一作用域：本检查器一次只校验一个 scope，所有文档同属根（`""`）。"""
+        return ""
 
     def check_counters(self) -> None:
         """README 编码计数器恒等式：`下一可用编号` MUST = 已用最大编号 + 1。
@@ -2097,28 +2115,28 @@ class DesignDocChecker:
             return max(dates) if dates else ""
         return ""
 
-    def _is_multi_app_top(self, doc: DocInfo) -> bool:
-        """顶层多应用 README：含应用注册表（app_key + 目录列），不再看 `doc_mode`。"""
-        if not doc.is_index:
+    def _is_system_root(self) -> bool:
+        """`ued/README.md` 含子系统注册表 → 系统根，应交给 system-design-doc。"""
+        readme = self.ued_path / "README.md"
+        if not readme.is_file():
             return False
-        for _idx, header, _rows in iter_tables(doc.lines):
+        try:
+            text = readme.read_text(encoding="utf-8")
+        except OSError:
+            return False
+        for _idx, header, _rows in iter_tables(text.splitlines()):
             heads = [norm(h) for h in header]
-            if "app_key" in heads and any(h in heads for h in ("目录", "directory", "dir")):
+            if "subsystem_key" in heads and any(
+                    h in heads for h in ("目录", "directory", "dir")):
                 return True
         return False
 
     def check_readme_product_version(self) -> None:
-        """应用级 README 应有 `产品版本`（`vX.Y`）。多应用顶层 README 不充当来源。
-
-        缺字段 WARNING 不阻断：存量按《存量文档迁移》补 `v1.0`，不追溯猜测。
-        """
+        """作用域根 README 应有 `产品版本`（`vX.Y`）；缺字段 WARNING 不阻断。"""
         for doc in self.docs:
             if not doc.is_index:
                 continue
-            if self._is_multi_app_top(doc):
-                if (doc.meta.get("doc_mode") or "").strip():
-                    self.add_issue("WARNING", "doc_mode 已移除",
-                                   f"{doc.path}: `doc_mode` 字段已移除；模式由应用注册表与目录结构判定")
+            if Path(doc.path).resolve().parent != self.ued_path.resolve():
                 continue
             if not (doc.meta.get("project_name")
                     or doc.meta.get("project_code")
@@ -2134,19 +2152,18 @@ class DesignDocChecker:
                                f"{doc.path}: `产品版本` '{pv}' 应为 v主.次（如 v1.0）")
 
     def _scope_dirs_with_product(self) -> List[Tuple[Path, str, str]]:
-        """返回 (作用域目录, 产品版本, README 相对路径)。"""
-        out: List[Tuple[Path, str, str]] = []
-        for doc in self.docs:
-            if not doc.is_index:
-                continue
-            if self._is_multi_app_top(doc):
-                continue
-            pv = (doc.meta.get("产品版本") or "").strip()
-            if not pv or not VERSION_RE.match(pv):
-                continue
-            scope = Path(doc.path).resolve().parent
-            out.append((scope, pv, doc.path))
-        return out
+        """单一作用域：返回根 README 的 (作用域目录, 产品版本, README 路径)。"""
+        readme = self.ued_path / "README.md"
+        if not readme.is_file():
+            return []
+        doc = next((d for d in self.docs
+                    if Path(d.path).resolve() == readme.resolve()), None)
+        if doc is None or not doc.is_index:
+            return []
+        pv = (doc.meta.get("产品版本") or "").strip()
+        if not pv or not VERSION_RE.match(pv):
+            return []
+        return [(self.ued_path.resolve(), pv, doc.path)]
 
     def check_product_baselines(self) -> None:
         """校验 `baselines/vX.Y.yaml`：形态、增量可重算；当前版对照活正式集。"""
@@ -2187,9 +2204,8 @@ class DesignDocChecker:
                 checked_files.add(bpath.resolve())
 
         # 无 README 产品版本指针的 baselines/（如夹具）：按当前版严格对照
-        for bdir in sorted(self.ued_path.rglob("baselines")):
-            if not bdir.is_dir():
-                continue
+        bdir = find_baseline_dir(self.ued_path)
+        if bdir.is_dir():
             for bpath in sorted(bdir.glob("v*.yaml")):
                 if not BASELINE_VER_RE.match(bpath.stem):
                     continue
@@ -2365,13 +2381,16 @@ class DesignDocChecker:
         scopes = self._scope_dirs_with_product()
         if not scopes:
             for doc in self.docs:
-                if not doc.is_index or self._is_multi_app_top(doc):
+                if not doc.is_index:
                     continue
-                if doc.meta.get("project_name") or doc.meta.get("app_key"):
-                    scopes.append((Path(doc.path).resolve().parent, "", doc.path))
+                if Path(doc.path).resolve().parent != self.ued_path.resolve():
+                    continue
+                if doc.meta.get("project_name") or doc.meta.get("project_code"):
+                    scopes.append((self.ued_path.resolve(), "", doc.path))
                     break
         if not scopes:
-            raise RuntimeError("未找到应用级 README（单应用或应用级目录的 README）")
+            raise RuntimeError("未找到作用域根 README（`ued/README.md`）；"
+                               "系统根请使用 system-design-doc")
 
         outs: List[Path] = []
         errors: List[str] = []
@@ -2474,6 +2493,7 @@ class DesignDocChecker:
             cur_pv, curr_items, prev_data=prev_data, note=note,
             full_version=new_full, prev_tip=prev_tip if prev_data else None,
             created=created, patch_log=log,
+            extras=_baseline_extras(cur_data),
         )
         # PATCH 不改 prev
         snap["prev"] = cur_data.get("prev")
@@ -2514,6 +2534,7 @@ class DesignDocChecker:
         snap = build_snapshot(
             new_pv, curr_items, prev_data=prev_data, note=note,
             full_version=initial_full(new_pv), prev_tip=prev_tip,
+            extras=_baseline_extras(prev_data or {}),
         )
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_baseline(snap), encoding="utf-8")
@@ -4238,6 +4259,14 @@ class DesignDocChecker:
 
     def run_checks(self) -> List[Dict]:
         """运行所有检查"""
+        if self._is_system_root():
+            self.add_issue(
+                "ERROR", "系统根需由 system-design-doc 校验",
+                f"{self.ued_path}: `README.md` 含子系统注册表；本检查器一次只校验"
+                "单一作用域。请对每个 `ued/{subsystem}` 分别运行本脚本，"
+                "系统级改用 system-design-doc/scripts/check_system.py")
+            return self.issues
+
         print("🔍 开始扫描文档...")
         self.scan_docs()
         print(f"📄 找到 {len(self.docs)} 个文档")
@@ -4527,7 +4556,9 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="DesignDoc 文档检查工具")
     parser.add_argument("-p", "--path", default="./ued",
-                        help="UED 目录路径 (默认: ./ued)")
+                        help="UED 作用域路径（单系统 ued/ 或子系统 ued/{subsystem}/；默认: ./ued）")
+    parser.add_argument("--glossary", default="",
+                        help="项目全局术语表路径；子系统校验时指向系统根 ued/glossary.md")
     parser.add_argument("-o", "--output", help="输出报告到文件")
     parser.add_argument("-v", "--verbose", action="store_true", help="显示详细信息")
     parser.add_argument("--refs", metavar="CODE",
@@ -4561,7 +4592,7 @@ def main() -> int:
     if args.instantiate:
         return _print_instantiated(args.instantiate, args.segment)
 
-    checker = DesignDocChecker(args.path)
+    checker = DesignDocChecker(args.path, glossary_path=args.glossary)
 
     if args.bump_product:
         if sum(bool(x) for x in (args.patch, args.minor, args.major)) > 1:

@@ -623,6 +623,176 @@ def run_baseline_bump_cases():
     return 0
 
 
+def run_single_scope_and_extension_cases():
+    """单一作用域守卫、外部术语表、基线扩展字段保留。"""
+    import tempfile
+    import yaml
+
+    check_docs = _load_checker()
+    fails = []
+
+    def check(name, cond):
+        if not cond:
+            fails.append(name)
+
+    readme = """# 作用域
+
+| 字段 | 值 |
+|------|----|
+| project_name | 作用域 |
+| project_code | SCP |
+| 产品版本 | v1.0 |
+
+## 发版记录
+
+| 产品版本 | 日期 | 说明 |
+|----------|------|------|
+"""
+
+    doc = """# L2-001-示例
+
+| 属性 | 值 |
+|------|----|
+| 文档编码 | L2-001 |
+| 层级 | L2 - 系统/产品需求 |
+| 修订版本号 | 1 |
+| 状态 | 初稿 |
+| 作者 | tester |
+| 创建日期 | 2026-01-01 |
+| 最后更新 | 2026-01-01 |
+
+## 术语和概念
+
+### 订单
+
+- **中文名称**：订单
+- **英文名称**：Order
+
+**定义**：客户提交的购买请求。
+
+## 需求定义
+
+<a id="fr-001"></a>
+### FR-001：下单
+
+- **细项状态**：正式
+- **修订版本号**：1
+- **创建日期**：2026-01-01
+- **最后修订日期**：2026-01-01
+- **优先级**：P1
+- **验证方式**：单元测试
+
+## 变更记录
+
+| 修订版本号 | 日期 | 作者 | 变更说明 |
+|------------|------|------|----------|
+| 1 | 2026-01-01 | tester | 初稿创建 |
+"""
+
+    glossary = """# 全局术语表
+
+| 属性 | 值 |
+|------|----|
+| 修订版本号 | 1 |
+| 作者 | tester |
+| 创建日期 | 2026-01-01 |
+| 最后更新 | 2026-01-01 |
+
+## 术语
+
+| 中文名称 | 英文名称 | 定义 | 定义位置 |
+|----------|----------|------|----------|
+| 订单 | Order | 客户提交的购买请求。 | L2-001 |
+
+## 变更记录
+
+| 修订版本号 | 日期 | 作者 | 变更说明 |
+|------------|------|------|----------|
+| 1 | 2026-01-01 | tester | 初稿创建 |
+"""
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "ued"
+        root.mkdir()
+        (root / "README.md").write_text(
+            "# 系统\n\n## 子系统注册表\n\n"
+            "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 角色文档 | 状态 |\n"
+            "|---------------|------------|------|----------|----------|------|\n"
+            "| crm | CRM | `crm/` | CRM | CMP-01 | 正式 |\n",
+            encoding="utf-8")
+        crm = root / "crm"
+        crm.mkdir()
+        (crm / "README.md").write_text(readme, encoding="utf-8")
+        (crm / "L2-001-sample.md").write_text(doc, encoding="utf-8")
+        (root / "glossary.md").write_text(glossary, encoding="utf-8")
+
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        check("系统根被拒",
+              any(i["title"] == "系统根需由 system-design-doc 校验"
+                  for i in checker.issues))
+
+        checker = check_docs.DesignDocChecker(
+            str(crm), glossary_path=str(root / "glossary.md"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        glossary_errors = [i for i in checker.issues
+                           if i["title"] in GLOSSARY_TITLES and i["level"] == "ERROR"]
+        check("外部术语表可用", not glossary_errors)
+
+        (crm / "glossary.md").write_text(glossary, encoding="utf-8")
+        checker = check_docs.DesignDocChecker(
+            str(crm), glossary_path=str(root / "glossary.md"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        check("子系统内术语表非法",
+              any(i["title"] == "术语表位置非法" for i in checker.issues))
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "README.md").write_text(readme, encoding="utf-8")
+        (root / "L2-001-sample.md").write_text(doc, encoding="utf-8")
+
+        def bump(**kw):
+            checker = check_docs.DesignDocChecker(str(root))
+            with contextlib.redirect_stdout(io.StringIO()):
+                checker.bump_product_version(**kw)
+
+        def load(pv):
+            return yaml.safe_load((root / "baselines" / f"{pv}.yaml").read_text(
+                encoding="utf-8"))
+
+        bump(note="首份")
+        first = load("v1.0")
+        first["depends_on"] = [{"subsystem": "oms", "product_version": "v2.5"}]
+        first["external_deps"] = [{"name": "identity-provider",
+                                   "product_version": "v4.0"}]
+        (root / "baselines" / "v1.0.yaml").write_text(
+            yaml.safe_dump(first, allow_unicode=True, sort_keys=False),
+            encoding="utf-8")
+
+        bump(patch=True, note="PATCH 保留扩展")
+        check("PATCH 保留 depends_on",
+              load("v1.0").get("depends_on") == first["depends_on"])
+        check("PATCH 保留 external_deps",
+              load("v1.0").get("external_deps") == first["external_deps"])
+
+        bump(note="MINOR 继承扩展")
+        v11 = load("v1.1")
+        check("MINOR 继承 depends_on", v11.get("depends_on") == first["depends_on"])
+        check("MINOR 继承 external_deps",
+              v11.get("external_deps") == first["external_deps"])
+
+    if fails:
+        print("FAIL 单一作用域 / 扩展字段用例未通过")
+        for name in fails:
+            print(f"     未通过：{name}")
+        return 1
+    print("单一作用域 / 扩展字段用例通过")
+    return 0
+
+
 def run_template_body_hygiene_cases():
     """哨兵内写作约束 / 技能包路径 MUST 报；干净正文 MUST 不报。"""
     import importlib.util
@@ -741,6 +911,7 @@ def main():
     rc |= run_glossary_fixtures(verbose)
     rc |= run_skill_link_fixtures(verbose)
     rc |= run_baseline_bump_cases()
+    rc |= run_single_scope_and_extension_cases()
     rc |= run_template_body_hygiene_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0

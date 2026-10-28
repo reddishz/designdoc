@@ -9,5 +9,5 @@
 3. 按模板生成，**MUST NOT** 含具体实现代码。
 4. **Checkpoint 1**：暂停，确认大纲与核心细项（增量时含上层是否同步）。
 5. 确认后按 [allocate-and-lock.md](allocate-and-lock.md) 分配编码。
-6. 立即更新当前作用域 `README.md` 与文档末尾清单（状态默认 `初稿`）。单应用改 `ued/README.md`；多应用改 `ued/{app}/README.md`。
+6. 立即更新当前作用域 `README.md` 与文档末尾清单（状态默认 `初稿`）。单系统改 `ued/README.md`；多子系统结构改 `ued/{subsystem}/README.md`（系统根注册表由 system-design-doc 维护）。
 7. 自检：与上层无冲突；标题适度宽泛；类型码只在定义层写定义块——详细设计里的「系统应当」先落到 L2 的 FR/NFR；按 [review-guidelines.md](../review-guidelines.md) 过锁定与措辞。

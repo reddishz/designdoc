@@ -1,6 +1,6 @@
-> **模板：项目设计文档 README**
+> **模板：作用域 README（单系统 / 子系统）**
 >
-> 按目录结构选择哨兵段（A 单应用 / B 多应用顶层 / C 应用级）：顶层含应用注册表 → B；`ued/{app-name}/README.md` → C；其余 `ued/README.md` → A。模式不再用字段声明。职责切分见 [runtime-config.md](../../references/workflows/runtime-config.md)。
+> 单系统与子系统使用同一模板：单系统放在 `ued/README.md`；多子系统结构下每个 `ued/{subsystem}/README.md` 各一份。系统根 `ued/README.md` **不用**本模板，见 [system-design-doc · readme-system](../../../system-design-doc/assets/templates/readme-system.md)。作用域判定见 [runtime-config.md](../../references/workflows/runtime-config.md)。
 >
 > **通用规则**：见 [index.md · 整篇型模板共用](index.md#整篇型模板共用)。
 >
@@ -8,11 +8,9 @@
 
 ---
 
-> **模板 A：单应用模式 `ued/README.md`**
->
 > 产品基线：`baselines/vX.Y.yaml`（两段式文件；tip 为文件内 `full_version`=`vX.Y.Z`）。规则见 [product-version.md](../../references/product-version.md)。`--bump-product --patch|--minor|--major`；PATCH 同步 revision（首份基线另可增删成员），MINOR/MAJOR 立新基线并冻结旧文件。
 
-<!-- TEMPLATE:BEGIN 模板 A：单应用模式 ued/README.md -->
+<!-- TEMPLATE:BEGIN 模板 A：作用域 README（单系统 ued/README.md 或 ued/{subsystem}/README.md） -->
 # {project_name} 设计文档索引
 
 ## 项目元信息
@@ -21,7 +19,7 @@
 |------|----|
 | project_name | {project_name} |
 | project_code | {project_code 或留空} |
-| scope | {应用范围说明} |
+| scope | {作用域范围说明} |
 | author | {author} |
 | last_updated | {YYYY-MM-DD} |
 | 产品版本 | v1.0 |
@@ -109,109 +107,4 @@
 | 编码 | 标题 | 所属文档 | 细项状态 |
 |------|------|----------|------|
 | {完整编码} | {标题} | {文档编码} | 初稿 |
-<!-- TEMPLATE:END -->
-
----
-
-> **模板 B：多应用模式顶层 `ued/README.md`**
-
-<!-- TEMPLATE:BEGIN 模板 B：多应用模式顶层 ued/README.md -->
-# UED 多应用总览
-
-## 总览元信息
-
-| 字段 | 值 |
-|------|----|
-| workspace_name | {文档域名称} |
-| owner | {author} |
-| last_updated | {YYYY-MM-DD} |
-
-## 应用注册表
-
-| app_key | 应用名称 | 目录 | 项目编码 | 状态 | 说明 |
-|---------|----------|------|--------------|------|------|
-| crm | CRM | `crm/` | CRM | 正式 | {说明} |
-| oms | OMS | `oms/` | OMS | 正式 | {说明} |
-
-## 术语表（可选）
-
-全局术语表：[glossary.md](glossary.md)。跨应用共用的术语只有这一份索引。
-
-## 共享文档（可选）
-
-| 目录/文件 | 说明 |
-|-----------|------|
-| `shared/README.md` | 共享文档入口 |
-| `shared/L0-vision/` | 共享战略文档 |
-
-## 跨应用规则
-
-- 每个应用必须维护自己的 `README.md`、编码计数器和应用级全局编码索引。
-- 顶层 `ued/README.md` 不维护各应用细项级全量索引。
-- 跨应用引用必须使用完整编码。
-- 新增应用前，必须先在应用注册表登记 `app_key`、目录名和 `project_code`。
-<!-- TEMPLATE:END -->
-
----
-
-> **模板 C：多应用模式应用级 `ued/{app-name}/README.md`**
-
-<!-- TEMPLATE:BEGIN 模板 C：多应用模式应用级 ued/{app-name}/README.md -->
-# {project_name} 设计文档索引
-
-## 项目元信息
-
-| 字段 | 值 |
-|------|----|
-| app_key | {app_key} |
-| project_name | {project_name} |
-| project_code | {project_code} |
-| scope | {应用范围说明} |
-| author | {author} |
-| last_updated | {YYYY-MM-DD} |
-| 产品版本 | v1.0 |
-
-## 术语表（可选）
-
-全局术语表：[../glossary.md](../glossary.md)。术语由全项目共用，不在应用目录内另建。
-
-## 发版记录
-
-| 产品版本 | 日期 | 说明 |
-|----------|------|------|
-
-产品基线快照目录：`baselines/`（每两段产品版本一份 `vX.Y.yaml`；首份基线可在开发期增删成员，PATCH 只同步 `items`、不记成员差异；其余基线成员变化须立新基线（MINOR/MAJOR））。
-
-## 文档索引
-
-### L2 - 系统/产品需求
-| 文档编码 | 文档标题 | 状态 | 作者 | 更新日期 |
-|----------|----------|------|------|----------|
-| {完整文档编码} | {文档标题} | {状态} | {作者} | {YYYY-MM-DD} |
-
-### L3 - 概念架构
-| 文档编码 | 文档标题 | 状态 | 作者 | 更新日期 |
-|----------|----------|------|------|----------|
-| {完整文档编码} | {文档标题} | {状态} | {作者} | {YYYY-MM-DD} |
-
-### L4 - 逻辑/系统设计
-| 文档编码 | 文档标题 | 状态 | 作者 | 更新日期 |
-|----------|----------|------|------|----------|
-| {完整文档编码} | {文档标题} | {状态} | {作者} | {YYYY-MM-DD} |
-
-## 编码计数器
-
-| 类型码 | 下一可用编号 | 备注 |
-|--------|--------------|------|
-| FR | 016 | 已启用 `{project_code}-` 前缀 |
-| IF | 008 | 已启用 `{project_code}-` 前缀 |
-
-## 全局编码索引
-
-### 按类型码索引
-
-#### FR - 功能需求（Functional Requirement）
-| 编码 | 标题 | 所属文档 | 细项状态 |
-|------|------|----------|------|
-| {project_code}-FR-001 | {标题} | {文档编码} | 初稿 |
 <!-- TEMPLATE:END -->
