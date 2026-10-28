@@ -8,7 +8,7 @@
 |------------|-----------|----------------------|
 | 改功能 / 修缺陷 / 改行为（项目有 `ued/`） | [before-code-change.md](workflows/before-code-change.md) | 设计需改而未先改文档；实现依据不在**当前**产品基线或 revision 落后 |
 | 新建 / 改编码、标题、类型码 | [allocate-and-lock.md](workflows/allocate-and-lock.md) + [锁定矩阵](object-model.md#锁定矩阵mandatory) | 删除或复用已分配编码；就地改编码 ID / 类型码 / `正式`·`草案` 标题的语义 / 正式含义 |
-| 改标题措辞 / 术语改名 / 引用路径，语义不变 | [maintenance-change.md](workflows/maintenance-change.md) | 与语义修改或状态转换混提交；跳过 `--refs` 与全文扫描；改动修订号 / 基线 / 钉住 |
+| 统一用语 / 修正措辞或路径 / 名称与标题非语义调整，语义不变 | [maintenance-change.md](workflows/maintenance-change.md) | 与语义修改或状态转换混提交；跳过 `--refs` 与全文扫描；改动修订号 / 基线 / 钉住 |
 | 废弃 / 受控复活 | [item-deprecation.md](item-deprecation.md) / [doc-deprecation.md](doc-deprecation.md) + [状态定义](status-definitions.md) | 废弃字段不齐；仍有活细项就整份废弃；复活条件未逐条满足或未取得人确认 |
 | 定稿 / 发版 / 基线变更 | [lifecycle.md](workflows/lifecycle.md)（Checkpoint 5）与 [baseline-change.md](workflows/baseline-change.md) | 未经人确认的定稿 / `--bump-product`；未跑检查 |
 | 维护术语 / 解决术语冲突 | [glossary-conventions.md](glossary-conventions.md) | 同一术语在不同文档各定义一次；用第二张表或应用命名空间并存同名不同义 |

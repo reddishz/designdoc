@@ -11,7 +11,6 @@ DesignDoc 文档检查工具
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
 - 修订号递增时机（仅 `正式→草案` 解冻或 `废弃→草案` 复活时 +1）、修订号不得改小、变更记录倒序
 - 维护性变更：`变更记录` 中的 `N（维护）` 行（批次号 / 类型 / `；语义不变`）、与同号语义行的位置、文档修订号只与最新语义行比对
-- `曾用名`：细项定义块的维护段位置与 `旧称（至 YYYY-MM-DD）` 形态；术语块同名可选属性行
 - 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项且可重算 added/removed/changed
 - 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；升版时对 added/removed 回写；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
@@ -22,7 +21,7 @@ DesignDoc 文档检查工具
 - 零章节编号引用门禁、文件名与结构合规
 - 定义块形态：禁粗体式定义位、锚点行齐备且与编码一致、属性行形态、属性名白名单
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
-- 属性行组段位：治理段（`细项状态` / `修订版本号` / `创建日期` / `最后修订日期`）齐备且居首、维护段（有则紧随治理段）、发版谱系段（有则次之）、追溯段居末
+- 属性行组段位：治理段（`细项状态` / `修订版本号` / `创建日期` / `最后修订日期`）齐备且居首、发版谱系段（有则）次之、追溯段居末
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期；细项 `草案` 而文档 `正式` 为门控违规
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
@@ -90,7 +89,6 @@ LEGACY_TYPE_CODES = {"API", "FLD", "DICT", "README", "CHANGELOG"}
 # 缺省快照：与 references/coding-system.md ·《属性行定义集（封闭）》保持一致。
 # 属性名集是封闭的——白名单外的属性名 MUST 改写进正文段，MUST NOT 自造名承载。
 FALLBACK_FIXED_ATTRS = ("细项状态", "修订版本号", "创建日期", "最后修订日期",
-                        "曾用名",
                         "引入版本", "退出版本",
                         "废弃时间", "废弃类别", "废弃原因", "替代方案", "复活时间",
                         "出处", "来源", "依赖")
@@ -159,8 +157,6 @@ MAINT_MARK_HINT_RE = re.compile(r"维护")
 MAINT_DESC_RE = re.compile(
     r"^MNT-(\d{4}-\d{2}-\d{2})-(\d{2})\s+"
     r"(命名维护|文字维护|引用维护|结构维护)：(.+?)；语义不变$")
-OLD_NAME_RE = re.compile(r"^.+（至 \d{4}-\d{2}-\d{2}）$")
-MAINT_SEGMENT = ("曾用名",)
 
 
 def is_legacy_rollback_action(desc: str) -> bool:
@@ -689,9 +685,6 @@ class TermInfo:
     zh: str = ""
     en: str = ""
     definition: str = ""
-    old_names: str = ""
-    old_name_line: int = 0
-    attr_names: Tuple[str, ...] = ()
 
 
 @dataclass
@@ -1095,7 +1088,7 @@ class DesignDocChecker:
         r"^\s{0,3}(#{1,6})\s+(?:\d+(?:[.．]\d+)*[.、]?\s*)?"
         r"(术语和概念|术语与概念)(?:\s*[（(][^）)]*[）)])?\s*$")
     TERM_ATTR_RE = re.compile(
-        r"^\s*[-*+]\s*\*\*(中文名称|英文名称|英文标识符|定义来源|曾用名)\*\*\s*[：:]\s*(.*)$")
+        r"^\s*[-*+]\s*\*\*(中文名称|英文名称|英文标识符|定义来源)\*\*\s*[：:]\s*(.*)$")
     TERM_DEF_RE = re.compile(r"^\s*(?:[-*+]\s*)?\*\*定义\*\*\s*[：:]\s*(.*)$")
     TERM_COLUMNS = ("中文名称", "英文名称", "定义", "定义位置")
 
@@ -1107,16 +1100,11 @@ class DesignDocChecker:
                           heading: str) -> TermInfo:
         fields: Dict[str, str] = {}
         definition = ""
-        old_line = 0
-        attr_names: List[str] = []
         for j in range(start + 1, end):
             line = doc.lines[j]
             m = self.TERM_ATTR_RE.match(line)
             if m:
                 fields[m.group(1)] = norm(m.group(2))
-                attr_names.append(m.group(1))
-                if m.group(1) == "曾用名" and not old_line:
-                    old_line = j + 1
                 continue
             dm = self.TERM_DEF_RE.match(line)
             if dm and not definition:
@@ -1133,9 +1121,6 @@ class DesignDocChecker:
             zh=fields.get("中文名称", ""),
             en=fields.get("英文名称", ""),
             definition=definition,
-            old_names=fields.get("曾用名", ""),
-            old_name_line=old_line,
-            attr_names=tuple(attr_names),
         )
 
     def _term_sections(self, doc: DocInfo) -> List[Tuple[int, str, str, List[TermInfo]]]:
@@ -1269,22 +1254,6 @@ class DesignDocChecker:
                             self.add_issue("ERROR", "术语标题与名称不一致",
                                            f"{doc.path}:{term.line} 标题「{term.heading}」"
                                            f"应等于中文名称「{term.zh}」或英文名称「{term.en}」")
-                    if term.old_names and not self._is_placeholder(term.old_names):
-                        parts = [p.strip() for p in term.old_names.split("；") if p.strip()]
-                        if not parts or any(not OLD_NAME_RE.match(p) for p in parts):
-                            self.add_issue("WARNING", "曾用名格式错误",
-                                           f"{doc.path}:{term.old_name_line} 术语"
-                                           f"「{term.zh or term.heading}」的 `曾用名` "
-                                           f"'{term.old_names[:30]}' MUST 为 "
-                                           "`旧称（至 YYYY-MM-DD）`，多个旧称用 `；` 分隔"
-                                           "并按时间倒序")
-                    if "曾用名" in term.attr_names and "英文名称" in term.attr_names \
-                            and term.attr_names.index("曾用名") \
-                            < term.attr_names.index("英文名称"):
-                        self.add_issue("WARNING", "曾用名位置错误",
-                                       f"{doc.path}:{term.old_name_line} 术语"
-                                       f"「{term.zh or term.heading}」的 `曾用名` 排在 "
-                                       "`英文名称` 之前；术语块内 MUST 位于 `英文名称` 之后")
                     doc_terms.append(term)
             if doc_terms:
                 seen: Dict[Tuple[str, str], TermInfo] = {}
@@ -2981,7 +2950,7 @@ class DesignDocChecker:
         return out
 
     def _check_attr_segments(self, doc: DocInfo, item: ItemInfo, idx: int) -> None:
-        """属性行组段位校验：治理段齐备且居首，维护段 / 发版谱系段有则依次紧随，追溯段居末。
+        """属性行组段位校验：治理段齐备且居首，发版谱系段有则紧随，追溯段居末。
 
         房规单点承载于 `references/coding-system.md` ·《细项定义块形态》与
         《追溯类属性行命名》；本方法只执行校验。废弃登记字段的值形态一并在此判，
@@ -2991,7 +2960,6 @@ class DesignDocChecker:
         if not attrs:
             return                      # 整组缺失属「缺属性行」，不在本方法职责内
         self._check_gov_segment(doc, item, attrs)
-        self._check_maint_segment(doc, item, attrs)
         self._check_lineage_segment(doc, item, attrs)
         self._check_trace_segment(doc, item, attrs)
         self._check_dep_item(doc, item, attrs)
@@ -3017,7 +2985,7 @@ class DesignDocChecker:
                 "ERROR", "属性名未在定义集内",
                 f"{doc.path}:{lineno} `{item.code}` 定义块的属性行 `{name}` 未在"
                 "《属性行定义集（封闭）》登记；该类型码允许的自有属性为 "
-                f"{hint}（固定属性为治理段 / 维护段 / 发版谱系段 / 废弃登记段 / 追溯段）。"
+                f"{hint}（固定属性为治理段 / 发版谱系段 / 废弃登记段 / 追溯段）。"
                 "未登记的语义 MUST 改写进正文段（属性行组后空一行，形态自由），"
                 "MUST NOT 自造属性名")
 
@@ -3077,42 +3045,6 @@ class DesignDocChecker:
                                f"'{val[:24]}' {msg}")
         self._check_rev_invariants(doc, item, attrs, pos)
 
-    def _check_maint_segment(self, doc: DocInfo, item: ItemInfo,
-                             attrs: List[Tuple[str, str, int]]) -> None:
-        """维护段：`曾用名` 有则紧随治理段、位于谱系段与内容段之前。
-
-        维护段属记录型（MAY）：仅命名维护后出现，随维护追加、不解冻不加号；
-        房规见 `references/coding-system.md` ·《细项定义块形态》与
-        `references/status-definitions.md` ·《曾用名（记录型，MAY）》。
-        """
-        names = [n for n, _v, _l in attrs]
-        hits = [(i, n) for i, n in enumerate(names) if n in MAINT_SEGMENT]
-        if not hits:
-            return
-        if len(hits) > 1:
-            self.add_issue("ERROR", "维护段重复",
-                           f"{doc.path}:{attrs[hits[1][0]][2]} `{item.code}`: `曾用名` "
-                           "只写一行，多个旧称用 `；` 分隔（按时间倒序）")
-        gov_idxs = [i for i, n in enumerate(names) if n in GOV_SEGMENT]
-        start = (max(gov_idxs) + 1) if gov_idxs else 0
-        for k, (i, n) in enumerate(hits):
-            if i != start + k:
-                self.add_issue("ERROR", "维护段位置错乱",
-                               f"{doc.path}:{attrs[i][2]} `{item.code}`: `{n}` 排在第 "
-                               f"{i + 1} 行，MUST 紧随治理段（第 {start + 1} 行起）、"
-                               "位于发版谱系段与内容段之前")
-                break
-        for i, _n in hits:
-            val, lineno = attrs[i][1], attrs[i][2]
-            if not val or "{" in val or val.lower() in EMPTY_MARKS:
-                continue
-            parts = [p.strip() for p in val.split("；") if p.strip()]
-            if not parts or any(not OLD_NAME_RE.match(p) for p in parts):
-                self.add_issue("WARNING", "曾用名格式错误",
-                               f"{doc.path}:{lineno} `{item.code}`: `曾用名` 的值 "
-                               f"'{val[:30]}' MUST 为 `旧称（至 YYYY-MM-DD）`，"
-                               "多个旧称用 `；` 分隔并按时间倒序")
-
     def _lineage_present(self, val: str) -> bool:
         return bool(val) and "{" not in val and val.lower() not in EMPTY_MARKS
 
@@ -3160,11 +3092,6 @@ class DesignDocChecker:
         if hits:
             gov_idxs = [pos[n] for n in GOV_SEGMENT if n in pos]
             start = (max(gov_idxs) + 1) if gov_idxs else 0
-            # 维护段（`曾用名`）位于治理段与谱系段之间；仅当它按序紧随治理段时
-            # 才为谱系段让位，避免一处错位连带报两条 ERROR。
-            maint_hits = [i for i, n in enumerate(names) if n in MAINT_SEGMENT]
-            if maint_hits and all(i == start + k for k, i in enumerate(maint_hits)):
-                start += len(maint_hits)
             misplaced = False
             for k, (i, n) in enumerate(hits):
                 if i != start + k:
@@ -3927,8 +3854,8 @@ class DesignDocChecker:
         """锁定矩阵·标题：引用处标题 MUST 与定义位一致。
 
         `初稿` 期改标题 MUST 先扫描全部引用处并同步（`--refs CODE` 可反查）；
-        `正式` / `草案` / `废弃` 期标题锁定：非语义命名维护走维护性变更
-        （`N（维护）` 行 + `曾用名`），语义变更 MUST 先废弃再新建编码。
+        `正式` / `草案` / `废弃` 期标题锁定：非语义维护走维护性变更
+        （`N（维护）` 行），语义变更 MUST 先废弃再新建编码。
         """
         titles: Dict[str, Tuple[str, str]] = {}
         for doc in self.docs:
@@ -3957,8 +3884,8 @@ class DesignDocChecker:
                                    f"{doc.path}:{lineno} 引用 {code} 写作「{raw_title}」，"
                                    f"定义位为「{expect}」（{site}）；`初稿` 期改标题 MUST 同步"
                                    "全部引用处；`正式` / `草案` / `废弃` 期标题锁定，"
-                                   "非语义命名维护 MUST 走维护性变更（`N（维护）` 行 + "
-                                   "`曾用名`），语义变更 MUST 先废弃再新建编码")
+                                   "非语义维护 MUST 走维护性变更（`N（维护）` 行），"
+                                   "语义变更 MUST 先废弃再新建编码")
 
     def check_ref_freshness(self) -> None:
         """REF 时效字段齐备性与复查周期：超期未核验提示复核（WARNING，不阻断）。"""

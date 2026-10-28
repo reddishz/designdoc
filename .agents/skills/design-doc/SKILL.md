@@ -39,7 +39,7 @@ metadata:
     - "自动化文档规范性审查"
     - "跨文档引用一致性维护"
     - "全局术语表与单一权威定义"
-    - "非语义文字维护与命名变更追溯"
+    - "非语义维护与变更追溯"
     - "变更代码前的设计对照与文档优先"
 compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执行主体标识
 ---
@@ -70,7 +70,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 增量加功能 / 加需求 | [change-feature.md](references/workflows/change-feature.md) |
 | 创建新设计文档 | [create-document.md](references/workflows/create-document.md) |
 | 分配编码；改 ID/类型码/正式标题或含义 | [allocate-and-lock.md](references/workflows/allocate-and-lock.md) |
-| 改标题措辞 / 术语改名 / 引用路径，语义不变 | [maintenance-change.md](references/workflows/maintenance-change.md) |
+| 统一用语 / 修正措辞或路径 / 名称与标题非语义调整，语义不变 | [maintenance-change.md](references/workflows/maintenance-change.md) |
 | 废弃细项/文档 | [lifecycle.md](references/workflows/lifecycle.md)（作废段） |
 | 定稿确认 / 提交收尾 / 基线漂移询问 | [lifecycle.md](references/workflows/lifecycle.md)（Checkpoint 5；见上「仅当」） |
 | 基线 PATCH / MINOR / MAJOR | [baseline-change.md](references/workflows/baseline-change.md) |
@@ -87,7 +87,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 ## 不变量（任何任务）
 
 1. 已分配编码 **MUST NOT** 删除或复用；放弃走作废。
-2. 编码 ID/类型码永不就地改；`正式`/`草案` 标题与已正式业务含义不就地改**语义**（通道见 [锁定矩阵](references/object-model.md#锁定矩阵mandatory)）；不改含义的命名维护走 [维护性变更](references/workflows/maintenance-change.md)，不改状态与修订号。
+2. 编码 ID/类型码永不就地改；`正式`/`草案` 标题与已正式业务含义不就地改**语义**（通道见 [锁定矩阵](references/object-model.md#锁定矩阵mandatory)）；不改含义的维护走 [维护性变更](references/workflows/maintenance-change.md)，不改状态与修订号。
 3. 未入**当前**产品基线（或基线 revision 落后）的内容 **MUST NOT** 作为实现依据。
 4. 语义引用只用细项/文档编码，**MUST NOT** 用章节编号；跨文件路径以 `./` 或 `../` 开头。
 5. `ued/` **MUST NOT** 含可执行实现代码（算法/契约/状态机可以）。
