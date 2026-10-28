@@ -3855,7 +3855,7 @@ class DesignDocChecker:
 
         `初稿` 期改标题 MUST 先扫描全部引用处并同步（`--refs CODE` 可反查）；
         `正式` / `草案` / `废弃` 期标题锁定：非语义维护走维护性变更
-        （`N（维护）` 行），语义变更 MUST 先废弃再新建编码。
+        （`N（维护）` 行），实质变更 MUST 先废弃再新建编码。
         """
         titles: Dict[str, Tuple[str, str]] = {}
         for doc in self.docs:
@@ -3885,7 +3885,7 @@ class DesignDocChecker:
                                    f"定义位为「{expect}」（{site}）；`初稿` 期改标题 MUST 同步"
                                    "全部引用处；`正式` / `草案` / `废弃` 期标题锁定，"
                                    "非语义维护 MUST 走维护性变更（`N（维护）` 行），"
-                                   "语义变更 MUST 先废弃再新建编码")
+                                   "实质变更 MUST 先废弃再新建编码")
 
     def check_ref_freshness(self) -> None:
         """REF 时效字段齐备性与复查周期：超期未核验提示复核（WARNING，不阻断）。"""

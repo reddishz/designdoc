@@ -2,7 +2,7 @@
 >
 > **通用规则**：见 [index.md · 整篇型模板共用](index.md#整篇型模板共用)。
 >
-> 术语表固定在 `ued/glossary.md`，不分配文档编码、不参与四态；修订号随实质变更递增，完整规则见 [glossary-conventions.md](../../references/glossary-conventions.md)。术语名称调整对术语表是**实质变更**（`修订版本号` +1，写普通语义行），并与设计文档的维护批次共用同一 `MNT` 批次号；非实质维护可写 `N（维护）` 行（见 [maintenance-change.md](../../references/workflows/maintenance-change.md)）。旧名写进变更记录说明或《补充信息》的普通文字，不单设字段。无补充信息的术语不必出现在《补充信息》，整节为空时删除。
+> 术语表固定在 `ued/glossary.md`，不分配文档编码、不参与四态；修订号随实质变更递增，完整规则见 [glossary-conventions.md](../../references/glossary-conventions.md)。术语名称调整对术语表是**实质变更**（`修订版本号` +1，写普通语义行），并与设计文档的维护批次共用同一 `MNT` 批次号；维护性变更可写 `N（维护）` 行（见 [maintenance-change.md](../../references/workflows/maintenance-change.md)）。旧名写进变更记录说明或《补充信息》的普通文字，不单设字段。无补充信息的术语不必出现在《补充信息》，整节为空时删除。
 >
 > **正文边界**：见 [index.md · 模板边界（哨兵）](index.md#模板边界哨兵)。
 
