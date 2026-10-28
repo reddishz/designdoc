@@ -354,7 +354,7 @@ def run_glossary_fixtures(verbose):
 
 def run_baseline_bump_cases():
     """产品基线动作：首份基线 PATCH 可增删成员且增量恒空；非首份成员变化须立
-    新基线；冻结时按冻结 items 归属首份成员。"""
+    新基线；首份创建不写谱系，冻结时按最终 items 归属，并清掉开发期残留。"""
     import tempfile
     import yaml
 
@@ -424,24 +424,31 @@ def run_baseline_bump_cases():
         a = root / "L2-901-bump.md"
         b = root / "L2-902-bump.md"
         c = root / "L2-903-bump.md"
+        d = root / "L2-904-bump.md"
         a.write_text(doc_text("FR-901", 901, "甲", "正式"), encoding="utf-8")
         b.write_text(doc_text("FR-902", 902, "乙", "草案"), encoding="utf-8")
         c.write_text(doc_text("FR-903", 903, "丙", "草案"), encoding="utf-8")
+        d.write_text(doc_text("FR-904", 904, "丁", "正式"), encoding="utf-8")
 
         bump(root, note="首份")
         v10 = load(root, "v1.0")
-        check("首份 items", [i["code"] for i in v10["items"]] == ["FR-901"])
+        check("首份 items",
+              [i["code"] for i in v10["items"]] == ["FR-901", "FR-904"])
         check("首份 prev", v10.get("prev") in (None, "null"))
         check("首份增量恒空",
               v10["added"] == [] and v10["removed"] == [] and v10["changed"] == [])
-        check("首份回写引入版本", "**引入版本**：v1.0" in a.read_text(encoding="utf-8"))
+        check("首份创建不写谱系",
+              "**引入版本**" not in a.read_text(encoding="utf-8")
+              and "**退出版本**" not in a.read_text(encoding="utf-8")
+              and "**引入版本**" not in d.read_text(encoding="utf-8")
+              and "**退出版本**" not in d.read_text(encoding="utf-8"))
 
         b.write_text(b.read_text(encoding="utf-8").replace(
             "**细项状态**：草案", "**细项状态**：正式"), encoding="utf-8")
         bump(root, patch=True, note="首份纳入 FR-902")
         v10 = load(root, "v1.0")
         check("首份 PATCH 纳入 items",
-              [i["code"] for i in v10["items"]] == ["FR-901", "FR-902"])
+              [i["code"] for i in v10["items"]] == ["FR-901", "FR-902", "FR-904"])
         check("首份 PATCH 纳入不记增量",
               v10["added"] == [] and v10["removed"] == [] and v10["changed"] == [])
         check("首份 PATCH 升 tip", v10["full_version"] == "v1.0.1")
@@ -455,7 +462,8 @@ def run_baseline_bump_cases():
         bump(root, patch=True, note="首份再纳入 FR-903")
         v10 = load(root, "v1.0")
         check("首份 PATCH 再次纳入",
-              [i["code"] for i in v10["items"]] == ["FR-901", "FR-902", "FR-903"])
+              [i["code"] for i in v10["items"]]
+              == ["FR-901", "FR-902", "FR-903", "FR-904"])
         check("首份 PATCH 累计不记增量",
               v10["added"] == [] and v10["removed"] == [] and v10["changed"] == [])
         check("首份 PATCH 再升 tip", v10["full_version"] == "v1.0.2")
@@ -465,7 +473,7 @@ def run_baseline_bump_cases():
         bump(root, patch=True, note="首份退出 FR-903")
         v10 = load(root, "v1.0")
         check("首份 PATCH 退出 items",
-              [i["code"] for i in v10["items"]] == ["FR-901", "FR-902"])
+              [i["code"] for i in v10["items"]] == ["FR-901", "FR-902", "FR-904"])
         check("首份 PATCH 退出不记增量",
               v10["added"] == [] and v10["removed"] == [] and v10["changed"] == [])
         check("首份 PATCH 退出升 tip", v10["full_version"] == "v1.0.3")
@@ -473,14 +481,35 @@ def run_baseline_bump_cases():
               "**引入版本**" not in c.read_text(encoding="utf-8")
               and "**退出版本**" not in c.read_text(encoding="utf-8"))
 
+        d.write_text(d.read_text(encoding="utf-8").replace(
+            "**细项状态**：正式", "**细项状态**：废弃"), encoding="utf-8")
+        bump(root, patch=True, note="首份退出 FR-904")
+        v10 = load(root, "v1.0")
+        check("首份 PATCH 再退出 items",
+              [i["code"] for i in v10["items"]] == ["FR-901", "FR-902"])
+        check("首份 PATCH 再退出不记增量",
+              v10["added"] == [] and v10["removed"] == [] and v10["changed"] == [])
+        check("首份 PATCH 再退出升 tip", v10["full_version"] == "v1.0.4")
+
+        d.write_text(d.read_text(encoding="utf-8").replace(
+            "- **最后修订日期**：2026-01-15\n- **优先级**：P1",
+            "- **最后修订日期**：2026-01-15\n- **引入版本**：v1.0\n"
+            "- **退出版本**：v1.0\n- **优先级**：P1"), encoding="utf-8")
+        check("注入残留谱系",
+              "**引入版本**：v1.0" in d.read_text(encoding="utf-8")
+              and "**退出版本**：v1.0" in d.read_text(encoding="utf-8"))
+
         bump(root, note="冻结 v1.0")
         v11 = load(root, "v1.1")
-        check("v1.1 prev", str(v11.get("prev")) == "v1.0.3")
+        check("v1.1 prev", str(v11.get("prev")) == "v1.0.4")
         check("v1.1 无增量",
               v11["added"] == [] and v11["removed"] == [] and v11["changed"] == [])
-        check("冻结按 items 回写首份成员",
+        check("冻结按最终 items 回写首份成员",
               "**引入版本**：v1.0" in a.read_text(encoding="utf-8")
               and "**引入版本**：v1.0" in b.read_text(encoding="utf-8"))
+        check("冻结清除初始成员残留谱系",
+              "**引入版本**" not in d.read_text(encoding="utf-8")
+              and "**退出版本**" not in d.read_text(encoding="utf-8"))
         check("冻结不为已退出成员写谱系",
               "**引入版本**" not in c.read_text(encoding="utf-8")
               and "**退出版本**" not in c.read_text(encoding="utf-8"))

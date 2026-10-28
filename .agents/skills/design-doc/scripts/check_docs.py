@@ -72,6 +72,7 @@ from baseline_ops import (  # noqa: E402
     list_baseline_files,
     load_baseline,
     next_version,
+    prune_lineage_cache,
     resolve_prev_path,
     stamp_lineage_cache,
     xy_of,
@@ -2516,23 +2517,23 @@ class DesignDocChecker:
         )
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_baseline(snap), encoding="utf-8")
-        # 谱系按成员归属回写，不依赖开发期操作记录：首份基线创建时其 items 即
-        # 首份成员；冻结首份时取其 items 归属首份两段；本次相对 prev 的
-        # added/removed 归属新两段。非首份基线的成员集合创建即固定，已在创建时
-        # 盖章，不能按旧版本重复归属。
+        # 谱系按成员归属回写：首份创建时不写，冻结时才按最终 `items` 归属首份
+        # 两段，并清掉开发期残留的同版本缓存；本次相对 prev 的 added/removed
+        # 归属新两段。非首份基线的成员集合创建即固定，已在创建时盖章，不能按
+        # 旧版本重复归属。
         old_pv = str((prev_data or {}).get("product_version") or "").strip()
         old_initial = prev_data is not None and (
             prev_data.get("prev") in (None, "null", ""))
         lineage_added = []
         lineage_removed = []
-        if prev_data is None:
-            lineage_added += [(str(it.get("code") or "").strip(), new_pv)
-                              for it in snap.get("items") or []
-                              if str(it.get("code") or "").strip()]
-        elif old_initial and old_pv:
-            lineage_added += [(str(it.get("code") or "").strip(), old_pv)
-                              for it in prev_data.get("items") or []
-                              if str(it.get("code") or "").strip()]
+        if old_initial and old_pv:
+            frozen_codes = {
+                str(it.get("code") or "").strip()
+                for it in prev_data.get("items") or []
+                if str(it.get("code") or "").strip()
+            }
+            lineage_added += [(c, old_pv) for c in frozen_codes]
+            prune_lineage_cache(scoped or self.docs, old_pv, frozen_codes)
         lineage_added += [(c, new_pv) for c in snap.get("added") or []]
         lineage_removed += [(c, new_pv) for c in snap.get("removed") or []]
         stamp_lineage_cache(

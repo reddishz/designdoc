@@ -8,7 +8,7 @@ import re
 from copy import deepcopy
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 try:
     import yaml
@@ -342,6 +342,25 @@ def set_item_attr(lines: List[str], item_line: int, field: str, value: str) -> b
     return True
 
 
+def _item_locations(docs) -> Dict[str, Tuple[Path, int, str]]:
+    """编码 → (文件, 行号, 细项状态)；供谱系回写与清理共用。"""
+    out: Dict[str, Tuple[Path, int, str]] = {}
+    for doc in docs:
+        path = Path(getattr(doc, "path", "") or "")
+        if not path:
+            continue
+        for item in getattr(doc, "items", []) or []:
+            if not getattr(item, "defined", True):
+                continue
+            code = getattr(item, "code", "") or ""
+            line = getattr(item, "line", 0) or 0
+            status = (getattr(item, "item_status", "")
+                      or getattr(item, "def_status", "")).strip()
+            if code and line:
+                out[code] = (path, line, status)
+    return out
+
+
 def stamp_lineage_cache(
     docs,
     added,
@@ -364,20 +383,7 @@ def stamp_lineage_cache(
                 out.append((str(entry), version))
         return out
 
-    code_loc: Dict[str, Tuple[Path, int, str]] = {}
-    for doc in docs:
-        path = Path(getattr(doc, "path", "") or "")
-        if not path:
-            continue
-        for item in getattr(doc, "items", []) or []:
-            if not getattr(item, "defined", True):
-                continue
-            code = getattr(item, "code", "") or ""
-            line = getattr(item, "line", 0) or 0
-            status = (getattr(item, "item_status", "")
-                      or getattr(item, "def_status", "")).strip()
-            if code and line:
-                code_loc[code] = (path, line, status)
+    code_loc = _item_locations(docs)
 
     jobs: Dict[Path, List[Tuple[int, str, str]]] = defaultdict(list)
     for code, ver in _pairs(added):
@@ -400,6 +406,51 @@ def stamp_lineage_cache(
         for item_line, field, ver in sorted(ops, key=lambda t: t[0], reverse=True):
             if set_item_attr(lines, item_line, field, ver):
                 dirty = True
+        if dirty:
+            ending = "\n" if raw.endswith("\n") else ""
+            path.write_text("\n".join(lines) + ending, encoding="utf-8")
+            changed.append(path)
+    return changed
+
+
+def prune_lineage_cache(
+    docs,
+    version: str,
+    keep_codes: Set[str],
+    fields: Tuple[str, ...] = ("引入版本", "退出版本"),
+) -> List[Path]:
+    """清除与最终冻结集合冲突的自动谱系缓存。
+
+    仅删除值等于 `version` 且编码不在 `keep_codes` 的字段；其他版本与其他
+    元数据原样保留。
+    """
+    if not version:
+        return []
+    from collections import defaultdict
+
+    code_loc = _item_locations(docs)
+    jobs: Dict[Path, List[Tuple[int, str, str]]] = defaultdict(list)
+    for code, (path, line, _) in code_loc.items():
+        if code in keep_codes:
+            continue
+        for field in fields:
+            jobs[path].append((line, field, version))
+
+    changed: List[Path] = []
+    for path, ops in jobs.items():
+        if not path.is_file():
+            continue
+        raw = path.read_text(encoding="utf-8")
+        lines = raw.splitlines()
+        dirty = False
+        for item_line, field, ver in sorted(ops, key=lambda t: t[0], reverse=True):
+            start, end = _attr_group_range(lines, item_line)
+            for i in range(start, end):
+                m = ATTR_FIELD.match(lines[i])
+                if m and m.group(2) == field and m.group(3).strip() == ver:
+                    del lines[i]
+                    dirty = True
+                    break
         if dirty:
             ending = "\n" if raw.endswith("\n") else ""
             path.write_text("\n".join(lines) + ending, encoding="utf-8")
