@@ -59,6 +59,8 @@ BARE_CODE_RE = re.compile(
 MD_LINK_TEXT_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 INLINE_CODE_RE = re.compile(r"`[^`]*`")
 DOC_META_CODE_RE = re.compile(r"^(?:[A-Z][A-Z0-9]{1,4}-)?(?:L[0-6]|ADR|EVAL|REF)-\d{2,4}$")
+# 设计文档文件名以完整文档编码开头（含可选项目前缀），见 design-doc 文件名规则
+DESIGN_DOC_FILE_RE = re.compile(DOC_META_CODE_RE.pattern[:-1] + "-")
 TERM_HEADING_RE = re.compile(r"^###\s+(.+?)\s*$")
 ATTR_RE = re.compile(r"^-\s+\*\*(.+?)\*\*\s*[:：]\s*(.*)$")
 
@@ -593,8 +595,7 @@ class SystemChecker:
                 continue
             docs = [p for p in root.rglob("*.md")
                     if "deprecated" not in p.parts
-                    and (p.name.startswith("L")
-                         or p.name.startswith(("ADR-", "EVAL-", "REF-")))]
+                    and DESIGN_DOC_FILE_RE.match(p.name)]
             if not docs:
                 self.add("WARNING", "子系统无设计文档",
                          f"{self.rel(root)}: 未找到 L*/ADR/EVAL/REF 文档；"
@@ -1000,6 +1001,12 @@ class SystemChecker:
         子系统内部的定义/引用前缀由 design-doc 的 `check_docs.py` 按
         `project_code` 校验；本方法只处理跨子系统：重复定义、定义占用他子系统
         前缀、跨子系统引用悬空/归属不符、跨作用域简写。
+
+        覆盖：所有非标题行（含「本文引用」钉住表行）中的全量编码存在性与前缀
+        归属。不覆盖：钉住表的 `类型` / `所在文档` / `钉住代际` / `钉住日期`
+        等语义列——两套检查器各自解析同一张表会放大不一致，暂不实现，另行评估。
+        前缀未在子系统注册表登记时，引用行当前跳过（定义行仍由前缀规则校验），
+        同属未覆盖项。
         """
         if not self.is_system:
             return

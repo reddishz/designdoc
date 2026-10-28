@@ -740,6 +740,7 @@ class DesignDocChecker:
         self.legacy_hits: Set[Tuple[str, str]] = set()   # (文件, 旧值 → 新值)
         self.dep_forward: Dict[str, List[str]] = {}      # A `依赖` B 的正向边
         self._code_index_cache: Optional[Dict[Tuple[str, int], Set[str]]] = None
+        self._scope_prefix_cache: Optional[Tuple[str, Set[str]]] = None
         # 系统根术语表的只读辅助作用域：仅用于解析 `定义位置` 与术语存在性
         self.aux_docs: List[DocInfo] = []
         self.aux_code_to_doc: Dict[str, DocInfo] = {}
@@ -754,6 +755,7 @@ class DesignDocChecker:
         self.aux_code_to_doc = {}
         self.aux_terms_by_doc = {}
         self._glossary_aux_loaded = False
+        self._scope_prefix_cache = None
         if not self.ued_path.exists():
             self.add_issue("CRITICAL", "UED目录不存在", f"未找到 {self.ued_path} 目录")
             return
@@ -1093,6 +1095,27 @@ class DesignDocChecker:
     def _code_target_doc(self, code: str) -> Optional[DocInfo]:
         return self.item_def_doc.get(code) or self.code_to_doc.get(code)
 
+    def _pin_target_revision(self, code: str, target: DocInfo,
+                             is_doc: bool) -> Optional[int]:
+        """「本文引用」钉住代际的比较对象。
+
+        文档型引用比较目标文档的 `修订版本号`；细项型引用比较目标细项定义块
+        中的 `修订版本号`。目标细项定义缺失或修订号不可读时返回 `None`，
+        由调用方跳过比较——不猜测，也不退回文档修订号。
+        """
+        if is_doc:
+            return int(target.version) if target.version.isdigit() else None
+        for item in target.items:
+            if not (item.defined and item.path == target.path and item.code == code):
+                continue
+            for name, val, _ln in self._attr_group(target, item.line - 1):
+                if name != "修订版本号":
+                    continue
+                val = val.strip()
+                return int(val) if REV_VALUE.match(val) else None
+            return None
+        return None
+
     @staticmethod
     def _code_prefix(code: str) -> str:
         """取项目前缀；无前缀（含 `L2-001` 一类文档编码）返回空串。"""
@@ -1105,6 +1128,27 @@ class DesignDocChecker:
             if doc.is_index and Path(doc.path).resolve().parent == self.ued_path.resolve():
                 return (doc.meta.get("project_code") or "").strip()
         return ""
+
+    def _local_prefixes(self) -> Tuple[str, Set[str]]:
+        """当前作用域的项目编码前缀与已登记编码前缀。"""
+        if self._scope_prefix_cache is None:
+            scope_prefix = self._scope_project_code()
+            local = {self._code_prefix(c) for c in self._known_item_codes()
+                     if self._code_prefix(c)}
+            self._scope_prefix_cache = (scope_prefix, local)
+        return self._scope_prefix_cache
+
+    def _is_local_code(self, code: str) -> bool:
+        """编码是否属于当前作用域。
+
+        带其他项目前缀的编码是他作用域引用，存在性与归属由 `check_system.py`
+        校验，本检查器只负责本作用域内的引用完整性。无前缀的简写按本作用域解析。
+        """
+        prefix = self._code_prefix(code)
+        if not prefix:
+            return True
+        scope_prefix, local_prefixes = self._local_prefixes()
+        return (prefix == scope_prefix) if scope_prefix else (prefix in local_prefixes)
 
     def resolve_code(self, code: str) -> str:
         """把简写 / 非补零写法解析为已登记编码；无法唯一解析时原样返回。
@@ -1779,13 +1823,14 @@ class DesignDocChecker:
         """
         known = self._known_item_codes()
         index = self._code_index()
-        scope_prefix = self._scope_project_code()
-        local_prefixes = {self._code_prefix(c) for c in known if self._code_prefix(c)}
         for doc in self.docs:
             if doc.archived:
                 continue
+            historical = self._historical_lines(doc)
             reported: Set[str] = set()
             for lineno, line in enumerate(doc.lines, 1):
+                if lineno in historical:
+                    continue            # 历史记录不随后续改名 / 废弃回写
                 for m in CODE_TOKEN.finditer(line):
                     full, type_code = m.group(1), m.group(2)
                     if type_code not in self.known_types or full in reported:
@@ -1798,9 +1843,7 @@ class DesignDocChecker:
                         continue
                     prefix = self._code_prefix(full)
                     if prefix:
-                        local = (prefix == scope_prefix) if scope_prefix \
-                            else (prefix in local_prefixes)
-                        if not local:
+                        if not self._is_local_code(full):
                             continue        # 他作用域引用由 check_system.py 负责
                         reported.add(full)
                         self.add_issue(
@@ -1829,7 +1872,10 @@ class DesignDocChecker:
         房规见 `coding-system.md` ·《本文引用（跨文档钉住，MANDATORY）》。检查
         对象是否存在、类型、所在文档、代际与日期形态、重复行、同文档行，以及
         契约位置（`来源` / `依赖` / 链接类属性）的跨文档引用是否都已进表。
-        代际落后是派生状态（不推翻已 `正式` 的本文），不报。
+        代际落后是派生状态（不推翻已 `正式` 的本文），不报。带他作用域前缀的
+        行与辅助集合跳过——存在性与归属由 `check_system.py` 负责，本检查器
+        不重复实现其语义列校验。细项钉对方细项 `修订版本号`，整份文档钉对方
+        文档 `修订版本号`；目标细项修订号不可读时跳过比较，不猜测。
         """
         for doc in self.docs:
             if doc.archived:
@@ -1848,6 +1894,8 @@ class DesignDocChecker:
                     if not m:
                         continue                # 占位行 / 空表体
                     raw = m.group(1)
+                    if not self._is_local_code(raw):
+                        continue            # 跨作用域钉住行由 check_system.py 校验
                     code = self.resolve_code(raw)
                     target = self._code_target_doc(code)
                     where = f"{doc.path}:{lineno} `{raw}`"
@@ -1888,10 +1936,12 @@ class DesignDocChecker:
                         if not REV_VALUE.match(gen):
                             self.add_issue("WARNING", "钉住代际非法",
                                            f"{where}: `钉住代际` '{gen[:12]}' MUST 为正整数")
-                        elif target.version.isdigit() and int(gen) > int(target.version):
-                            self.add_issue("WARNING", "钉住代际超前",
-                                           f"{where}: 钉住代际 {gen} 大于对方当前 "
-                                           f"{target.version}")
+                        else:
+                            pinned_rev = self._pin_target_revision(code, target, is_doc)
+                            if pinned_rev is not None and int(gen) > pinned_rev:
+                                self.add_issue("WARNING", "钉住代际超前",
+                                               f"{where}: 钉住代际 {gen} 大于对方当前 "
+                                               f"{pinned_rev}")
                     date = cell("钉住日期")
                     if date and "{" not in date and not DATE_VALUE.match(date):
                         self.add_issue("WARNING", "钉住日期格式错误",
@@ -1907,6 +1957,8 @@ class DesignDocChecker:
                     if name not in PIN_ATTRS or not val or "{" in val:
                         continue
                     for raw in self._attr_codes(val):
+                        if not self._is_local_code(raw):
+                            continue        # 跨作用域引用由 check_system.py 校验
                         code = self.resolve_code(raw)
                         target = self._code_target_doc(code)
                         if target is None or target is doc:
@@ -1925,6 +1977,8 @@ class DesignDocChecker:
                     cm = CODE_TOKEN.search(text)
                     if not cm:
                         continue
+                    if not self._is_local_code(cm.group(1)):
+                        continue            # 跨作用域链接由 check_system.py 校验
                     code = self.resolve_code(cm.group(1))
                     target = self._code_target_doc(code)
                     if target is None or target is doc:
@@ -3487,7 +3541,8 @@ class DesignDocChecker:
                                f"{doc.path}:{lineno} `{item.code}`（{item.item_status}）"
                                f"`依赖` 指向仍为 `初稿` 的 `{c}`；`依赖` 是生效前提，"
                                "MUST 先把被依赖项定稿")
-            elif status_of.get(c) == "废弃":
+            elif status_of.get(c) == "废弃" and item.item_status != "废弃":
+                # 废弃细项的历史依赖不回写；活跃细项仍须收口
                 self.add_issue("WARNING", "依赖指向废弃细项",
                                f"{doc.path}:{lineno} `{item.code}`: `依赖` 指向已 `废弃` "
                                f"的 `{c}`；作废流程未收口")
@@ -3732,7 +3787,37 @@ class DesignDocChecker:
     def _item_block(self, doc: DocInfo, code: str) -> str:
         return "\n".join(doc.lines[i - 1] for i in self._own_lines(doc, code, block=True))
 
-    def _own_lines(self, doc: DocInfo, code: str, block: bool = False) -> Set[int]:
+    def _changelog_region(self, doc: DocInfo) -> Set[int]:
+        """`变更记录` 小节覆盖的行号（1-based），含标题与表格。"""
+        start = self._changelog_start(doc)
+        if start is None:
+            return set()
+        hm = re.match(r"^\s{0,3}(#{1,6})\s+", doc.lines[start])
+        level = len(hm.group(1)) if hm else 6
+        end = len(doc.lines)
+        for j in range(start + 1, len(doc.lines)):
+            m = re.match(r"^\s{0,3}(#{1,6})\s+", doc.lines[j])
+            if m and len(m.group(1)) <= level:
+                end = j
+                break
+        return set(range(start + 1, end + 1))
+
+    def _historical_lines(self, doc: DocInfo) -> Set[int]:
+        """历史内容行号（1-based）：`变更记录` 与已 `废弃` 细项定义块。
+
+        这两处的引用与标题是既有历史：目标后来改名或废弃时不回写旧记录，
+        因此不参与引用完整性、标题一致性与「活跃引用废弃对象」判定。
+        废弃登记字段的取值校验、治理段与属性行结构检查仍独立执行。
+        """
+        out = self._changelog_region(doc)
+        for item in self._doc_items(doc):
+            if item.item_status != "废弃" or not item.defined or item.path != doc.path:
+                continue
+            out |= self._own_lines(doc, item.code, block=True, rows=False)
+        return out
+
+    def _own_lines(self, doc: DocInfo, code: str, block: bool = False,
+                   rows: bool = True) -> Set[int]:
         """返回该编码在本文内“属于自己”的行号（1-based）：定义位及其正文块、
         以及表格中以该编码为首列的登记行；用于区分“引用”与“自身定义/登记”。"""
         out: Set[int] = set()
@@ -3747,7 +3832,7 @@ class DesignDocChecker:
                         break
                     out.add(j + 1)
                 continue
-            if line.lstrip().startswith("|"):
+            if rows and line.lstrip().startswith("|"):
                 cells = split_row(line)
                 for cell in cells[:2]:
                     if self._split_code(cell)[0] == code:
@@ -3894,7 +3979,10 @@ class DesignDocChecker:
                 continue
             reported: Set[str] = set()
             own = {code: self._own_lines(doc, code, block=True) for code in patterns}
+            historical = self._historical_lines(doc)
             for lineno, line in enumerate(doc.lines, 1):
+                if lineno in historical:
+                    continue            # 历史正文与变更记录不算活跃引用
                 for code, pat in sorted(patterns.items()):
                     if code == doc.doc_code or code in reported or not pat.search(line):
                         continue
@@ -4058,6 +4146,8 @@ class DesignDocChecker:
             else:
                 bm = ITEM_BOLD_DEF.match(line)
                 text = line[bm.end():] if bm else ""
+            # `~~已废弃~~` 只是人眼标记，不属于标题本体
+            text = re.sub(r"\s*~~[^~]*~~\s*$", "", text).strip()
             text = re.sub(r"^" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4}\s*[:\uff1a\-\u2014]?\s*", "", text)
             return norm(text)
         return ""
@@ -4082,8 +4172,11 @@ class DesignDocChecker:
         for doc in self.docs:
             if doc.archived:
                 continue
+            historical = self._historical_lines(doc)
             reported: Set[Tuple[str, str]] = set()
             for lineno, line in enumerate(doc.lines, 1):
+                if lineno in historical:
+                    continue
                 for m in TITLE_LINK.finditer(line):
                     code, raw_title = m.group(1), norm(m.group(2))
                     if code not in titles or not raw_title or "{" in raw_title:

@@ -987,6 +987,196 @@ def run_cross_scope_glossary_cases():
     return 0
 
 
+def run_pin_scope_and_history_cases():
+    """本文引用作用域、钉住代际对象与历史内容豁免的正反例。"""
+    import tempfile
+
+    check_docs = _load_checker()
+    fails = []
+
+    def check(name, cond):
+        if not cond:
+            fails.append(name)
+
+    def doc(code, layer, rev, body, changelog):
+        return (
+            f"# {code}-示例\n\n"
+            "| 属性 | 值 |\n|------|----|\n"
+            f"| 文档编码 | {code} |\n"
+            f"| 层级 | {layer} |\n"
+            f"| 修订版本号 | {rev} |\n"
+            "| 状态 | 正式 |\n"
+            "| 作者 | tester |\n"
+            "| 创建日期 | 2026-01-01 |\n"
+            "| 最后更新 | 2026-01-05 |\n\n"
+            f"{body}\n\n"
+            "## 变更记录\n\n"
+            "| 修订版本号 | 日期 | 作者 | 变更说明 |\n"
+            "|------------|------|------|----------|\n"
+            f"{changelog}\n")
+
+    def item(code, title, status, rev, extra=""):
+        suffix = " ~~已废弃~~" if status == "废弃" else ""
+        return (
+            f'<a id="{code.lower()}"></a>\n'
+            f"### {code}：{title}{suffix}\n\n"
+            f"- **细项状态**：{status}\n"
+            f"- **修订版本号**：{rev}\n"
+            "- **创建日期**：2026-01-01\n"
+            "- **最后修订日期**：2026-01-01\n"
+            f"{extra}\n")
+
+    def scenario(files):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td) / "ued"
+            root.mkdir()
+            for name, text in files.items():
+                (root / name).write_text(text, encoding="utf-8")
+            checker = check_docs.DesignDocChecker(str(root))
+            with contextlib.redirect_stdout(io.StringIO()):
+                checker.run_checks()
+            return checker
+
+    def hits(checker, title):
+        return [i for i in checker.issues if i["title"] == title]
+
+    def desc_has(checker, title, needle):
+        return any(needle in i["description"] for i in hits(checker, title))
+
+    deprecated_fields = (
+        "- **废弃时间**：2026-01-02\n"
+        "- **废弃类别**：被替代\n"
+        "- **废弃原因**：已被替代\n"
+        "- **替代方案**：无\n")
+
+    l2_body = (
+        "## 需求\n\n"
+        + item("CRM-FR-001", "登录", "正式", 3)
+        + item("CRM-FR-002", "注册", "废弃", 2, deprecated_fields)
+        + item("CRM-FR-003", "约束", "正式", 7)
+        + item("CRM-FR-006", "坏登记", "废弃", 1,
+               "- **废弃时间**：2026-01-02\n"
+               "- **废弃类别**：被替代\n"
+               "- **替代方案**：无\n"))
+
+    l2_changelog = (
+        "| 5 | 2026-01-05 | tester | 现行 |\n"
+        "| 4 | 2026-01-04 | tester | 历史引用 L5-002 与 "
+        "[CRM-FR-002（历史旧称）](./CRM-L2-001-requirements.md#crm-fr-002) |\n")
+
+    l4_body = (
+        "## 本文引用\n\n"
+        "| 引用对象 | 类型 | 所在文档 | 钉住代际 | 钉住日期 |\n"
+        "|----------|------|----------|----------|----------|\n"
+        "| CRM-FR-001 | 细项 | CRM-L2-001 | 4 | 2026-01-01 |\n"
+        "| CRM-FR-002 | 细项 | CRM-L2-001 | 2 | 2026-01-01 |\n"
+        "| CRM-FR-003 | 细项 | CRM-L2-001 | 6 | 2026-01-01 |\n"
+        "| CRM-L2-001 | 文档 | — | 6 | 2026-01-01 |\n"
+        "| CRM-L2-002 | 文档 | — | 2 | 2026-01-01 |\n"
+        "| OMS-L2-001 | 细项 | OMS-L2-001 | 99 | 2026-1-1 |\n"
+        "| OMS-FR-009 | 文档 | — | 99 | 2026-1-1 |\n\n"
+        "## 动作\n\n"
+        '<a id="crm-act-001"></a>\n'
+        "### CRM-ACT-001：旧动作 ~~已废弃~~\n\n"
+        "- **细项状态**：废弃\n"
+        "- **修订版本号**：1\n"
+        "- **创建日期**：2026-01-01\n"
+        "- **最后修订日期**：2026-01-01\n"
+        "- **废弃时间**：2026-01-02\n"
+        "- **废弃类别**：被替代\n"
+        "- **废弃原因**：动作退场\n"
+        "- **替代方案**：无\n"
+        "- **来源**：[CRM-FR-001（登录）](./CRM-L2-001-requirements.md#crm-fr-001)\n"
+        "- **依赖**：[CRM-FR-002（废弃旧称）](./CRM-L2-001-requirements.md#crm-fr-002)\n\n"
+        "参见 [CRM-FR-002（废弃旧称）](./CRM-L2-001-requirements.md#crm-fr-002)。\n\n"
+        '<a id="crm-act-002"></a>\n'
+        "### CRM-ACT-002：新动作\n\n"
+        "- **细项状态**：正式\n"
+        "- **修订版本号**：1\n"
+        "- **创建日期**：2026-01-01\n"
+        "- **最后修订日期**：2026-01-01\n"
+        "- **来源**：[OMS-FR-003（订单）](../oms/OMS-L2-001-order.md#oms-fr-003)\n\n"
+        "参见 [CRM-FR-002（过期旧称）](./CRM-L2-001-requirements.md#crm-fr-002)。\n"
+        "外部契约见 [OMS-L2-001（订单）](../oms/OMS-L2-001-order.md) 与 OMS-FR-001。\n"
+        "另见 CRM-FR-999。\n")
+
+    files = {
+        "README.md": (
+            "# CRM 设计文档索引\n\n"
+            "| 属性 | 值 |\n|------|----|\n"
+            "| project_code | CRM |\n| 产品版本 | v1.0 |\n"),
+        "CRM-L2-001-requirements.md": doc(
+            "CRM-L2-001", "L2", 5, l2_body, l2_changelog),
+        "CRM-L2-002-extra.md": doc(
+            "CRM-L2-002", "L2", 2,
+            "## 需求\n\n" + item("CRM-FR-005", "补充", "正式", 1),
+            "| 2 | 2026-01-02 | tester | 现行 |\n"
+            "| 1 | 2026-01-01 | tester | 初建 |\n"),
+        "CRM-L4-001-system.md": doc(
+            "CRM-L4-001", "L4", 5, l4_body,
+            "| 5 | 2026-01-05 | tester | 现行 |\n"
+            "| 4 | 2026-01-04 | tester | 历史 [CRM-FR-002（变更旧称）]"
+            "(./CRM-L2-001-requirements.md#crm-fr-002) |\n"),
+    }
+    checker = scenario(files)
+
+    # 跨作用域引用：存在性 / 归属由 check_system.py 负责，本检查器不重复报
+    check("跨作用域钉住行不报对象不存在", not hits(checker, "本文引用对象不存在"))
+    check("跨作用域正文引用不报悬空", not desc_has(checker, "引用悬空", "OMS-"))
+    check("跨作用域引用不计入钉住表", not hits(checker, "缺本文引用钉住行"))
+    check("跨作用域钉住行不做类型校验", not hits(checker, "本文引用类型不符"))
+    check("跨作用域钉住行不做所在文档校验",
+          not hits(checker, "文档型引用所在文档应为 —")
+          and not hits(checker, "本文引用所在文档不符"))
+    check("跨作用域钉住行不做日期校验", not hits(checker, "钉住日期格式错误"))
+
+    # 本地无效引用仍须报错
+    check("本地无效引用仍报悬空", desc_has(checker, "引用悬空", "CRM-FR-999"))
+
+    # 钉住代际：文档比较文档修订号，细项比较目标细项修订号
+    supers = hits(checker, "钉住代际超前")
+    check("细项钉住代际用细项修订号",
+          any("`CRM-FR-001`" in i["description"] for i in supers))
+    check("细项钉住代际不误用文档修订号",
+          not any("`CRM-FR-003`" in i["description"] for i in supers))
+    check("文档钉住代际用文档修订号",
+          any("`CRM-L2-001`" in i["description"] for i in supers))
+    check("文档钉住代际不超前时不报",
+          not any("`CRM-L2-002`" in i["description"] for i in supers))
+    check("跨作用域钉住代际不比较",
+          not any("`OMS-" in i["description"] for i in supers))
+
+    # 历史内容：不随后续改名 / 废弃而要求改写
+    check("变更记录历史引用不报悬空",
+          not desc_has(checker, "引用悬空", "L5-002"))
+    check("变更记录历史标题不强制改写",
+          not desc_has(checker, "引用标题与定义标题不一致", "变更旧称"))
+    check("废弃细项历史标题不强制改写",
+          not desc_has(checker, "引用标题与定义标题不一致", "废弃旧称"))
+    check("废弃细项历史依赖不报收口",
+          not hits(checker, "依赖指向废弃细项"))
+
+    # 活跃内容仍须报错
+    active = hits(checker, "活跃文档引用已废弃对象")
+    l4_lines = files["CRM-L4-001-system.md"].splitlines()
+    active_line = next(i for i, line in enumerate(l4_lines, 1) if "过期旧称" in line)
+    check("活跃正文引用废弃对象仍告警",
+          any(f":{active_line} 引用了已废弃的" in i["description"] for i in active))
+    check("活跃正文标题不一致仍告警",
+          desc_has(checker, "引用标题与定义标题不一致", "过期旧称"))
+
+    # 废弃登记的结构检查不被历史豁免吞掉
+    check("废弃登记缺字段仍报错", hits(checker, "废弃细项缺少必需字段"))
+
+    if fails:
+        print("FAIL 本文引用作用域 / 钉住代际 / 历史豁免用例未通过")
+        for name in fails:
+            print(f"     未通过：{name}")
+        return 1
+    print("本文引用作用域 / 钉住代际 / 历史豁免用例通过")
+    return 0
+
+
 def run_template_body_hygiene_cases():
     """哨兵内写作约束 / 技能包路径 MUST 报；干净正文 MUST 不报。"""
     import importlib.util
@@ -1107,6 +1297,7 @@ def main():
     rc |= run_baseline_bump_cases()
     rc |= run_single_scope_and_extension_cases()
     rc |= run_cross_scope_glossary_cases()
+    rc |= run_pin_scope_and_history_cases()
     rc |= run_template_body_hygiene_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0

@@ -572,6 +572,17 @@ def main() -> int:
     check("成员命令数", len(cmds) == 2)
     check("成员命令含 --glossary", all("--glossary" in x for x in cmds))
 
+    c = case("plain-design-doc-names", valid_files())
+    check("无前缀设计文档名识别", not has(c, "子系统无设计文档"))
+
+    files = valid_files()
+    for old, new in (
+            ("ued/crm/L2-001-req.md", "ued/crm/CRM-L2-001-req.md"),
+            ("ued/crm/L3-001-arch.md", "ued/crm/CRM-L3-001-arch.md")):
+        files[new] = files.pop(old)
+    c = case("prefixed-design-doc-names", files)
+    check("带前缀设计文档名识别", not has(c, "子系统无设计文档"))
+
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
 
