@@ -3,8 +3,8 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.7-blue.svg)](./.agents/skills/design-doc/SKILL.md)
-[![Skill](https://img.shields.io/badge/system--design--doc-v1.7-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.8-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/system--design--doc-v1.8-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。单系统用 `design-doc`；由多个子系统组成的系统另加 `system-design-doc` 管注册表、依赖钉住与系统发布。
@@ -28,7 +28,7 @@
 - **全局编码** — 文档和细项都有唯一编号，正文用编码跳转，不用「见上一节」
 - **四种状态** — 初稿 / 正式 / 草案 / 废弃。正式后不就地改含义；废弃保留编号，便于追溯
 - **术语单一权威** — 全局术语表固定为 `ued/glossary.md`，每个术语只有一个权威定义；文档可声明重点使用的术语
-- **维护性变更** — 统一用语、修正措辞或引用路径、名称非语义调整等不改含义的维护，在变更记录留下 `N（维护）` 行，不改状态、修订号或基线，与实质变更分开处理
+- **维护性变更** — 统一用语、修正措辞或引用路径、名称非语义调整等不改含义的维护，在变更记录留下 `N（维护）` 行（同号一条，后续批次追加为片段），不改状态、修订号或基线，与实质变更分开处理
 - **产品基线** — 每个产品版本一份可实现细项清单；首份基线可在开发期增删成员，后续基线成员变化立新基线，写代码只认当前版
 - **按文档实现** — 改功能/修 bug 先对照设计文档；实现只依据已定稿且已入当前产品基线的内容，未入基线会先拦住
 - **可检查** — `check_docs.py` 核对编码、状态、引用是否对得上

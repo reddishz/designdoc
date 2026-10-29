@@ -10,7 +10,7 @@ DesignDoc 文档检查工具
 - 正文定义 / 本文档清单 / 作用域 README 全局索引三方的编码与状态一致
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
 - 修订号递增时机（仅 `正式→草案` 解冻或 `废弃→草案` 复活时 +1）、修订号不得改小、变更记录倒序
-- 维护性变更：`变更记录` 中的 `N（维护）` 行（批次号 / 类型 / `；语义不变`）、与同号语义行的位置、文档修订号只与最新语义行比对
+- 维护性变更：`变更记录` 中的 `N（维护）` 行（批次片段 / 类型 / 倒序 / 末尾 `；语义不变`）、与同号语义行的位置、文档修订号只与最新语义行比对
 - 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项；增量字段相对冻结前驱复算，首份恒空
 - 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；立新基线时按成员归属回写（首份取 `items`，其余取 `added` / `removed`）；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
@@ -157,13 +157,49 @@ BUSINESS_ROLLBACK_KW = re.compile(
 INIT_KW = re.compile(r"初始|新建|创建|初稿")
 
 # 维护性变更（房规：status-definitions.md ·《维护性变更（第三维度，MANDATORY）》）。
-# 维护行首列固定为 `N（维护）`（全角括号、无空格），说明以批次号开头并以
-# `；语义不变` 收尾；维护行不参与状态 / 修订号推断。
+# 维护行首列固定为 `N（维护）`（全角括号、无空格）；说明是一个或多个批次片段，
+# 用 `；` 连接、按批次日期倒序（最新在前），整段只在末尾出现一次 `；语义不变`。
+# 同一修订号至多一条维护行（存量多条不追溯）；维护行不参与状态 / 修订号推断。
 MAINT_MARK_RE = re.compile(r"^(\d+)（维护）$")
 MAINT_MARK_HINT_RE = re.compile(r"维护")
-MAINT_DESC_RE = re.compile(
+MAINT_SEG_RE = re.compile(
     r"^MNT-(\d{4}-\d{2}-\d{2})-(\d{2})\s+"
-    r"(命名维护|文字维护|引用维护|结构维护)：(.+?)；语义不变$")
+    r"(命名维护|文字维护|引用维护|结构维护)：(.+)$")
+MAINT_TAIL = "；语义不变"
+
+# 语义行里的「解冻」未必指本文档：`草案` 态的文档再解冻个别细项时，文档本身
+# 没有再次解冻，不该触发递增判定。按「解冻」与细项类宾语相邻判定为细项解冻。
+ITEM_UNFREEZE_RE = re.compile(
+    r"(?:解冻|转(?:草稿|草案))[^，。；]{0,12}?(?:细项|条目|上游|下游|他文档|其它文档|其他文档)"
+    r"|(?:细项|条目|上游|下游|他文档|其它文档|其他文档)[^，。；]{0,12}?(?:解冻|转(?:草稿|草案))")
+
+
+def parse_maintenance_segments(desc: str) -> Optional[List[Tuple[str, str]]]:
+    """把维护行说明拆成 `[(批次日期, 片段)]`；不符合格式返回 None。
+
+    形态：`MNT-YYYY-MM-DD-NN {类型}：{说明}`，片段之间用 `；` 连接，
+    最新批次在前，整段只在末尾出现一次 `；语义不变`。只在 `；` 后紧跟
+    `MNT-` 处切分——说明正文里的 `；` 属于该片段，不拆段。
+    """
+    text = desc.strip()
+    if not text.endswith(MAINT_TAIL) or text.count("语义不变") != 1:
+        return None
+    body = text[: -len(MAINT_TAIL)]
+    if not body:
+        return None
+    segs: List[Tuple[str, str]] = []
+    for raw in re.split(r"；(?=MNT-)", body):
+        seg = raw.strip()
+        m = MAINT_SEG_RE.match(seg)
+        if not m:
+            return None
+        segs.append((m.group(1), seg))
+    return segs
+
+
+def is_item_unfreeze(desc: str) -> bool:
+    """语义行描述的是细项解冻（而非本文档解冻）。"""
+    return bool(ITEM_UNFREEZE_RE.search(desc))
 
 
 def is_legacy_rollback_action(desc: str) -> bool:
@@ -2854,11 +2890,13 @@ class DesignDocChecker:
 
     def check_version_flow(self) -> None:
         """修订号机制：起始 1、初稿期与定稿不变号、解冻才 +1、不得改小、
-        变更记录倒序。维护行 `N（维护）` 只占同号代际块，不参与状态 / 修订号推断。
+        变更记录倒序。维护行 `N（维护）` 只占同号代际块，不参与状态 / 修订号推断；
+        同号后续维护追加为片段而非新行（存量多行不追溯）。
 
         房规见 `references/status-definitions.md` ·《变更流程与版本号》与
         《维护性变更》：文档 `修订版本号` 与**最新语义行**比对；维护行归入其修订号
-        所在的代际块，位于同号语义行之上。
+        所在的代际块，位于同号语义行之上；语义行里的「解冻」只在指向本文档时
+        触发递增判定（细项解冻不触发）。
         """
 
         def key(ver: str) -> Optional[int]:
@@ -2905,7 +2943,6 @@ class DesignDocChecker:
             for i, k in semantic:
                 sem_first.setdefault(k, i)
 
-            last_maint_date: Dict[int, str] = {}
             for idx, num, date_cell, desc in maint:
                 if num not in sem_values:
                     self.add_issue("WARNING", "维护行引用的修订号不存在",
@@ -2916,29 +2953,30 @@ class DesignDocChecker:
                     self.add_issue("WARNING", "维护行未置于同号语义行之上",
                                    f"{doc.path}: 维护行 `{rows[idx][0]}` 排在修订号 {num} "
                                    "的语义行之下；同一代际块内维护行 MUST 在语义行之上"
-                                   "（发生更晚）")
-                m = MAINT_DESC_RE.match(desc)
-                if not m:
+                                   "（维护行视为该号下的最新版本）")
+                segs = parse_maintenance_segments(desc)
+                if segs is None:
                     self.add_issue("WARNING", "维护行说明格式错误",
-                                   f"{doc.path}: '{desc[:32]}'；MUST 为 "
-                                   "`MNT-YYYY-MM-DD-NN {类型}：{说明}；语义不变`，"
+                                   f"{doc.path}: '{desc[:32]}'；MUST 为一个或多个 "
+                                   "`MNT-YYYY-MM-DD-NN {类型}：{说明}` 片段，用 `；` 连接、"
+                                   "最新在前，整段只在末尾出现一次 `；语义不变`；"
                                    "类型取 命名维护 / 文字维护 / 引用维护 / 结构维护")
                     continue
-                batch_date = m.group(1)
-                if not self._is_iso_date(batch_date):
-                    self.add_issue("WARNING", "维护行说明格式错误",
-                                   f"{doc.path}: 批次号日期 '{batch_date}' 不是有效日期")
+                dates = [d for d, _s in segs]
+                for d in dates:
+                    if not self._is_iso_date(d):
+                        self.add_issue("WARNING", "维护行说明格式错误",
+                                       f"{doc.path}: 批次号日期 '{d}' 不是有效日期")
+                for newer, older in zip(dates, dates[1:]):
+                    if older > newer:
+                        self.add_issue("WARNING", "维护片段未按批次日期倒序",
+                                       f"{doc.path}: 维护行 `{rows[idx][0]}` 中片段日期 "
+                                       f"{older} 晚于其前面的 {newer}；最新批次应置顶")
                 cell_date = DATE_IN_TEXT.search(date_cell or "")
-                if cell_date and cell_date.group(0) != batch_date:
+                if cell_date and cell_date.group(0) != dates[0]:
                     self.add_issue("WARNING", "维护行日期与批次号不一致",
-                                   f"{doc.path}: 日期列 {cell_date.group(0)} 与批次号 "
-                                   f"{batch_date} 不一致")
-                prev_date = last_maint_date.get(num)
-                if prev_date and batch_date > prev_date:
-                    self.add_issue("WARNING", "维护行未按日期倒序",
-                                   f"{doc.path}: 修订号 {num} 下维护行日期 {batch_date} "
-                                   f"晚于其上一行 {prev_date}；最新维护应置顶")
-                last_maint_date[num] = batch_date
+                                   f"{doc.path}: 日期列 {cell_date.group(0)} 与最新批次号 "
+                                   f"{dates[0]} 不一致")
 
             prev = None
             for ver, _desc, _date in rows:
@@ -2971,7 +3009,7 @@ class DesignDocChecker:
                     self.add_issue("WARNING", "定稿时递增了修订号",
                                    f"{doc.path}: '{desc[:28]}' 定稿不应变号"
                                    "（{old} -> {new}）".replace("{old}", older_ver).replace("{new}", ver))
-                if UNFREEZE_KW.search(desc):
+                if UNFREEZE_KW.search(desc) and not is_item_unfreeze(desc):
                     if cur == old:
                         self.add_issue("WARNING", "解冻未递增修订号",
                                        f"{doc.path}: `正式→草案` 解冻是修订号唯一正规递增时机，"
