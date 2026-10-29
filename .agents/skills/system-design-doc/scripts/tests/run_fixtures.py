@@ -482,6 +482,33 @@ def main() -> int:
               and "OMS-FR-999" in i.detail for i in c.issues))
 
     files = valid_files()
+    files["ued/crm/L2-001-req.md"] += (
+        "\n- **依赖**：[OMS-FR-999（不存在）](../oms/L2-001-req.md#oms-fr-999)\n")
+    c = case("cross-scope-dep-dangling", files)
+    check("跨子系统依赖悬空报错",
+          any(i.title == "跨子系统依赖悬空" and i.level == "ERROR"
+              and "OMS-FR-999" in i.detail for i in c.issues))
+    check("依赖悬空不降级为普通引用告警",
+          not any(i.title == "跨子系统引用悬空" and "OMS-FR-999" in i.detail
+                  for i in c.issues))
+
+    files = valid_files()
+    files["ued/crm/L2-001-req.md"] += (
+        "\n- **依赖**（同时有效）：[XYZ-FR-001（未知前缀）](../xyz/L2-001-req.md#xyz-fr-001)\n")
+    c = case("cross-scope-dep-unknown-prefix", files)
+    check("依赖指向未登记前缀报错",
+          any(i.title == "依赖指向未登记前缀" and i.level == "ERROR"
+              and "XYZ-FR-001" in i.detail for i in c.issues))
+
+    files = valid_files()
+    files["ued/crm/L2-001-req.md"] += (
+        "\n- **依赖**：[CRM-CMP-001（客户关系）](./L3-001-arch.md#crm-cmp-001)\n")
+    c = case("cross-scope-dep-ok", files)
+    check("同子系统依赖不报跨作用域",
+          not any(i.title in ("跨子系统依赖悬空", "依赖指向未登记前缀")
+                  for i in c.issues))
+
+    files = valid_files()
     files["ued/oms/L2-001-req.md"] += (
         "\n# OMS-RUL-001-跨域规则\n\n- **细项状态**：正式\n")
     files["ued/crm/L2-001-req.md"] += (

@@ -53,6 +53,9 @@ ITEM_CODE_RE = re.compile(r"^(?:([A-Z][A-Z0-9]{1,4})-)?([A-Z]{1,5}[0-9]?)-\d{2,4
 HEADING_CODE_RE = re.compile(
     r"^\s{0,3}#{1,6}\s+((?:[A-Z][A-Z0-9]{1,4}-)?([A-Z]{1,5}[0-9]?)-\d{2,4})\b")
 REF_CODE_RE = re.compile(r"\b(([A-Z][A-Z0-9]{1,4})-[A-Z]{1,5}[0-9]?-\d{2,4})\b")
+# `依赖` 属性行：生效前提，目标须存在且归属正确，故按 ERROR 判（普通引用维持 WARNING）。
+DEP_ATTR_RE = re.compile(
+    r"^\s*(?:[-*+]\s*)?\*\*依赖\*\*(?:\uff08[^\uff09]*\uff09|\([^)]*\))?\s*[\uff1a:]")
 # 无前缀简写：只从链接文字与表格行识别为引用，正文散文里的裸编码不在此校验。
 BARE_CODE_RE = re.compile(
     r"(?<![A-Za-z0-9_/-])([A-Z]{1,5}[0-9]?-\d{2,4})(?![0-9A-Za-z.])")
@@ -1005,8 +1008,9 @@ class SystemChecker:
         覆盖：所有非标题行（含「本文引用」钉住表行）中的全量编码存在性与前缀
         归属。不覆盖：钉住表的 `类型` / `所在文档` / `钉住代际` / `钉住日期`
         等语义列——两套检查器各自解析同一张表会放大不一致，暂不实现，另行评估。
-        前缀未在子系统注册表登记时，引用行当前跳过（定义行仍由前缀规则校验），
-        同属未覆盖项。
+        前缀未在子系统注册表登记时，普通引用行跳过（定义行仍由前缀规则校验），
+        同属未覆盖项；`依赖` 行不跳过——悬空或未登记前缀均按 ERROR 判，与本地
+        `依赖` 目标不存在的严重度对齐。
         """
         if not self.is_system:
             return
@@ -1040,7 +1044,7 @@ class SystemChecker:
                     lines = mask_fences(read_text(path))
                 except RuntimeError:
                     continue
-                reported: Set[str] = set()
+                reported: Set[Tuple[str, bool]] = set()
                 reported_bare: Set[str] = set()
                 for i, line in enumerate(lines):
                     # 定义行由下方「定义前缀」规则处理，不当作引用
@@ -1083,22 +1087,40 @@ class SystemChecker:
         self._check_glossary()
 
     def _check_cross_refs(self, path: Path, i: int, line: str, sub: Subsystem,
-                          reported: Set[str]) -> None:
-        """跨子系统全量引用：目标须存在，且归属被引用前缀的子系统。"""
+                          reported: Set[Tuple[str, bool]]) -> None:
+        """跨子系统全量引用：目标须存在，且归属被引用前缀的子系统。
+
+        `依赖` 是生效前提，悬空与未登记前缀按 ERROR 判；普通引用维持 WARNING
+        与「未登记前缀跳过」的既有口径。两者共用同一张定义表，只是严重度不同。
+        """
+        is_dep = bool(DEP_ATTR_RE.match(line))
         for m in REF_CODE_RE.finditer(line):
             code, prefix = m.group(1), m.group(2)
-            if prefix == sub.prefix or prefix not in self.prefix_owner:
+            if prefix == sub.prefix:
                 continue
-            if code in reported:
+            key = (code, is_dep)
+            if key in reported:
                 continue
-            reported.add(code)
+            loc = f"{self.rel(path)}:{i + 1}: `{code}`"
+            if prefix not in self.prefix_owner:
+                if is_dep:
+                    reported.add(key)
+                    self.add("ERROR", "依赖指向未登记前缀",
+                             f"{loc} 的前缀 `{prefix}` 未在子系统注册表登记；"
+                             "`依赖` 目标 MUST 属于已登记子系统")
+                continue
+            reported.add(key)
             owner = self.prefix_owner[prefix]
             item_sites = self.definitions.get(code, [])
             doc_paths = self.doc_code_map.get(code, [])
-            loc = f"{self.rel(path)}:{i + 1}: `{code}`"
             if not item_sites and not doc_paths:
-                self.add("WARNING", "跨子系统引用悬空",
-                         f"{loc} 在 {owner.key} 内无定义")
+                if is_dep:
+                    self.add("ERROR", "跨子系统依赖悬空",
+                             f"{loc} 在 {owner.key} 内无定义；`依赖` 是生效前提，"
+                             "目标 MUST 存在")
+                else:
+                    self.add("WARNING", "跨子系统引用悬空",
+                             f"{loc} 在 {owner.key} 内无定义")
                 continue
             owner_dir = owner.directory.strip("/")
             scopes = {s for s, _p, _l in item_sites}

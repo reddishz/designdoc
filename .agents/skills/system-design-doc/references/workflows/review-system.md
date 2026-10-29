@@ -49,6 +49,7 @@ python3 .agents/skills/design-doc/scripts/check_docs.py -p ued --cross-scope-dep
 - [ ] 依赖目标已登记且 `正式`。
 - [ ] 目标 `vX.Y` 基线存在。
 - [ ] 无自依赖、无重复、无外部名冲突。
+- [ ] 跨子系统 `依赖` 目标存在且归属正确（`check_system.py` 对 `依赖` 行的悬空目标与未登记前缀按 ERROR 判，普通引用仍为 WARNING）。
 - [ ] 冻结后依赖变化通过新基线表达，不是 PATCH；冻结前修正没有改 `items` 或升版本。
 - [ ] 环依赖已评估；不应存在的已消除。
 - [ ] 细项 `依赖` 图跨子系统无活跃环，且无「`正式` / `草案` 细项 `依赖` 他子系统 `初稿` 细项」（`--cross-scope-deps`）。
