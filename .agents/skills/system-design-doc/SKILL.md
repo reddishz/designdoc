@@ -7,7 +7,7 @@ description: >
   子系统内部的分层设计、编码与产品基线由 design-doc 负责，本技能只做系统级编排。
 license: MIT
 metadata:
-  version: "1.4"
+  version: "1.5"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [system, subsystem, design, documentation, release, dependency]
@@ -90,7 +90,7 @@ compatibility: 需能访问 `ued/` 系统根；子系统内部校验需 design-d
 2. 注册表是系统组成的唯一真源；`subsystem_key` 一经登记**不可改、不可复用**。
 3. `正式` 子系统 **MUST** 有角色文档、`产品版本` 与对应基线；`初稿` 未启用；`废弃` 不再进入新发布。
 4. 共享库就是普通子系统；**MUST NOT** 为它单设固定目录、特殊状态或部署规则。
-5. 子系统基线 **MUST** 用 `depends_on` / `external_deps` 钉住精确两段版本；修改依赖钉住 **MUST** 立新基线，**MUST NOT** 用 PATCH。
+5. 子系统基线 **MUST** 用 `depends_on` / `external_deps` 钉住精确两段版本；PATCH **MUST NOT** 触碰依赖块；基线进入系统发布组合后，依赖变化 **MUST** 立新基线。
 6. 系统发布是**不可变组合锁**；发布后 **MUST NOT** 修改，只能发新版本。
 7. 公开接口破坏性变更 **MUST** 使用 MAJOR；PATCH **MUST NOT** 改变接口语义。
 8. 高风险动作（登记、激活、废弃、系统发布）**MUST** 经人确认。
@@ -123,6 +123,6 @@ python3 .agents/skills/system-design-doc/scripts/tests/run_fixtures.py
 - **系统要不要产品版本？** → 不要；系统版本写在 `releases/sys-vX.Y.yaml`。
 - **系统发布必须包含全部正式子系统吗？** → 不必。发布是可选快照；纳入项须为 `正式` 且依赖闭合，未纳入的正式子系统只是不在该组合内。
 - **A v3.1 必须配 D v2.5 怎么表达？** → A 的基线写 `depends_on: [{subsystem: d, product_version: v2.5}]`；系统发布同时钉住两者。
-- **依赖变了怎么办？** → 立新子系统基线（MINOR/MAJOR），再发新系统版本；不能 PATCH。
+- **依赖变了怎么办？** → 已进入系统发布组合的：立新子系统基线（MINOR/MAJOR），再发新系统版本；尚未进入的：原地修正，不升版本。两者都不经过 PATCH。
 - **系统级文档放哪？** → 放到承担该职责的普通子系统，或写在根 README 摘要表；不新建特殊根作用域。
 - **子系统怎么校验？** → `check_docs.py -p ued/{子系统} --glossary ued/glossary.md`。

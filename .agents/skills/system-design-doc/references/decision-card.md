@@ -16,7 +16,7 @@
 | 子系统要发版，或要改依赖钉住 | [subsystem-baseline.md](workflows/subsystem-baseline.md) |
 | 把一组子系统作为一个产品集发布 | [system-release.md](workflows/system-release.md) |
 | 审查系统结构、依赖、发布 | [review-system.md](workflows/review-system.md) |
-| 只改某个子系统内部设计 | 转 [design-doc](../design-doc/SKILL.md) |
+| 只改某个子系统内部设计 | 转 [design-doc](../../design-doc/SKILL.md) |
 | 统一术语 | design-doc 的术语规范；全局表仍在 `ued/glossary.md` |
 | 从旧多应用结构迁过来 | [migration-from-design-doc.md](migration-from-design-doc.md) |
 
@@ -35,7 +35,7 @@
 - **「共享库要单独建 shared/」**：不需要。共享库按普通子系统登记，可有零个或多个。
 - **「系统也要一个产品版本」**：不要。系统版本只在 `releases/sys-vX.Y.yaml`。
 - **「系统根也放 L0/L2 文档」**：不要。放到承担职责的普通子系统，或只在根 README 写摘要。
-- **「依赖改了 PATCH 一下」**：不允许。依赖钉住变化必须立新基线。
+- **「依赖改了 PATCH 一下」**：不允许。PATCH 不碰依赖；基线进入系统发布组合后，依赖变化必须立新基线，冻结前可原地修正。
 - **「系统发布必须包含所有正式子系统」**：不必。发布是可选快照；纳入项依赖闭合即可，未纳入的正式成员不受影响。
 - **「复杂系统得建专门的系统级设计文档」**：不新建根作用域；建一个承担系统级职责的普通子系统（如 `platform/`）。
 - **「系统发布可以改」**：不允许。发布不可变，错了发新版本。

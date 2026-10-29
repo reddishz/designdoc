@@ -92,8 +92,10 @@ AI **MUST NOT** 自行创建或修改系统发布。
 ## 与子系统发版的顺序
 
 ```text
-子系统设计/实现 → 子系统基线（PATCH/MINOR/MAJOR，含依赖钉住）
+子系统设计/实现 → 子系统基线（PATCH/MINOR/MAJOR；依赖按写入时机处理）
 → 纳入的子系统检查通过 → 系统发布（组合锁）
 ```
+
+依赖的写入时机见 [version-alignment.md · 依赖字段的写入时机](../version-alignment.md#依赖字段的写入时机)。
 
 **MUST NOT** 先发系统发布再补子系统基线；也 **MUST NOT** 在系统发布中写入不存在或未验证的版本。

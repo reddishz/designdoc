@@ -128,7 +128,7 @@ items:
 | `patch_log` | MUST；每升一次 tip（含 `.0`）追加一条；**MUST NOT** 改写旧条；只记版本/日期/说明，不保存当次 `items` |
 | `added`/`removed`/`changed` | 只表达**基线版本之间**的成员与 revision 差异；相对 `prev` 指向的冻结基线重算（累计值，不是相对上一 PATCH），首份基线无前驱、三块恒空；**MUST NOT** 记录开发期操作历史 |
 | `items` | 首份基线的 PATCH 可增删成员（只改 `items`，不写增量字段）；其他基线创建后成员不变；按 `code` 字典序 |
-| `depends_on` / `external_deps` | 可选扩展块；仅多子系统结构由 system-design-doc 写入。本技能升版 **MUST** 原样保留，**MUST NOT** 删除或改写；依赖变化走子系统 MINOR/MAJOR，不走 PATCH。语义见 [system-design-doc · 版本对齐](../../system-design-doc/references/version-alignment.md) |
+| `depends_on` / `external_deps` | 可选扩展块；仅多子系统结构由 system-design-doc 写入。本技能升版 **MUST** 原样保留，**MUST NOT** 删除或改写；PATCH **MUST NOT** 触碰依赖块。写入时机与冻结后变更规则见 [system-design-doc · 依赖字段的写入时机](../../system-design-doc/references/version-alignment.md#依赖字段的写入时机) |
 
 存量缺 `full_version` 时检查器 WARNING，并按 `vX.Y.0` 理解；`prev` 若仍为两段 `vX.Y`，按该文件解析，WARNING 建议改为当时 tip。
 

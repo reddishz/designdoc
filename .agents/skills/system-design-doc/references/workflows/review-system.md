@@ -46,7 +46,7 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-
 - [ ] 依赖目标已登记且 `正式`。
 - [ ] 目标 `vX.Y` 基线存在。
 - [ ] 无自依赖、无重复、无外部名冲突。
-- [ ] 依赖变化通过新基线表达，不是 PATCH。
+- [ ] 冻结后依赖变化通过新基线表达，不是 PATCH；冻结前修正没有改 `items` 或升版本。
 - [ ] 环依赖已评估；不应存在的已消除。
 
 ## 系统发布
@@ -73,6 +73,6 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-
 - 系统根放了产品版本或 L2 文档。
 - 共享库被建成特殊 `shared/` 作用域。
 - 子系统依赖只写 README 口头说明，基线没有 `depends_on`。
-- 用 PATCH 改了依赖钉住。
+- 用 PATCH 改了依赖钉住，或在基线进入系统发布组合后原地改依赖。
 - 系统发布纳入 `初稿` 子系统，或发布项版本与依赖钉住不一致。
 - 发布后直接改清单。
