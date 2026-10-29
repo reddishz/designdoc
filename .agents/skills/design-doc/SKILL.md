@@ -11,7 +11,7 @@ description: >
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.6"
+  version: "10.7"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -131,10 +131,11 @@ python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径>
 python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径> --glossary <项目术语表路径>
 python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径> --bump-product --patch|--minor|--major --note '…'
 python3 .agents/skills/design-doc/scripts/check_docs.py -p <scope路径> --refs {编码}
+python3 .agents/skills/design-doc/scripts/check_docs.py -p ued --cross-scope-deps
 python3 .agents/skills/design-doc/scripts/tests/run_fixtures.py
 ```
 
-`--check-templates` / `--instantiate` 见脚本帮助。静态检查不代替人工审查与定稿确认。
+`--check-templates` / `--instantiate` 见脚本帮助。`--cross-scope-deps` 是系统根只读跨作用域细项 `依赖` 检查（跨子系统成环、`正式` / `草案` 指向他子系统 `初稿`），须以 `-p ued` 在系统根运行，供 [system-design-doc](../system-design-doc/SKILL.md) 审查调用；目标存在性与前缀归属仍由 `check_system.py` 负责。静态检查不代替人工审查与定稿确认。
 
 **适用**：单一作用域（单系统 `ued/` 或一个子系统 `ued/{subsystem}/`）的设计文档全生命周期；有 `ued/` 时变更代码前的设计对照与据文档实现门禁（**不代替**编写业务代码）。多子系统结构、跨子系统依赖与系统发布由 [system-design-doc](../system-design-doc/SKILL.md) 编排。**不适用**：与 `ued/` 无关的纯环境琐事、用户/运维手册。
 

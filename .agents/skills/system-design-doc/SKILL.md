@@ -7,7 +7,7 @@ description: >
   子系统内部的分层设计、编码与产品基线由 design-doc 负责，本技能只做系统级编排。
 license: MIT
 metadata:
-  version: "1.5"
+  version: "1.6"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [system, subsystem, design, documentation, release, dependency]
@@ -64,6 +64,10 @@ compatibility: 需能访问 `ued/` 系统根；子系统内部校验需 design-d
    并对每个子系统运行：
    ```bash
    python3 .agents/skills/design-doc/scripts/check_docs.py -p ued/{子系统} --glossary ued/glossary.md
+   ```
+   跨子系统细项 `依赖`（成环 / 指向他子系统 `初稿`）另跑：
+   ```bash
+   python3 .agents/skills/design-doc/scripts/check_docs.py -p ued --cross-scope-deps
    ```
 5. 系统检查器只查注册表、拓扑、依赖、发布与跨子系统引用，**不查**文档内部规则；通过 ≠ 语义正确。
 6. 人审后才可定稿或创建发布；AI **MUST NOT** 自行登记、废弃或发布。

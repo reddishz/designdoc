@@ -1158,6 +1158,10 @@ class DesignDocChecker:
         """
         if code in self.code_to_doc or code in self.item_def_doc:
             return code
+        if not self._is_local_code(code):
+            # 他作用域全量编码只保留原义：按 `(类型码, 序号)` 键会把它重映射到
+            # 本作用域同键项，依赖边与「指向初稿」判断都会落到错误对象上。
+            return code
         key = self._code_key(code)
         if not key[0]:
             return code
@@ -3552,6 +3556,10 @@ class DesignDocChecker:
                     self.add_issue("ERROR", "依赖与专名重复",
                                    f"{doc.path}:{lineno} `{item.code}`: `{c}` 已由 "
                                    f"`{attr_name}` 表达，MUST NOT 再写入 `依赖`")
+            if not self._is_local_code(c):
+                # 他作用域目标：存在性与归属由 `check_system.py`，目标状态与
+                # 跨作用域环由系统根只读检查负责；本地不判，避免误报与漏报互换。
+                continue
             if c not in defined and c not in self.codes:
                 self.add_issue("ERROR", "依赖目标不存在",
                                f"{doc.path}:{lineno} `{item.code}`: `依赖` 指向 `{c}`，"
@@ -4139,7 +4147,8 @@ class DesignDocChecker:
                     self.add_issue("WARNING", "正式或草案细项依据初稿细项",
                                    f"{doc.path}: `{it.code}`（{it.item_status}）依据仍为 `初稿` 的 "
                                    f"{shown}；`初稿` 的标题与业务含义仍可改，据它定稿等于把基线"
-                                   "建在流沙上——MUST 先把被依据项定稿，或移除该依据")
+                                   "建在流沙上——MUST 先定稿被依据项，或与之在同一修订"
+                                   "轮次内一并定稿（引用互指不是 `依赖` 环），或移除该依据")
 
     def check_layer_references(self) -> None:
         """层级引用关系：下层文档应引用上层文档编码。"""
@@ -4480,7 +4489,17 @@ class DesignDocChecker:
                     self.dep_forward[it.code] = targets
 
     def check_dep_cycles(self) -> None:
-        """`依赖` 成环 → WARNING（作废时仍须同时处理，禁止只废一端）。"""
+        """`依赖` 成环：活跃环 ERROR；整环 `废弃` 属历史存量，不再报。
+
+        房规见 `coding-system.md` ·《追溯类属性行命名》：细项 `依赖` 图 MUST 无环。
+        `item-deprecation.md` ·《循环依赖废弃》的「同时废弃」是合法出口，因此整环
+        都是 `废弃` 时不报；环内只要还有活跃节点，就是结构错误。
+        """
+        status_of: Dict[str, str] = {}
+        for doc in self.docs:
+            for it in self._doc_items(doc):
+                if it.defined and it.item_status:
+                    status_of[it.code] = it.item_status
         color: Dict[str, int] = {}
         reported: Set[frozenset] = set()
 
@@ -4494,9 +4513,14 @@ class DesignDocChecker:
                     key = frozenset(cyc[:-1])
                     if key not in reported:
                         reported.add(key)
-                        self.add_issue("WARNING", "依赖成环",
-                                       f"`{' → '.join(cyc)}`：循环 `依赖` 作废时 MUST "
-                                       "同时标记，禁止只废一端")
+                        live = [n for n in cyc[:-1] if status_of.get(n) != "废弃"]
+                        if live:
+                            self.add_issue(
+                                "ERROR", "依赖成环",
+                                f"`{' → '.join(cyc)}`：细项 `依赖` 图 MUST 无环"
+                                f"（活跃：{'、'.join(live)}）；MUST NOT 以同轮整体上抬"
+                                "规避。按 `item-deprecation.md` ·《循环依赖废弃》同时废弃，"
+                                "或重构 / 依赖倒置；整环 `废弃` 后不再报")
                 elif state == 0:
                     dfs(nxt, stack)
             stack.pop()
@@ -4505,6 +4529,66 @@ class DesignDocChecker:
         for src in list(self.dep_forward):
             if color.get(src, 0) == 0:
                 dfs(src, [])
+
+    def run_cross_scope_deps(self) -> List[Dict]:
+        """系统根只读跨作用域检查：细项 `依赖` 图判环 + 目标状态。
+
+        只在系统根（`README.md` 含子系统注册表）运行，供 system-design-doc 的
+        审查流程调用。它不把系统根当作设计作用域：本作用域规则一律不跑，只把各
+        子系统的细项 `依赖` 合成一张图。编码按原样使用——全量编码系统内唯一，
+        不做跨子系统简写解析或重写；目标存在性与归属仍由 `check_system.py` 负责。
+
+        检出两类问题：跨作用域 `依赖` 指向 `初稿`（`正式` / `草案` 来源），
+        以及细项 `依赖` 成环（活跃环，口径与本作用域一致）。
+        """
+        print("🔍 跨作用域扫描文档...")
+        self.scan_docs()
+        if not self._is_system_root():
+            self.add_issue(
+                "ERROR", "跨作用域依赖检查未在系统根运行",
+                f"{self.ued_path}: 未找到子系统注册表；该检查须以 `-p ued` 在系统根运行")
+            return self.issues
+
+        status_of: Dict[str, str] = {}
+        defined_in: Dict[str, str] = {}
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            for it in self._doc_items(doc):
+                if it.defined and it.item_status:
+                    status_of[it.code] = it.item_status
+                    defined_in[it.code] = doc.path
+
+        dep_forward: Dict[str, List[str]] = {}
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            for it in self._doc_items(doc):
+                if not (it.defined and it.path == doc.path):
+                    continue
+                for lineno in sorted(self._own_lines(doc, it.code, block=True)):
+                    line = doc.lines[lineno - 1]
+                    if not DEP_OWN_ATTR.match(line):
+                        continue
+                    for m in CODE_TOKEN.finditer(line):
+                        ref = m.group(1)
+                        if ref == it.code or ref not in defined_in:
+                            continue    # 自指与本作用域同名有本地规则；悬空归 check_system
+                        deps = dep_forward.setdefault(it.code, [])
+                        if ref not in deps:
+                            deps.append(ref)
+                        if (status_of.get(ref) == "初稿"
+                                and it.item_status in ("正式", "草案")):
+                            self.add_issue(
+                                "ERROR", "跨作用域依赖指向初稿",
+                                f"{doc.path}:{lineno} `{it.code}`（{it.item_status}）"
+                                f"`依赖` 指向仍为 `初稿` 的 `{ref}`"
+                                f"（{defined_in[ref]}）；`依赖` 是生效前提，"
+                                "MUST 先把被依赖项定稿")
+
+        self.dep_forward = dep_forward
+        self.check_dep_cycles()
+        return self.issues
 
     def check_tbd_in_formal(self) -> None:
         """文档 `状态` 为 `正式` 时，定义块与概述 MUST NOT 残留 TBD / 待定。
@@ -4862,6 +4946,9 @@ def main() -> int:
                         help="配合 --bump-product：发版/补丁说明（写入 patch_log）")
     parser.add_argument("--force-version", default="",
                         help="配合 --bump-product：强制两段式产品版本号（如 v5.17；不可用于 --patch）")
+    parser.add_argument("--cross-scope-deps", action="store_true",
+                        help="系统根只读跨作用域细项 `依赖` 检查（跨子系统成环与"
+                             "目标状态）；须以 -p ued 在系统根运行，配合 system-design-doc 审查")
     args = parser.parse_args()
 
     if args.check_templates:
@@ -4891,6 +4978,12 @@ def main() -> int:
         for out in outs:
             print(f"✅ 已写入产品基线：{out}")
         return 0
+
+    if args.cross_scope_deps:
+        checker.run_cross_scope_deps()
+        report = checker.generate_report()
+        print("\n" + report)
+        return checker.print_summary()
 
     if args.refs:
         checker.scan_docs()

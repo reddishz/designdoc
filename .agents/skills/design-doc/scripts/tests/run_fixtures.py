@@ -1199,6 +1199,195 @@ def run_pin_scope_and_history_cases():
     return 0
 
 
+def run_dep_graph_cases():
+    """细项 `依赖`：外部编码原义、成环口径（活跃 ERROR / 整环废弃豁免）、
+    系统根只读跨作用域检查。"""
+    import tempfile
+
+    check_docs = _load_checker()
+    fails = []
+
+    def check(name, cond):
+        if not cond:
+            fails.append(name)
+
+    def scope_readme(code, name):
+        return (
+            "# 作用域\n\n"
+            "| 字段 | 值 |\n|------|----|\n"
+            f"| project_name | {name} |\n"
+            f"| project_code | {code} |\n"
+            "| 产品版本 | v1.0 |\n\n"
+            "## 发版记录\n\n"
+            "| 产品版本 | 日期 | 说明 |\n"
+            "|----------|------|------|\n"
+            "| v1.0 | 2026-01-01 | 初建 |\n")
+
+    def item(code, title, status, deps=(), deprecated=False):
+        suffix = " ~~已废弃~~" if deprecated else ""
+        lines = [
+            f'<a id="{code.lower()}"></a>',
+            f"### {code}：{title}{suffix}",
+            "",
+            f"- **细项状态**：{status}",
+            "- **修订版本号**：1",
+            "- **创建日期**：2026-01-01",
+            "- **最后修订日期**：2026-01-01",
+        ]
+        if deprecated:
+            lines += [
+                "- **废弃时间**：2026-01-02",
+                "- **废弃类别**：被替代",
+                "- **废弃原因**：测试存量环",
+                "- **替代方案**：无",
+            ]
+        else:
+            lines += ["- **优先级**：P1", "- **验证方式**：单元测试"]
+        for target, target_title, url in deps:
+            lines.append(f"- **依赖**：[{target}（{target_title}）]({url})")
+        return "\n".join(lines) + "\n"
+
+    def doc(code, layer, body):
+        return (
+            f"# {code}-示例\n\n"
+            "| 属性 | 值 |\n|------|----|\n"
+            f"| 文档编码 | {code} |\n"
+            f"| 层级 | {layer} |\n"
+            "| 修订版本号 | 1 |\n"
+            "| 状态 | 初稿 |\n"
+            "| 作者 | tester |\n"
+            "| 创建日期 | 2026-01-01 |\n"
+            "| 最后更新 | 2026-01-01 |\n\n"
+            f"## 需求\n\n{body}\n"
+            "## 变更记录\n\n"
+            "| 修订版本号 | 日期 | 作者 | 变更说明 |\n"
+            "|------------|------|------|----------|\n"
+            "| 1 | 2026-01-01 | tester | 初建 |\n")
+
+    def run_scope(root):
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_checks()
+        return checker
+
+    def hits(checker, title):
+        return [i for i in checker.issues if i["title"] == title]
+
+    # —— 跨作用域编码原义：外部全量编码不得按 (类型码, 序号) 重映射 ——
+    with tempfile.TemporaryDirectory() as td:
+        beta = Path(td) / "beta"
+        beta.mkdir()
+        (beta / "README.md").write_text(scope_readme("BET", "乙"), encoding="utf-8")
+        (beta / "BET-L2-001.md").write_text(doc("BET-L2-001", "L2", (
+            item("BET-DOM-001", "本地领域", "正式")
+            + item("BET-ACT-001", "动作甲", "正式", [
+                ("ALP-DOM-001", "外部领域",
+                 "../alpha/ALP-L2-001.md#alp-dom-001")])
+            + item("BET-ACT-002", "动作乙", "正式", [
+                ("DOM-001", "本地领域", "#bet-dom-001")]))),
+            encoding="utf-8")
+        checker = run_scope(beta)
+        check("外部编码不重映射",
+              checker.resolve_code("ALP-DOM-001") == "ALP-DOM-001")
+        check("外部依赖边保留原义",
+              checker.dep_forward.get("BET-ACT-001") == ["ALP-DOM-001"])
+        check("外部依赖不报目标不存在",
+              not any("ALP-DOM-001" in i["description"]
+                      for i in hits(checker, "依赖目标不存在")))
+        check("同作用域简写照旧解析",
+              checker.dep_forward.get("BET-ACT-002") == ["BET-DOM-001"])
+
+    # —— 依赖成环：活跃 ERROR；整环 `废弃` 属历史存量，不报 ——
+    with tempfile.TemporaryDirectory() as td:
+        cyc = Path(td) / "cyc"
+        cyc.mkdir()
+        (cyc / "README.md").write_text(scope_readme("CYC", "环"), encoding="utf-8")
+        (cyc / "CYC-L2-001.md").write_text(doc("CYC-L2-001", "L2", (
+            item("CYC-FR-001", "甲", "正式", [
+                ("CYC-FR-002", "乙", "#cyc-fr-002")])
+            + item("CYC-FR-002", "乙", "正式", [
+                ("CYC-FR-001", "甲", "#cyc-fr-001")])
+            + item("CYC-FR-003", "丙", "废弃", [
+                ("CYC-FR-004", "丁", "#cyc-fr-004")], deprecated=True)
+            + item("CYC-FR-004", "丁", "废弃", [
+                ("CYC-FR-003", "丙", "#cyc-fr-003")], deprecated=True))),
+            encoding="utf-8")
+        checker = run_scope(cyc)
+        live = hits(checker, "依赖成环")
+        check("活跃依赖环报 ERROR",
+              any(i["level"] == "ERROR" and "CYC-FR-001" in i["description"]
+                  for i in live))
+        check("整环废弃不报依赖成环",
+              not any("CYC-FR-003" in i["description"] for i in live))
+
+    # —— 系统根只读跨作用域检查 ——
+    registry = (
+        "# 系统\n\n"
+        "## 子系统注册表\n\n"
+        "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 角色文档 | 状态 |\n"
+        "|---------------|------------|------|----------|----------|------|\n"
+        "| alpha | 甲 | `alpha/` | ALP | ALP-CMP-001 | 初稿 |\n"
+        "| beta | 乙 | `beta/` | BET | BET-CMP-001 | 初稿 |\n")
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td) / "ued"
+        (root / "alpha").mkdir(parents=True)
+        (root / "beta").mkdir()
+        (root / "README.md").write_text(registry, encoding="utf-8")
+        (root / "alpha" / "README.md").write_text(
+            scope_readme("ALP", "甲"), encoding="utf-8")
+        (root / "beta" / "README.md").write_text(
+            scope_readme("BET", "乙"), encoding="utf-8")
+        alpha_doc = root / "alpha" / "ALP-L2-001.md"
+        beta_doc = root / "beta" / "BET-L2-001.md"
+
+        alpha_doc.write_text(doc("ALP-L2-001", "L2", (
+            item("ALP-FR-001", "甲需求", "初稿")
+            + item("ALP-FR-002", "甲目标", "正式"))), encoding="utf-8")
+        beta_doc.write_text(doc("BET-L2-001", "L2", (
+            item("BET-FR-001", "乙需求", "草案", [
+                ("ALP-FR-001", "甲需求",
+                 "../alpha/ALP-L2-001.md#alp-fr-001")])
+            + item("BET-FR-002", "乙目标", "正式", [
+                ("ALP-FR-002", "甲目标",
+                 "../alpha/ALP-L2-001.md#alp-fr-002")]))), encoding="utf-8")
+
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_cross_scope_deps()
+        check("跨作用域依赖指向初稿",
+              any("BET-FR-001" in i["description"] and "ALP-FR-001" in i["description"]
+                  for i in hits(checker, "跨作用域依赖指向初稿")))
+        check("跨作用域依赖图按原义记录",
+              "ALP-FR-001" in checker.dep_forward.get("BET-FR-001", []))
+
+        alpha_doc.write_text(doc("ALP-L2-001", "L2", (
+            item("ALP-FR-001", "甲需求", "正式")
+            + item("ALP-FR-002", "甲目标", "正式", [
+                ("BET-FR-002", "乙目标",
+                 "../beta/BET-L2-001.md#bet-fr-002")]))), encoding="utf-8")
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_cross_scope_deps()
+        check("跨子系统依赖环报 ERROR",
+              any(i["level"] == "ERROR" and "ALP-FR-002" in i["description"]
+                  for i in hits(checker, "依赖成环")))
+
+        checker = check_docs.DesignDocChecker(str(root / "beta"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            checker.run_cross_scope_deps()
+        check("非系统根拒绝跨作用域检查",
+              hits(checker, "跨作用域依赖检查未在系统根运行"))
+
+    if fails:
+        print("FAIL 细项依赖图用例未通过")
+        for name in fails:
+            print(f"     未通过：{name}")
+        return 1
+    print("细项依赖图用例通过")
+    return 0
+
+
 def run_template_body_hygiene_cases():
     """哨兵内写作约束 / 技能包路径 MUST 报；干净正文 MUST 不报。"""
     import importlib.util
@@ -1320,6 +1509,7 @@ def main():
     rc |= run_single_scope_and_extension_cases()
     rc |= run_cross_scope_glossary_cases()
     rc |= run_pin_scope_and_history_cases()
+    rc |= run_dep_graph_cases()
     rc |= run_template_body_hygiene_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0

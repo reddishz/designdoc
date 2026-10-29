@@ -11,7 +11,10 @@
 ```bash
 python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued
 python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-member-commands
+python3 .agents/skills/design-doc/scripts/check_docs.py -p ued --cross-scope-deps
 ```
+
+第三条是 design-doc 的只读跨作用域细项 `依赖` 检查：把各子系统的 `依赖` 合成一张图，只判环与「`正式` / `草案` → 他子系统 `初稿`」，不校验系统根的设计规则。目标存在性与前缀归属仍由 `check_system.py` 负责。
 
 ## 结构
 
@@ -48,6 +51,7 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued --print-
 - [ ] 无自依赖、无重复、无外部名冲突。
 - [ ] 冻结后依赖变化通过新基线表达，不是 PATCH；冻结前修正没有改 `items` 或升版本。
 - [ ] 环依赖已评估；不应存在的已消除。
+- [ ] 细项 `依赖` 图跨子系统无活跃环，且无「`正式` / `草案` 细项 `依赖` 他子系统 `初稿` 细项」（`--cross-scope-deps`）。
 
 ## 系统发布
 
