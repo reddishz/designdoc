@@ -167,12 +167,6 @@ MAINT_SEG_RE = re.compile(
     r"(命名维护|文字维护|引用维护|结构维护)：(.+)$")
 MAINT_TAIL = "；语义不变"
 
-# 语义行里的「解冻」未必指本文档：`草案` 态的文档再解冻个别细项时，文档本身
-# 没有再次解冻，不该触发递增判定。按「解冻」与细项类宾语相邻判定为细项解冻。
-ITEM_UNFREEZE_RE = re.compile(
-    r"(?:解冻|转(?:草稿|草案))[^，。；]{0,12}?(?:细项|条目|上游|下游|他文档|其它文档|其他文档)"
-    r"|(?:细项|条目|上游|下游|他文档|其它文档|其他文档)[^，。；]{0,12}?(?:解冻|转(?:草稿|草案))")
-
 
 def parse_maintenance_segments(desc: str) -> Optional[List[Tuple[str, str]]]:
     """把维护行说明拆成 `[(批次日期, 片段)]`；不符合格式返回 None。
@@ -197,9 +191,115 @@ def parse_maintenance_segments(desc: str) -> Optional[List[Tuple[str, str]]]:
     return segs
 
 
-def is_item_unfreeze(desc: str) -> bool:
-    """语义行描述的是细项解冻（而非本文档解冻）。"""
-    return bool(ITEM_UNFREEZE_RE.search(desc))
+def changelog_state_events(desc: str, doc_code: str) -> Tuple[List[Tuple[str, str, str]], bool]:
+    """提取本文档的 (起态, 终态, 动作) 和待人工核对标记；不解析另一份文档。
+
+    分句绑定主体，编码统一用 CODE_TOKEN；逗号可承接主体，分号/句号重置。
+    无主体只接受句首独立事件，不把散文中提及的动作当成本文件迁移。
+    同句「解冻（正式→草案）」只产生一个事件，不要求历史完整或倒推元信息。
+    """
+    states = "(?:" + "|".join(DOC_STATUSES + ["草稿"]) + ")"
+    event_re = re.compile(
+        rf"(?P<start>{states})\s*(?:r\d+\s*)?(?:→|->|转(?:为|入)?|变为)\s*"
+        rf"(?P<end>{states})(?:\s*r\d+)?"
+        rf"|(?P<stay>已(?:经)?(?:为|是|处于)|保持|仍(?:为|是|处于)?|状态[为是：:])\s*(?P<state>{states})"
+        rf"|(?P<edit>{states})期(?:修改|编辑)"
+        r"|(?P<action>" + FINALIZE_KW.pattern + "|" + UNFREEZE_KW.pattern
+        + r"|受控复活|复活|废弃|作废|初稿创建|创建|新建)")
+    subject_re = re.compile(
+        r"本文档|本文件|本对象|(?:上游|下游|其他|其它|他)文档|上游|下游|细项|条目|整份|文档")
+    pending_re = re.compile(
+        r"尚未|未(?:曾|经|予)?|没有|不(?:再|予|会|得)?|无需|无须|禁止|取消|"
+        r"待(?:确认|审批|评审)?|拟|计划|准备|将(?:要)?|预计|若|如果|是否")
+    events: List[Tuple[str, str, str]] = []
+    uncertain = False
+    inherited = ""
+    for part in re.split(r"([，,；;。\n])", desc):
+        if part in ("；", ";", "。", "\n"):
+            inherited = ""
+            continue
+        if not part or part in ("，", ","):
+            continue
+        clause = part.strip()
+        subjects = [(m.start(), m.end(), "self" if m.group(1) == doc_code else "other")
+                    for m in CODE_TOKEN.finditer(clause)]
+        subjects += [(m.start(), m.end(), "self" if m.group() in
+                      ("本文档", "本文件", "本对象", "文档", "整份") else "other")
+                     for m in subject_re.finditer(clause)]
+        subjects.sort()
+        matches = list(event_re.finditer(clause))
+        previous_object_end = -1
+        for n, m in enumerate(matches):
+            left = [s for s in subjects if s[1] <= m.start()]
+            next_at = matches[n + 1].start() if n + 1 < len(matches) else len(clause)
+            right = [s for s in subjects if m.end() <= s[0] < next_at]
+            subject = left[-1][2] if left else inherited
+            # 动宾式「解冻细项/编码」：宾语优先于前面的背景主体。
+            has_object = bool(m.group("action") and right and re.fullmatch(
+                r"[\s（(:：]*(?:修订\s*)?", clause[m.end():right[0][0]]))
+            if has_object:
+                subject = right[0][2]
+            # 新主体的谓语不承接前一对象的否定/计划；动作宾语后的括号迁移仍承接。
+            scope_at = (matches[n - 1].end() if n and left
+                        and left[-1][0] >= matches[n - 1].end()
+                        and left[-1][1] != previous_object_end else 0)
+            previous_object_end = right[0][1] if has_object else -1
+            prefix = clause[scope_at:m.start()]
+            suffix_end = next((s[0] for s in subjects if s[0] >= m.end()
+                               and s[1] != previous_object_end), len(clause))
+            if pending_re.search(prefix) or re.search(
+                    r"(?:待确认|待审批|尚未执行|未确认|未执行)", clause[m.end():suffix_end]):
+                continue
+            # 引用/影响是背景，不是动作；只有外部对象时直接排除，否则交人工。
+            background = re.search(r"对齐|依赖|引用|受(?!控)|关于|讨论", prefix)
+            if background and not (left and left[-1][0] >= scope_at + background.end()):
+                subject = "other" if subjects and all(s[2] == "other" for s in subjects) else ""
+            head = re.fullmatch(
+                rf"(?:\d{{4}}-\d{{2}}-\d{{2}}\s*起?[：:]?\s*)?"
+                rf"(?:已|已经|经确认|已确认|再次|首次|迁移|{states}(?:期)?)?\s*", prefix)
+            tail = clause[m.end():]
+            following = re.match(rf"(?:修订|为{states})?\s*(?:[（(:：]|$)", tail)
+            # 句首传统独立转换行属于本文档；带冒号时后面的编码只是说明背景。
+            if (not subject and not background and not left and head and following
+                    and (not right or re.match(rf"(?:修订|为{states})?\s*[:：]", tail))):
+                subject = "self"
+            if subject:
+                inherited = subject
+            if subject != "self":
+                if not subject and not m.group("stay") and not m.group("edit"):
+                    uncertain = True
+                continue
+            start = (m.group("start") or "").replace("草稿", "草案")
+            end = (m.group("end") or "").replace("草稿", "草案")
+            action = m.group("action") or ""
+            if start:
+                action = ("解冻" if (start, end) == ("正式", "草案") else
+                          "复活" if (start, end) == ("废弃", "草案") else
+                          "定稿" if end == "正式" else "作废" if end == "废弃" else "状态")
+            elif m.group("stay") or m.group("edit"):
+                start = end = (m.group("state") or m.group("edit")).replace("草稿", "草案")
+                action = "编辑"
+            elif "复活" in action:
+                start, end, action = "废弃", "草案", "复活"
+            elif UNFREEZE_KW.fullmatch(action):
+                start, end, action = "正式", "草案", "解冻"
+            elif FINALIZE_KW.fullmatch(action):
+                end, action = "正式", "定稿"
+            elif action in ("作废", "废弃"):
+                end, action = "废弃", "作废"
+            else:
+                end, action = "初稿", "创建"
+            event = (start, end, action)
+            # 动作名与括号中的同一迁移不重复计数，保留更具体的起态。
+            duplicate = next((i for i, e in enumerate(events)
+                              if e[1:] == event[1:] and (not e[0] or not start or e[0] == start)), None)
+            if duplicate is None:
+                events.append(event)
+            elif start:
+                events[duplicate] = event
+        if subjects:
+            inherited = subjects[-1][2]
+    return events, uncertain
 
 
 def is_legacy_rollback_action(desc: str) -> bool:
@@ -2889,7 +2989,7 @@ class DesignDocChecker:
             return False
 
     def check_version_flow(self) -> None:
-        """修订号机制：起始 1、初稿期与定稿不变号、解冻才 +1、不得改小、
+        """修订号机制：起始 1、初稿/草案编辑及定稿/作废不变号、解冻/复活 +1。
         变更记录倒序。维护行 `N（维护）` 只占同号代际块，不参与状态 / 修订号推断；
         同号后续维护追加为片段而非新行（存量多行不追溯）。
 
@@ -2953,7 +3053,7 @@ class DesignDocChecker:
                     self.add_issue("WARNING", "维护行未置于同号语义行之上",
                                    f"{doc.path}: 维护行 `{rows[idx][0]}` 排在修订号 {num} "
                                    "的语义行之下；同一代际块内维护行 MUST 在语义行之上"
-                                   "（维护行视为该号下的最新版本）")
+                                   "（表示该号时间线上的最新维护更新，不是新的语义修订）")
                 segs = parse_maintenance_segments(desc)
                 if segs is None:
                     self.add_issue("WARNING", "维护行说明格式错误",
@@ -2989,38 +3089,77 @@ class DesignDocChecker:
                                    f"{doc.path}: {ver} 晚于其上一行，最新记录应置顶")
                 prev = k
 
-            for _idx, desc, _date in rows:
+            # 术语表无四态：修订号由实质变更决定，不套用文档状态机。
+            if doc.is_glossary:
+                continue
+
+            old = None
+            history_max = 0
+            state = ""  # 只沿明确事件前推；元信息不是历史状态，缺失历史不倒推。
+            pending_bumps: List[Tuple[str, int, int]] = []
+            for idx, cur in reversed(semantic):
+                ver, desc, _date = rows[idx]
                 if is_legacy_rollback_action(desc):
                     self.add_issue("WARNING", "变更记录声明回退",
                                    f"{doc.path}: '{desc[:28]}' 状态机已取消回退；放弃本轮须在"
                                    "草案期内改正文再定稿，或走 `草案→废弃`。修订号不得改回解冻前")
-
-            for pos, (idx, cur) in enumerate(semantic):
-                ver, desc, _date = rows[idx]
-                if pos + 1 >= len(semantic):
-                    if INIT_KW.search(desc) and cur != 1:
+                events, uncertain = changelog_state_events(desc, doc.doc_code)
+                if uncertain:
+                    self.add_issue("INFO", "文档状态事件需人工核对",
+                                   f"{doc.path}: 修订号 {ver} 的 '{desc[:48]}' 无法确定动作主体；"
+                                   "请核对本文档是否发生状态转换及修订号是否应变化")
+                actions = {action for _start, _end, action in events}
+                bump = next((a for _s, _e, a in events if a in ("解冻", "复活")), "")
+                # 「草案期修改」若跨越已知初稿，说明中间历史缺失，不猜测漏写的迁移。
+                continuous = not uncertain
+                next_state = "" if uncertain else state
+                for start, end, action in events:
+                    if action == "编辑" and next_state and start != next_state:
+                        continuous = False
+                    next_state = end
+                if old is None:
+                    if "创建" in actions and cur != 1:
                         self.add_issue("INFO", "起始修订号非 1",
                                        f"{doc.path}: 历史起始修订号 {ver}（新建文档应从 1 + `初稿` 起）")
-                    continue
-                _older_idx, old = semantic[pos + 1]
-                older_ver = rows[_older_idx][0]
-                history_max = max((k for _i, k in semantic[pos + 1:]), default=None)
-                if FINALIZE_KW.search(desc) and cur != old:
-                    self.add_issue("WARNING", "定稿时递增了修订号",
-                                   f"{doc.path}: '{desc[:28]}' 定稿不应变号"
-                                   "（{old} -> {new}）".replace("{old}", older_ver).replace("{new}", ver))
-                if UNFREEZE_KW.search(desc) and not is_item_unfreeze(desc):
+                elif bump:
                     if cur == old:
-                        self.add_issue("WARNING", "解冻未递增修订号",
-                                       f"{doc.path}: `正式→草案` 解冻是修订号唯一正规递增时机，"
-                                       f"应从 {older_ver} +1，当前仍为 {ver}")
+                        self.add_issue("WARNING", f"{bump}未递增修订号",
+                                       f"{doc.path}: 本文档解冻（正式→草案）或受控复活（废弃→草案）"
+                                       f"均须 +1；本次{bump}应从 {old} +1，当前仍为 {ver}")
                     elif cur != old + 1:
-                        self.add_issue("WARNING", "解冻修订号跳号",
-                                       f"{doc.path}: 解冻 MUST +1 且不得跳号（{older_ver} → {ver}）")
-                    elif history_max is not None and cur <= history_max:
+                        self.add_issue("WARNING", f"{bump}修订号跳号",
+                                       f"{doc.path}: {bump} MUST +1 且不得跳号（{old} → {ver}）")
+                    elif cur <= history_max:
                         self.add_issue("WARNING", "递增未基于历史最大修订号",
-                                       f"{doc.path}: 解冻递增到 {ver}，但历史已出现过不低于它的修订号；"
+                                       f"{doc.path}: {bump}递增到 {ver}，但历史已出现过不低于它的修订号；"
                                        "递增基准 = 该对象当前修订号（单调、不得改小）")
+                elif cur != old:
+                    if "定稿" in actions:
+                        self.add_issue("WARNING", "定稿时递增了修订号",
+                                       f"{doc.path}: '{desc[:48]}' 定稿不应变号（{old} → {ver}）")
+                    elif "作废" in actions:
+                        self.add_issue("WARNING", "作废时变更了修订号",
+                                       f"{doc.path}: '{desc[:48]}' 作废不应变号（{old} → {ver}）")
+                    elif continuous and state in ("初稿", "草案"):
+                        # 历史可能漏写了本文档的转换，待走完时间线再定性。
+                        pending_bumps.append((desc, old, cur))
+                state = next_state
+                old = cur
+                history_max = max(history_max, cur)
+
+            if pending_bumps:
+                if state and state == doc.status:
+                    for desc, older, newer in pending_bumps:
+                        self.add_issue("WARNING", "非冻结编辑时变更了修订号",
+                                       f"{doc.path}: '{desc[:48]}' 本文档初稿/草案继续编辑"
+                                       f"不应变号（{older} → {newer}）；仅解冻或受控复活须 +1")
+                elif state:
+                    desc, older, newer = pending_bumps[0]
+                    self.add_issue("INFO", "变更记录缺少本文档状态转换",
+                                   f"{doc.path}: 变更记录推断状态为 '{state}'，元信息为 "
+                                   f"'{doc.status}'；'{desc[:48]}' 的修订号 {older} → {newer} "
+                                   "无法判定是否由未记录的解冻/复活引起，请人工核对历史，"
+                                   "不得仅凭关键词改动修订号")
 
     CHAPTER_REF_PATTERNS = [
         (re.compile(r"§\s*\d"), "§ 编号引用"),

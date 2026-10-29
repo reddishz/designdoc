@@ -1459,6 +1459,165 @@ def run_template_body_hygiene_cases():
     return 0
 
 
+def run_version_flow_cases():
+    """纯内存构造语义时间线，直接校验公开检查入口的全部问题名及数量。"""
+    mod = _load_checker()
+    initial = [(1, "初稿创建")]
+    formal = initial + [(1, "定稿（初稿→正式）")]
+    draft = formal + [(2, "解冻修订（正式→草案）")]
+    void = formal + [(1, "本文档正式→废弃")]
+    cases = []
+
+    def case(name, history, want=(), code="L2-001", status="草案"):
+        cases.append((name, code, status, history, tuple(want)))
+
+    # 原始用户场景既可独立追加，也可追加在同一创建/解冻语义行内。
+    for code, status, history, text in [
+        ("DAT-L4-001", "草案", draft,
+         "经确认解冻 DAT-DOM-001、DAT-IF-001：两项由正式 r1 转草案 r2；文档已为草案 r2，不再加号"),
+        ("FEAT-L4-001", "草案", draft,
+         "经确认解冻 FEAT-IF-001：由正式 r1 转草案 r2；文档已为草案 r2，不再加号"),
+        ("RES-L5-001", "初稿", initial,
+         "对齐已确认解冻的数据与特征契约：RES-ALG-001 显式依赖 DAT-IF-001 r2、FEAT-IF-001 r2；研究保持初稿，不定稿、不改基线"),
+    ]:
+        rev, desc = history[-1]
+        case(code + "-独立", history + [(rev, text)], code=code, status=status)
+        case(code + "-合并", history[:-1] + [(rev, desc + "；" + text)], code=code, status=status)
+        case(code + "-合并过程", history[:-1] + [(rev, desc + "；" + status + "期修改：" + text)],
+             code=code, status=status)
+        case(code + "-细项变更不能增号", history + [(rev + 1, text)],
+             ("非冻结编辑时变更了修订号",), code, status)
+
+    # 任何外部动作都不能遮蔽明确的自身迁移，也不能让细项定稿变成文档定稿。
+    own_unfreezes = [
+        "本文档正式→草案",
+        "本文档由正式 r1 转为草案 r2",
+        "本文档正式→草案；解冻细项 FR-001",
+        "解冻细项 FR-001，受上游解冻影响，本文档正式→草案",
+        "本文档正式→草案；细项定稿",
+        "细项定稿；本文档正式→草案",
+        "本文档解冻；细项 FR-001 初稿→正式",
+        "上游文档 L1-002 在完成全部联调并确认接口兼容性和风险后解冻；本文档正式→草案",
+        "L2-001 正式→草案；L2-002 定稿",
+        "L2-002 解冻；L2-001 正式→草案",
+        "解冻 L2-001（正式→草案）；细项定稿",
+        "解冻修订（正式→草案）；草案期修改：经确认解冻 FR-001（正式→草案）",
+        "本文档正式→草案；草案期修改：细项 FR-001 定稿",
+        "细项不定稿而本文档正式→草案",
+        "本文档正式→草案而细项解冻待确认",
+        "本文档正式→草案而细项待确认解冻",
+    ]
+    for i, text in enumerate(own_unfreezes):
+        for rev, want in [(1, ("解冻未递增修订号",)), (2, ()), (3, ("解冻修订号跳号",))]:
+            case(f"自身解冻-{i}-r{rev}", formal + [(rev, text)], want)
+
+    external = [
+        "细项 FR-001 正式→草案",
+        "细项FR-001正式→草案",
+        "FR-001 正式 r1 转草案 r2",
+        "解冻细项 FR-001；文档保持草案",
+        "上游在完成兼容性验证并且所有评审者确认风险已解决以后解冻",
+        "其他文档在完成全部必要的联调和兼容性验证以后正式→草案",
+        "L2-002 正式→草案",
+        "L2-002 定稿；细项 FR-001 受控复活",
+        "上游文档 L1-001，正式→草案",
+        "本文档引用不变；解冻 L2-002",
+    ]
+    for i, text in enumerate(external):
+        case(f"外部事件-{i}", draft + [(2, text)])
+        case(f"外部事件不能增号-{i}", draft + [(3, text)], ("非冻结编辑时变更了修订号",))
+    # 项目前缀与位宽由共用 CODE_TOKEN 决定，不限于示例中的项目。
+    for code in ("W3T-L2-01", "A9-ADR-1234", "ABCDE-L5-001"):
+        case(code + "-自身", formal + [(2, code + " 正式→草案")], code=code)
+        case(code + "-自身不增", formal + [(1, code + " 解冻")], ("解冻未递增修订号",), code)
+        case(code + "-外部", draft + [(2, "OTHER-L2-001 正式→草案")], code=code)
+
+    for text in ("本文档未解冻", "本文档不解冻", "本文档无需解冻", "本文档待确认解冻",
+                 "拟解冻本文档（正式→草案）", "本文档计划正式→草案", "本文档解冻待确认",
+                 "本文档解冻（正式→草案）待确认", "解冻本文档（正式→草案）待确认",
+                 "尚未确认本文档解冻", "是否解冻本文档", "本文档取消解冻"):
+        case("未发生-" + text, formal + [(1, text)], status="正式")
+        case("未发生不增号-" + text, draft + [(3, text)], ("非冻结编辑时变更了修订号",))
+    case("否定外部不遮蔽自身", formal + [(2, "细项不定稿；本文档正式→草案")])
+
+    for text in ("本文档受控复活（废弃→草案）", "本文档废弃 r1 转草案 r2",
+                 "受控复活为草案", "L2-001 废弃→草案；细项定稿"):
+        for rev, want in [(1, ("复活未递增修订号",)), (2, ()), (3, ("复活修订号跳号",))]:
+            case(f"复活-{text}-r{rev}", void + [(rev, text)], want)
+    case("复活后继续编辑不能增号", void + [(2, "受控复活"), (3, "补充细项说明")],
+         ("非冻结编辑时变更了修订号",))
+
+    for status, history in [("初稿", initial), ("草案", draft)]:
+        rev = history[-1][0]
+        for text in ("继续修改正文", f"{status}期修改", f"本文档保持{status}"):
+            case(status + "-编辑-" + text, history + [(rev, text)], status=status)
+            case(status + "-编辑增号-" + text, history + [(rev + 1, text)],
+                 ("非冻结编辑时变更了修订号",), status=status)
+        for text in (f"{status}定稿", f"本文档{status}→正式", "定稿"):
+            case(status + "-定稿-" + text, history + [(rev, text)], status="正式")
+            case(status + "-定稿增号-" + text, history + [(rev + 1, text)],
+                 ("定稿时递增了修订号",), status="正式")
+    for status, history in [("初稿", initial), ("正式", formal), ("草案", draft)]:
+        rev = history[-1][0]
+        for text in ("本文档作废", f"本文档{status}→废弃"):
+            case(status + "-作废-" + text, history + [(rev, text)], status="废弃")
+            case(status + "-作废增号-" + text, history + [(rev + 1, text)],
+                 ("作废时变更了修订号",), status="废弃")
+
+    case("模糊主体", formal + [(1, "讨论中提及解冻带来的影响")], ("文档状态事件需人工核对",))
+    for text in ("解冻方案讨论", "定稿条件说明", "复活流程说明"):
+        case("句首关键词不是独立事件-" + text, formal + [(1, text)], ("文档状态事件需人工核对",))
+    case("自身背景不是迁移", formal + [(1, "本文档对齐已确认解冻的契约")],
+         ("文档状态事件需人工核对",))
+    case("不从元信息猜历史", [(1, "补充内容"), (2, "补充更多内容")])
+    case("不强制补全历史", initial + [(11, "草案期修改"), (12, "解冻修订（正式→草案）")])
+    case("同号编辑多行", draft + [(2, "补充内容"), (2, "继续修改")])
+    case("模糊事件中断推断", draft + [(2, "讨论中提及解冻影响"), (3, "补充内容")],
+         ("文档状态事件需人工核对",))
+    case("多次真解冻不增号", formal + [(1, "解冻修订"), (1, "定稿"), (1, "解冻修订")],
+         ("解冻未递增修订号", "解冻未递增修订号"))
+    maintenance = ("2（维护）", "MNT-2026-01-01-01 文字维护：解冻、复活、定稿及回退措辞；语义不变")
+    case("维护不参与状态推断", draft + [(2, "继续编辑"), maintenance])
+    case("维护不遮蔽非法编辑增号", draft + [maintenance, (3, "继续编辑")],
+         ("非冻结编辑时变更了修订号",))
+    case("历史缺失转换只作人工核对",
+         initial + [(2, "2026-10-27 起：补充口径；解冻 RES-NFR-001")],
+         ("变更记录缺少本文档状态转换",), status="草案")
+    case("历史完整仍判编辑增号", draft + [(3, "继续编辑")],
+         ("非冻结编辑时变更了修订号",))
+    case("迁移创建行归属本文档",
+         [(1, "迁移创建：从原总体架构文档拆出角色定义与术语；细项编码统一")])
+    case("首次创建行归属本文档", [(1, "首次创建。按 v8 改为固定四列全局索引")])
+    # 日期前缀是常见写法，不应让句首的本文档事件变成主体不明。
+    case("日期前缀创建行", [(1, "2026-10-27 起：初稿创建；补回撤分级评估 TRD-ALG-005")])
+    case("日期前缀草案编辑", draft + [(2, "2026-10-27 起：草案期修改")])
+    case("日期前缀外部解冻", initial + [(1, "2026-10-27 起：解冻细项 FR-001；文档保持初稿")],
+         status="初稿")
+    case("模型初始化不是创建事件", initial + [(1, "模型初始化与训练说明")], status="初稿")
+
+    fails = []
+    checker = mod.DesignDocChecker(str(ROOT))
+    for name, code, status, history, want in cases:
+        rows = [f"| {rev} | 2026-01-01 | {text} |" for rev, text in reversed(history)]
+        latest = next(str(rev) for rev, _text in reversed(history) if str(rev).isdigit())
+        doc = mod.DocInfo(path=str(ROOT / (code + "-memory.md")), doc_code=code,
+                          status=status, version=latest,
+                          lines=["## 变更记录", "", "| 修订版本号 | 日期 | 变更说明 |",
+                                 "| --- | --- | --- |", *rows])
+        checker.docs = [doc]
+        checker.issues = []
+        checker.check_version_flow()
+        have = {issue["title"] for issue in checker.issues}
+        # 不滤噪声，并检查数量；解析空跑、重复事件/重复报告都不能假通过。
+        if (len(checker._changelog_rows(doc)) != len(history) or have != set(want)
+                or len(checker.issues) != len(want)):
+            fails.append(name)
+            print(f"  FAIL 修订时间线 {name}: 期望 {want}，实际 "
+                  f"{[issue['title'] for issue in checker.issues]}")
+    print(f"修订时间线纯内存用例 {len(cases)} 条，通过 {len(cases) - len(fails)} 条")
+    return 1 if fails else 0
+
+
 def run_check_templates_smoke():
     """本包 `--check-templates` 必须通过（哨兵 + 技能包内部锚点）。"""
     proc = subprocess.run(
@@ -1521,6 +1680,7 @@ def main():
     rc |= run_pin_scope_and_history_cases()
     rc |= run_dep_graph_cases()
     rc |= run_template_body_hygiene_cases()
+    rc |= run_version_flow_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
 
