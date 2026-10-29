@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.4-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.5-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v1.4-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 

@@ -1054,6 +1054,7 @@ def run_pin_scope_and_history_cases():
         + item("CRM-FR-001", "登录", "正式", 3)
         + item("CRM-FR-002", "注册", "废弃", 2, deprecated_fields)
         + item("CRM-FR-003", "约束", "正式", 7)
+        + item("CRM-FR-007", "临时标注 ~~待删~~", "正式", 1)
         + item("CRM-FR-006", "坏登记", "废弃", 1,
                "- **废弃时间**：2026-01-02\n"
                "- **废弃类别**：被替代\n"
@@ -1074,7 +1075,9 @@ def run_pin_scope_and_history_cases():
         "| CRM-L2-001 | 文档 | — | 6 | 2026-01-01 |\n"
         "| CRM-L2-002 | 文档 | — | 2 | 2026-01-01 |\n"
         "| OMS-L2-001 | 细项 | OMS-L2-001 | 99 | 2026-1-1 |\n"
-        "| OMS-FR-009 | 文档 | — | 99 | 2026-1-1 |\n\n"
+        "| OMS-FR-009 | 文档 | — | 99 | 2026-1-1 |\n"
+        "| OMS-FR-003 | 细项 | OMS-L2-001 | 1 | 2026-01-01 |\n"
+        "| CRM-FR-007 | 细项 | CRM-L2-001 | 1 | 2026-01-01 |\n\n"
         "## 动作\n\n"
         '<a id="crm-act-001"></a>\n'
         "### CRM-ACT-001：旧动作 ~~已废弃~~\n\n"
@@ -1087,7 +1090,8 @@ def run_pin_scope_and_history_cases():
         "- **废弃原因**：动作退场\n"
         "- **替代方案**：无\n"
         "- **来源**：[CRM-FR-001（登录）](./CRM-L2-001-requirements.md#crm-fr-001)\n"
-        "- **依赖**：[CRM-FR-002（废弃旧称）](./CRM-L2-001-requirements.md#crm-fr-002)\n\n"
+        "- **依赖**：[CRM-FR-002（废弃旧称）](./CRM-L2-001-requirements.md#crm-fr-002)\n"
+        "- **依赖**：[CRM-FR-005（补充）](./CRM-L2-002-extra.md#crm-fr-005)\n\n"
         "参见 [CRM-FR-002（废弃旧称）](./CRM-L2-001-requirements.md#crm-fr-002)。\n\n"
         '<a id="crm-act-002"></a>\n'
         "### CRM-ACT-002：新动作\n\n"
@@ -1095,9 +1099,12 @@ def run_pin_scope_and_history_cases():
         "- **修订版本号**：1\n"
         "- **创建日期**：2026-01-01\n"
         "- **最后修订日期**：2026-01-01\n"
-        "- **来源**：[OMS-FR-003（订单）](../oms/OMS-L2-001-order.md#oms-fr-003)\n\n"
+        "- **来源**：[OMS-FR-003（订单）](../oms/OMS-L2-001-order.md#oms-fr-003)\n"
+        "- **来源**：[CRM-FR-005（补充）](./CRM-L2-002-extra.md#crm-fr-005)\n\n"
         "参见 [CRM-FR-002（过期旧称）](./CRM-L2-001-requirements.md#crm-fr-002)。\n"
         "外部契约见 [OMS-L2-001（订单）](../oms/OMS-L2-001-order.md) 与 OMS-FR-001。\n"
+        "标题核对 [CRM-FR-007（临时标注）](./CRM-L2-001-requirements.md#crm-fr-007)。\n"
+        "另见 [OMS-FR-004（订单行）](../oms/OMS-L2-001-order.md#oms-fr-004)。\n"
         "另见 CRM-FR-999。\n")
 
     files = {
@@ -1123,7 +1130,11 @@ def run_pin_scope_and_history_cases():
     # 跨作用域引用：存在性 / 归属由 check_system.py 负责，本检查器不重复报
     check("跨作用域钉住行不报对象不存在", not hits(checker, "本文引用对象不存在"))
     check("跨作用域正文引用不报悬空", not desc_has(checker, "引用悬空", "OMS-"))
-    check("跨作用域引用不计入钉住表", not hits(checker, "缺本文引用钉住行"))
+    missing_pins = hits(checker, "缺本文引用钉住行")
+    check("跨作用域已钉引用不报缺行",
+          not any("OMS-FR-003" in i["description"] for i in missing_pins))
+    check("跨作用域未钉引用仍报缺行",
+          any("OMS-FR-004" in i["description"] for i in missing_pins))
     check("跨作用域钉住行不做类型校验", not hits(checker, "本文引用类型不符"))
     check("跨作用域钉住行不做所在文档校验",
           not hits(checker, "文档型引用所在文档应为 —")
@@ -1155,6 +1166,12 @@ def run_pin_scope_and_history_cases():
           not desc_has(checker, "引用标题与定义标题不一致", "废弃旧称"))
     check("废弃细项历史依赖不报收口",
           not hits(checker, "依赖指向废弃细项"))
+    check("废弃细项历史属性不要求补钉",
+          not any("CRM-ACT-001" in i["description"] and "CRM-FR-005" in i["description"]
+                  for i in missing_pins))
+    check("活跃细项缺钉仍报",
+          any("CRM-ACT-002" in i["description"] and "CRM-FR-005" in i["description"]
+              for i in missing_pins))
 
     # 活跃内容仍须报错
     active = hits(checker, "活跃文档引用已废弃对象")
@@ -1164,6 +1181,11 @@ def run_pin_scope_and_history_cases():
           any(f":{active_line} 引用了已废弃的" in i["description"] for i in active))
     check("活跃正文标题不一致仍告警",
           desc_has(checker, "引用标题与定义标题不一致", "过期旧称"))
+    check("一般删除线不从标题剥离",
+          desc_has(checker, "引用标题与定义标题不一致", "临时标注"))
+    l4_doc = next(d for d in checker.docs if d.doc_code == "CRM-L4-001")
+    check("废弃标记仍从标题剥离",
+          checker._def_title(l4_doc, "CRM-ACT-001") == "旧动作")
 
     # 废弃登记的结构检查不被历史豁免吞掉
     check("废弃登记缺字段仍报错", hits(checker, "废弃细项缺少必需字段"))

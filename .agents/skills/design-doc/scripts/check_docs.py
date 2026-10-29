@@ -1873,14 +1873,19 @@ class DesignDocChecker:
         对象是否存在、类型、所在文档、代际与日期形态、重复行、同文档行，以及
         契约位置（`来源` / `依赖` / 链接类属性）的跨文档引用是否都已进表。
         代际落后是派生状态（不推翻已 `正式` 的本文），不报。带他作用域前缀的
-        行与辅助集合跳过——存在性与归属由 `check_system.py` 负责，本检查器
-        不重复实现其语义列校验。细项钉对方细项 `修订版本号`，整份文档钉对方
-        文档 `修订版本号`；目标细项修订号不可读时跳过比较，不猜测。
+        行不做语义列校验——存在性与归属由 `check_system.py` 负责，本检查器
+        不重复实现——但其编码仍计入本表完整性：活跃契约位置引用了跨子系统
+        对象却无钉住行时照报缺行。`变更记录` 与已 `废弃` 细项的定义块属历史
+        内容，不要求补钉；表内钉住行本身仍按本表校验。细项钉对方细项
+        `修订版本号`，整份文档钉对方 `修订版本号`；目标细项修订号不可读时
+        跳过比较，不猜测。
         """
         for doc in self.docs:
             if doc.archived:
                 continue
             pinned: Dict[str, int] = {}
+            pinned_foreign: Set[str] = set()
+            historical = self._historical_lines(doc)
             for _idx, header, rows in iter_tables(doc.lines):
                 cols = {norm(h): i for i, h in enumerate(header)}
                 if not all(h in cols for h in PIN_HEADERS):
@@ -1895,7 +1900,8 @@ class DesignDocChecker:
                         continue                # 占位行 / 空表体
                     raw = m.group(1)
                     if not self._is_local_code(raw):
-                        continue            # 跨作用域钉住行由 check_system.py 校验
+                        pinned_foreign.add(raw)   # 语义列由 check_system.py 校验
+                        continue
                     code = self.resolve_code(raw)
                     target = self._code_target_doc(code)
                     where = f"{doc.path}:{lineno} `{raw}`"
@@ -1950,15 +1956,20 @@ class DesignDocChecker:
             if doc.is_index:
                 continue
             required: Dict[str, str] = {}
+            required_foreign: Dict[str, str] = {}
             for item in self._doc_items(doc):
                 if not (item.defined and item.path == doc.path):
                     continue
+                if item.line in historical:
+                    continue            # 废弃细项历史定义块不回写、不补钉
                 for name, val, _ln in self._attr_group(doc, item.line - 1):
                     if name not in PIN_ATTRS or not val or "{" in val:
                         continue
                     for raw in self._attr_codes(val):
                         if not self._is_local_code(raw):
-                            continue        # 跨作用域引用由 check_system.py 校验
+                            required_foreign.setdefault(
+                                raw, f"`{item.code}` 的 `{name}`")
+                            continue
                         code = self.resolve_code(raw)
                         target = self._code_target_doc(code)
                         if target is None or target is doc:
@@ -1966,6 +1977,8 @@ class DesignDocChecker:
                         required.setdefault(code, f"`{item.code}` 的 `{name}`")
             # 正文段（非表格 / 非列表 / 非属性行）里的跨文档标准链接同样进表
             for lineno, line in enumerate(doc.lines, 1):
+                if lineno in historical:
+                    continue            # 历史正文不要求补钉
                 stripped = line.lstrip()
                 if (not stripped or stripped[0] in "|#>*+-" or ATTR_LINE_OK.match(line)):
                     continue
@@ -1978,7 +1991,9 @@ class DesignDocChecker:
                     if not cm:
                         continue
                     if not self._is_local_code(cm.group(1)):
-                        continue            # 跨作用域链接由 check_system.py 校验
+                        required_foreign.setdefault(
+                            cm.group(1), f"第 {lineno} 行正文链接")
+                        continue
                     code = self.resolve_code(cm.group(1))
                     target = self._code_target_doc(code)
                     if target is None or target is doc:
@@ -1988,6 +2003,11 @@ class DesignDocChecker:
                 if code not in pinned:
                     self.add_issue("WARNING", "缺本文引用钉住行",
                                    f"{doc.path}: {source} 指向他文档 {code}，"
+                                   "但「本文引用」表无对应钉住行")
+            for code, source in sorted(required_foreign.items()):
+                if code not in pinned_foreign:
+                    self.add_issue("WARNING", "缺本文引用钉住行",
+                                   f"{doc.path}: {source} 指向跨子系统对象 {code}，"
                                    "但「本文引用」表无对应钉住行")
 
     def check_item_status(self) -> None:
@@ -4146,8 +4166,8 @@ class DesignDocChecker:
             else:
                 bm = ITEM_BOLD_DEF.match(line)
                 text = line[bm.end():] if bm else ""
-            # `~~已废弃~~` 只是人眼标记，不属于标题本体
-            text = re.sub(r"\s*~~[^~]*~~\s*$", "", text).strip()
+            # 只剥精确的废弃标记；一般删除线属于标题本体
+            text = re.sub(r"\s*~~已废弃~~\s*$", "", text).strip()
             text = re.sub(r"^" + PROJECT_PREFIX + r"[A-Z]{1,5}[0-9]?-\d{2,4}\s*[:\uff1a\-\u2014]?\s*", "", text)
             return norm(text)
         return ""
