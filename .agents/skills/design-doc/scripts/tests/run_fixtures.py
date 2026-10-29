@@ -182,6 +182,8 @@ EXPECT = {
     # 语义行里的「解冻」指向细项 / 上游文档时，不触发本文档递增判定
     "L2-983-item-unfreeze-ok":    set(),
     "L2-984-upstream-unfreeze-ok": set(),
+    # 作废是状态转换：文档 `→废弃` 写一条语义行，修订号不变
+    "L2-985-docvoid-row-ok":      set(),
     # —— EVAL 文档级基线评估报告 ——
     "EVAL-901-ok":                set(),
     "EVAL-902-no-scope":          {"EVAL缺少必需章节"},
