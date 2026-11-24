@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""系统 / 子系统结构与架构一致性检查器（system-design-doc v2.0）。
+"""系统 / 子系统结构与架构一致性检查器（system-design-doc v2.1）。
 
 只检查系统级架构权威与编排，不检查子系统文档内部规则：
 
-- 系统根 README：5 列子系统注册表、当前结构、架构入口、发布索引；
+- 系统根 README：5 列子系统注册表、当前结构、架构入口、发布索引、`规范版本目标`（与已装规范比对）；
   根上不得有产品版本 / 基线 / L0–L6 / 全局设计索引
 - 系统架构（ued/architecture/）：独立扫描通道，与子系统文档完全隔离；
   校验 system-architecture.md 元信息、必选章节、职责分配覆盖、系统交互契约、
@@ -38,6 +38,20 @@ except ImportError:  # pragma: no cover
     yaml = None  # type: ignore
 
 VERSION_RE = re.compile(r"^v(\d+)\.(\d+)$")
+# 规范版本目标（系统根 README）：与 SKILL.md `metadata.version` 同形，裸数字
+SPEC_VERSION_RE = re.compile(r"^\d+\.\d+$")
+SPEC_VERSION_META = re.compile(r'^\s+version:\s*"?(\d+\.\d+)"?\s*$', re.M)
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+
+
+def installed_spec_version() -> str:
+    """已装 system-design-doc 规范版本：取 SKILL.md `metadata.version`；读不到返回空串。"""
+    try:
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    m = SPEC_VERSION_META.search(text)
+    return m.group(1) if m else ""
 FULL_VERSION_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 PREFIX_RE = re.compile(r"^[A-Z][A-Z0-9]{1,4}$")
@@ -1866,6 +1880,30 @@ class SystemChecker:
             self.add("WARNING", "系统 README 未链接系统架构",
                      f"{self.rel(self.readme)}: 存在 {self.rel(self.arch.path)}，"
                      "但系统根 README 未链接该架构文档")
+        self._check_spec_target()
+
+    def _check_spec_target(self) -> None:
+        """系统根 `规范版本目标`：声明本系统层要求对齐的规范版本。
+
+        只记根 README 一处，不逐篇记录（系统层文档数量少，迁移进度由目标与
+        system-architecture.md / 发布清单的 architecture_rev 共同追溯）。规则见
+        references/version-alignment.md · 规范版本目标。
+        """
+        installed = installed_spec_version()
+        raw = norm(self.meta.get("规范版本目标") or "")
+        if not raw:
+            self.add("WARNING", "系统 README 缺规范版本目标",
+                     f"{self.rel(self.readme)}: 缺 `规范版本目标`；填当前已装 "
+                     f"system-design-doc 版本 {installed or '（不可读）'}")
+            return
+        if not SPEC_VERSION_RE.match(raw):
+            self.add("WARNING", "系统 README 规范版本目标格式错误",
+                     f"{self.rel(self.readme)}: `规范版本目标` '{raw}' 应为主.次")
+            return
+        if installed and raw != installed:
+            self.add("WARNING", "系统 README 规范版本目标与已装不一致",
+                     f"{self.rel(self.readme)}: `规范版本目标` 为 {raw}，已装为 "
+                     f"{installed}；升级后确认影响并更新目标，或恢复对应技能包")
 
     # ---------------------------------------------------------------- 报告
 

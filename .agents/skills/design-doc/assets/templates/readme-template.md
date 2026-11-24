@@ -23,6 +23,7 @@
 | author | {author} |
 | last_updated | {YYYY-MM-DD} |
 | 产品版本 | v1.0 |
+| 规范版本目标 | {当前已装规范版本，取 SKILL.md metadata.version} |
 
 ## 发版记录
 

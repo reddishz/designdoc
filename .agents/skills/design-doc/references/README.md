@@ -27,6 +27,7 @@
 | [layer-system.md](layer-system.md) | L0–L6、按需启用、目录命名 |
 | [status-definitions.md](status-definitions.md) | 四态、门控、修订号、维护性变更与实质变更、存量迁移 |
 | [product-version.md](product-version.md) | 产品版本、基线、PATCH/MINOR/MAJOR |
+| [spec-upgrade.md](spec-upgrade.md) | 规范版本（逐篇）、作用域规范版本目标、基线 `spec_version`、升级影响表 |
 | [item-deprecation.md](item-deprecation.md) | 细项废弃 |
 | [doc-deprecation.md](doc-deprecation.md) | 整份文档废弃与归档 |
 | [glossary-conventions.md](glossary-conventions.md) | 术语定义、全局术语表与 `所用术语` |

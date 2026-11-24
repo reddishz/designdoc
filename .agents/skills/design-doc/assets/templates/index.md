@@ -35,6 +35,7 @@
 | 定义块形态、属性封闭集、`出处` / `来源` / `依赖`、链接类每行一个对象 | [coding-system.md · 细项定义块形态](../../references/coding-system.md#细项定义块形态mandatory) |
 | 清单范围、分配、升序与缺口、变更记录倒序、本文引用 | [编码分配管理](../../references/coding-system.md#编码分配管理)；[本文引用](../../references/coding-system.md#本文引用跨文档钉住mandatory) |
 | 文档修订号、产品版本、产品基线 | [status-definitions.md · 变更流程与版本号](../../references/status-definitions.md#变更流程与版本号统一mandatory)；[product-version.md](../../references/product-version.md) |
+| 规范版本（封面 `规范版本`、README `规范版本目标`）与升级影响表 | [spec-upgrade.md](../../references/spec-upgrade.md) |
 | 术语定义、全局术语表、`所用术语` | [glossary-conventions.md](../../references/glossary-conventions.md) |
 | 维护性变更、维护行 `N（维护）` | [maintenance-change.md](../../references/workflows/maintenance-change.md)；[status-definitions.md · 维护性变更](../../references/status-definitions.md#维护性变更第三维度mandatory) |
 | 实例化与哨兵 | 上文《模板边界（哨兵）》 |

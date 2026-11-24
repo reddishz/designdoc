@@ -3,8 +3,8 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.10-blue.svg)](./.agents/skills/design-doc/SKILL.md)
-[![Skill](https://img.shields.io/badge/system--design--doc-v2.0-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.11-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。单系统用 `design-doc`；由多个子系统组成的系统另加 `system-design-doc` 管注册表、依赖钉住与系统发布。
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.11 | 新增规范版本记录：文档封面 `规范版本` 逐篇记录已对齐的规范，作用域 README `规范版本目标` 声明升级要求，基线 `spec_version` 盖章创建时规范；升级影响表见 `references/spec-upgrade.md` |
 | v10.0 | 移除内置多应用模式：`design-doc` 只管单一作用域，多子系统拆到独立 skill `system-design-doc`（注册表、依赖钉住、系统发布）；共享库按普通子系统登记，不再固定 `shared/` |
 | v9.0 | 把变更分为维护性与实质性：不改含义的整理记 `N（维护）`，不动状态、修订号与基线；首份基线在开发期可原地增删成员 |
 | v8.0 | 全局术语表 `ued/glossary.md` 与文档术语块，一个术语只有一个权威定义 |
@@ -148,6 +149,7 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued
 - [状态定义](./.agents/skills/design-doc/references/status-definitions.md)
 - [术语与概念](./.agents/skills/design-doc/references/glossary-conventions.md)
 - [产品版本与基线](./.agents/skills/design-doc/references/product-version.md)
+- [规范版本与逐篇迁移](./.agents/skills/design-doc/references/spec-upgrade.md)
 - [审核指南](./.agents/skills/design-doc/references/review-guidelines.md)
 - [检查脚本](./.agents/skills/design-doc/scripts/check_docs.py)
 

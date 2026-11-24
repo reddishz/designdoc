@@ -67,6 +67,8 @@ NOISE = {
     "缺少变更记录", "缺少细项编码清单", "缺少必需章节", "引用悬空",
     "细项未登记入清单", "编码序列存在缺口", "细项待定稿", "文档待定稿",
     "草案待定稿",
+    # 夹具不随规范升级补 `规范版本`；该项的正反例由 run_spec_version_cases 专测
+    "文档缺规范版本",
 }
 
 # 夹具 → 期望命中的目标问题名（空集 = 该规则的正例，MUST 零命中）。
@@ -1664,6 +1666,199 @@ def run_version_flow_cases():
     return 1 if fails else 0
 
 
+def run_spec_version_cases():
+    """规范版本（逐篇迁移记录）：README `规范版本目标` 与文档 `规范版本` 的判定；
+    基线 `spec_version` 创建即盖章、PATCH 保留、未加引号按浮点报错。只断言规范版本相关问题名。"""
+    import tempfile
+    import yaml
+
+    check_docs = _load_checker()
+    installed = check_docs.installed_spec_version()
+    if not installed:
+        print("FAIL 无法读取已装规范版本（SKILL.md metadata.version）")
+        return 1
+    spec_titles = {
+        "缺规范版本目标", "规范版本目标格式错误", "规范版本目标与已装规范不一致",
+        "文档缺规范版本", "规范版本格式错误", "文档规范版本超前", "文档待迁移规范",
+        "产品基线缺规范版本", "产品基线规范版本格式错误", "产品基线规范版本超前",
+    }
+    readme_tpl = """# 规范版本测试
+
+## 项目元信息
+
+| 字段 | 值 |
+|------|----|
+| project_name | 规范版本测试 |
+| project_code | SPEC |
+| 产品版本 | v1.0 |
+{target_row}
+## 发版记录
+
+| 产品版本 | 日期 | 说明 |
+|----------|------|------|
+"""
+
+    def doc_text(num, sv_row):
+        return f"""# L2-{num:03d}-spec
+
+| 属性 | 值 |
+| ---- | -- |
+| 文档编码 | L2-{num:03d} |
+| 层级 | L2 - 系统需求 |
+| 修订版本号 | 1 |
+| 状态 | 初稿 |
+| 作者 | 测试 |
+| 创建日期 | 2026-01-15 |
+| 最后更新 | 2026-01-15 |
+{sv_row}
+## 需求定义
+
+<a id="fr-{num:03d}"></a>
+### FR-{num:03d}：甲
+
+- **细项状态**：初稿
+- **修订版本号**：1
+- **创建日期**：2026-01-15
+- **最后修订日期**：2026-01-15
+- **优先级**：P1
+- **验证方式**：单元测试
+"""
+
+    def sv(v):
+        return f"| 规范版本 | {v} |\n"
+
+    def run(root):
+        checker = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            issues = checker.run_checks()
+        out = defaultdict(set)
+        for i in issues:
+            if i["title"] in spec_titles:
+                out[i["title"]].add(i["description"].split(":", 1)[0].split("/")[-1])
+        return out
+
+    fails = []
+
+    def expect(name, got, want):
+        if set(got) != set(want):
+            fails.append((name, sorted(got), sorted(want)))
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "README.md").write_text(readme_tpl.replace(
+            "{target_row}", f"| 规范版本目标 | {installed} |\n"), encoding="utf-8")
+        (root / "L2-901-spec.md").write_text(doc_text(901, sv(installed)), encoding="utf-8")
+        (root / "L2-902-spec.md").write_text(doc_text(902, ""), encoding="utf-8")
+        (root / "L2-903-spec.md").write_text(doc_text(903, sv("9.0")), encoding="utf-8")
+        (root / "L2-904-spec.md").write_text(doc_text(904, sv("99.0")), encoding="utf-8")
+        (root / "L2-905-spec.md").write_text(doc_text(905, sv("10.x")), encoding="utf-8")
+        got = run(root)
+        expect("文档缺规范版本仅 902", got.get("文档缺规范版本", set()), {"L2-902-spec.md"})
+        expect("文档待迁移仅 903", got.get("文档待迁移规范", set()), {"L2-903-spec.md"})
+        expect("文档超前仅 904", got.get("文档规范版本超前", set()), {"L2-904-spec.md"})
+        expect("格式错误仅 905", got.get("规范版本格式错误", set()), {"L2-905-spec.md"})
+        expect("目标与已装一致", got.get("规范版本目标与已装规范不一致", set()), set())
+        expect("目标已声明", got.get("缺规范版本目标", set()), set())
+        expect("901 无任何规范版本问题",
+               {k for k, v in got.items() if "L2-901-spec.md" in v}, set())
+
+        # README 目标缺失 → 缺目标；目标不等于已装 → 不一致；待迁移判定随之跳过
+        (root / "README.md").write_text(readme_tpl.replace(
+            "{target_row}", "| 规范版本目标 | 9.0 |\n"), encoding="utf-8")
+        got = run(root)
+        expect("目标 9.0 与已装不一致",
+               got.get("规范版本目标与已装规范不一致", set()), {"README.md"})
+        expect("目标 9.0 时 903 不再判待迁移（9.0 不低于 9.0）",
+               got.get("文档待迁移规范", set()), set())
+
+        (root / "README.md").write_text(readme_tpl.replace("{target_row}", ""),
+                                        encoding="utf-8")
+        got = run(root)
+        expect("缺目标", got.get("缺规范版本目标", set()), {"README.md"})
+        expect("缺目标时不判待迁移", got.get("文档待迁移规范", set()), set())
+
+    # 基线：创建即盖章（加引号）、PATCH 保留、未加引号报错、超前报错
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "README.md").write_text(readme_tpl.replace(
+            "{target_row}", f"| 规范版本目标 | {installed} |\n"), encoding="utf-8")
+        (root / "L2-901-spec.md").write_text(doc_text(901, sv(installed)), encoding="utf-8")
+        with contextlib.redirect_stdout(io.StringIO()):
+            check_docs.DesignDocChecker(str(root)).bump_product_version(note="首份")
+        bpath = root / "baselines" / "v1.0.yaml"
+        text = bpath.read_text(encoding="utf-8")
+        expect("新基线盖章", [] if f'spec_version: "{installed}"' in text else ["缺"], [])
+        data = yaml.safe_load(text)
+        expect("盖章值为字符串", [] if data.get("spec_version") == installed else ["错"], [])
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            check_docs.DesignDocChecker(str(root)).bump_product_version(
+                patch=True, note="纠错")
+        data = yaml.safe_load(bpath.read_text(encoding="utf-8"))
+        expect("PATCH 保留 spec_version",
+               [] if data.get("spec_version") == installed else ["丢失"], [])
+        got = run(root)
+        expect("合规基线无规范版本问题",
+               {k for k in got if k.startswith("产品基线")}, set())
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "README.md").write_text(readme_tpl.replace(
+            "{target_row}", f"| 规范版本目标 | {installed} |\n"), encoding="utf-8")
+        bdir = root / "baselines"
+        bdir.mkdir()
+        base = """product_version: v1.0
+full_version: v1.0.0
+created: 2026-01-15
+updated: 2026-01-15
+prev: null
+patch_log: []
+added: []
+removed: []
+changed: []
+{sv}
+items: []
+"""
+        (bdir / "v1.0.yaml").write_text(base.replace("{sv}", "spec_version: 10.10"),
+                                        encoding="utf-8")
+        got = run(root)
+        expect("未加引号报格式错误", got.get("产品基线规范版本格式错误", set()),
+               {"v1.0.yaml"})
+        (bdir / "v1.0.yaml").write_text(base.replace("{sv}", 'spec_version: "99.0"'),
+                                        encoding="utf-8")
+        got = run(root)
+        expect("基线超前报错", got.get("产品基线规范版本超前", set()), {"v1.0.yaml"})
+        (bdir / "v1.0.yaml").write_text(base.replace("{sv}", ""), encoding="utf-8")
+        got = run(root)
+        expect("存量缺失仅提示", got.get("产品基线缺规范版本", set()), {"v1.0.yaml"})
+        # 未加引号的历史 spec_version：PATCH 须拒绝，不得静默改写为 10.1
+        (bdir / "v1.0.yaml").write_text(base.replace("{sv}", "spec_version: 10.10"),
+                                        encoding="utf-8")
+        refused = False
+        try:
+            with contextlib.redirect_stdout(io.StringIO()):
+                check_docs.DesignDocChecker(str(root)).bump_product_version(
+                    patch=True, note="纠错")
+        except RuntimeError:
+            refused = True
+        expect("未加引号 spec_version 的基线拒绝 PATCH", [] if refused else ["未拒绝"], [])
+
+    # 维护类型枚举含「规范迁移」；未知类型仍不得通过
+    ok_seg = check_docs.parse_maintenance_segments(
+        "MNT-2026-01-01-01 规范迁移：章节顺序对齐；语义不变")
+    bad_seg = check_docs.parse_maintenance_segments(
+        "MNT-2026-01-01-01 迁移：章节顺序对齐；语义不变")
+    expect("规范迁移为合法维护类型", [] if ok_seg else ["拒收"], [])
+    expect("未知维护类型仍拒收", [] if bad_seg is None else ["误收"], [])
+
+    print("\n".join(f"  FAIL {n}：期望 {w}，实际 {g}" for n, g, w in fails))
+    if fails:
+        print("FAIL 规范版本用例未通过")
+        return 1
+    print("规范版本（逐篇迁移记录）用例通过")
+    return 0
+
+
 def run_check_templates_smoke():
     """本包 `--check-templates` 必须通过（哨兵 + 技能包内部锚点）。"""
     proc = subprocess.run(
@@ -1727,6 +1922,7 @@ def main():
     rc |= run_dep_graph_cases()
     rc |= run_template_body_hygiene_cases()
     rc |= run_version_flow_cases()
+    rc |= run_spec_version_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
 

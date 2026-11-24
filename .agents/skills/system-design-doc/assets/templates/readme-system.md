@@ -18,6 +18,7 @@
 | scope | 系统（含多个子系统） |
 | author | {author} |
 | last_updated | {YYYY-MM-DD} |
+| 规范版本目标 | {当前已装规范版本，取 SKILL.md metadata.version} |
 
 ## 当前结构
 

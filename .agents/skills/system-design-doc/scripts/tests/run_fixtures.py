@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parent
 SKILL = ROOT.parents[1]
 sys.path.insert(0, str(SKILL / "scripts"))
 
-from check_system import SystemChecker  # noqa: E402
+from check_system import SystemChecker, installed_spec_version  # noqa: E402
 
 PASS = 0
 FAIL = 0
@@ -75,7 +75,11 @@ def write_tree(root: Path, files: Dict[str, str]) -> None:
 
 def readme(rows: str, release_rows: str = "", extra_meta: str = "",
            structure: bool = True, release_table: bool = True,
-           glossary: bool = True, arch_link: bool = True) -> str:
+           glossary: bool = True, arch_link: bool = True,
+           spec_target: Optional[str] = None) -> str:
+    # None = 默认写已装版本；"" = 不写该行（用于缺失用例）
+    spec_row = ("" if spec_target == "" else
+                f"| 规范版本目标 | {spec_target or installed_spec_version()} |\n")
     structure_block = (
         "## 当前结构\n\n本仓库为系统 + 子系统结构；系统级与子系统级职责分离。\n\n"
         if structure else ""
@@ -107,7 +111,7 @@ def readme(rows: str, release_rows: str = "", extra_meta: str = "",
 | scope | 系统（含多个子系统） |
 | author | tester |
 | last_updated | 2026-01-01 |
-{extra_meta}
+{spec_row}{extra_meta}
 {structure_block}{arch_block}## 子系统注册表
 
 | subsystem_key | 子系统名称 | 目录 | 编码前缀 | 状态 |
@@ -393,7 +397,7 @@ def case(name: str, files: Dict[str, str]) -> SystemChecker:
 
 
 def main() -> int:
-    print("system-design-doc v2.0 fixtures")
+    print("system-design-doc v2.1 fixtures")
 
     # ---- 基础结构与注册表 ----
     c = case("valid", valid_files())
@@ -940,6 +944,28 @@ def main() -> int:
         files[new] = files.pop(old)
     c = case("prefixed-design-doc-names", files)
     check("带前缀设计文档名识别", not has(c, "子系统无设计文档"))
+
+    # ---- 规范版本目标（系统根 README） ----
+    inst = installed_spec_version()
+    check("已装规范版本可读", bool(inst))
+    c = case("spec-target-ok", {"ued/README.md": readme("\n".join([
+        "| crm | 客户关系 | crm/ | CRM | 正式 |",
+        "| oms | 订单中心 | oms/ | OMS | 正式 |",
+    ]), "| sys-v1.0 | 2026-01-02 | 首个产品集发布 | [清单](releases/sys-v1.0.yaml) |")})
+    check("规范版本目标与已装一致不告警",
+          not any("规范版本目标" in i.title for i in c.issues))
+    for label, target, want in (
+            ("缺规范版本目标", "", "系统 README 缺规范版本目标"),
+            ("规范版本目标格式错误", "two", "系统 README 规范版本目标格式错误"),
+            ("规范版本目标与已装不一致", "1.0", "系统 README 规范版本目标与已装不一致")):
+        rows = "\n".join([
+            "| crm | 客户关系 | crm/ | CRM | 正式 |",
+            "| oms | 订单中心 | oms/ | OMS | 正式 |",
+        ])
+        text = readme(rows, "| sys-v1.0 | 2026-01-02 | 首个产品集发布 | [清单](releases/sys-v1.0.yaml) |",
+                      spec_target=target if target else "")
+        c = case("spec-target-" + label, {"ued/README.md": text})
+        check(f"{label}告警", any(i.title == want and i.level == "WARNING" for i in c.issues))
 
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

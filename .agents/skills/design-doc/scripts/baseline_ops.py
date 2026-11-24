@@ -34,7 +34,8 @@ _LINEAGE_AFTER = ("最后修订日期", "创建日期", "修订版本号", "细�
 # external_deps）不属于 design-doc，升版时必须原样保留。
 KNOWN_BASELINE_KEYS = {
     "product_version", "full_version", "created", "updated", "date",
-    "prev", "patch_log", "note", "added", "removed", "changed", "items",
+    "prev", "spec_version", "patch_log", "note", "added", "removed", "changed",
+    "items",
 }
 
 
@@ -121,6 +122,10 @@ def dump_baseline(data: Dict[str, Any]) -> str:
         lines.append(f"prev: {prev}")
     else:
         lines.append("prev: null")
+    spec = data.get("spec_version")
+    if spec not in (None, ""):
+        # 必须加引号：未加引号的 10.10 会被 YAML 解析为浮点数 10.1
+        lines.append(f'spec_version: "{spec}"')
     log = data.get("patch_log")
     if log is None and data.get("note"):
         log = [{"full_version": fv, "date": updated,

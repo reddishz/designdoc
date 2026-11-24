@@ -129,3 +129,17 @@ external_deps:
 - `depends_on` / `external_deps` 是本技能定义的**扩展顶层字段**，不改变 `items`、`added` / `removed` / `changed` 的语义。
 - design-doc 的 PATCH / MINOR / MAJOR 工具 **MUST** 原样保留未知顶层字段；本技能的检查器读取并校验它们。
 - 系统发布清单**不是** design-doc 基线，不参与 `--bump-product`。
+
+## 规范版本目标（系统根 README）
+
+系统根 `ued/README.md` 的项目元信息表含一行 `规范版本目标`（裸数字，与 `SKILL.md` 的 `metadata.version` 同形，如 `2.1`），表示本系统层要求对齐的 system-design-doc 规范版本。
+
+| 项 | 规则 |
+|----|------|
+| 承载 | 仅系统根 README 一处；**MUST NOT** 在 `architecture/`、`releases/` 或子系统文档中逐篇记录 |
+| 与已装不一致 | 检查器 WARNING；升级技能后确认影响后更新目标，或恢复对应技能包 |
+| 缺失 | WARNING（存量允许，不阻断） |
+| 子系统 | 子系统是独立的 design-doc 作用域，其逐篇 `规范版本` 与基线 `spec_version` 由 design-doc 管理，见 [design-doc · spec-upgrade](../../design-doc/references/spec-upgrade.md) |
+| 与 `architecture_rev` | 互不替代：`architecture_rev` 追溯**系统架构内容**的修订，规范版本记录**本技能的规则版本** |
+
+系统层文档数量少，逐篇迁移的进度由根 README 目标与发布清单的 `architecture_rev` 共同追溯，因此不做逐篇记录。

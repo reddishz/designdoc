@@ -11,7 +11,7 @@ description: >
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.10"
+  version: "10.11"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -79,6 +79,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 废弃细项/文档 | [lifecycle.md](references/workflows/lifecycle.md)（作废段） |
 | 定稿确认 / 提交收尾 / 基线漂移询问 | [lifecycle.md](references/workflows/lifecycle.md)（Checkpoint 5；见上「仅当」） |
 | 基线 PATCH / MINOR / MAJOR | [baseline-change.md](references/workflows/baseline-change.md) |
+| 技能升级后让已有文档跟随新规范（`规范版本` / `规范版本目标`） | [spec-upgrade.md](references/spec-upgrade.md) |
 | 写/改 EVAL | [eval-report-profile.md](references/eval-report-profile.md) + 模板 [eval.md](assets/templates/eval.md) |
 | 维护术语表 / 定义术语 / 术语冲突 | [glossary-conventions.md](references/glossary-conventions.md) + 模板 [glossary.md](assets/templates/glossary.md) |
 | 审查设计文档 | [review-guidelines.md](references/review-guidelines.md) |
