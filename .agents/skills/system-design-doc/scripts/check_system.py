@@ -1,14 +1,21 @@
 #!/usr/bin/env python3
-"""系统 / 子系统结构检查器（system-design-doc）。
+"""系统 / 子系统结构与架构一致性检查器（system-design-doc v2.0）。
 
-只检查系统级编排，不检查子系统文档内部规则：
+只检查系统级架构权威与编排，不检查子系统文档内部规则：
 
-- 系统根 README：子系统注册表、当前结构、发布索引；根上不得有产品版本 / 基线 / 设计索引
-- 注册表：键、目录、前缀、角色文档、状态、唯一性与 README 一致性
+- 系统根 README：5 列子系统注册表、当前结构、架构入口、发布索引；
+  根上不得有产品版本 / 基线 / L0–L6 / 全局设计索引
+- 系统架构（ued/architecture/）：独立扫描通道，与子系统文档完全隔离；
+  校验 system-architecture.md 元信息、必选章节、职责分配覆盖、系统交互契约、
+  SYS-CON 锚点、固定格式修订记录表，以及 SYS-ADR-*.md
+- 注册表：键、目录、前缀（禁用保留词 SYS）、状态、唯一性与 README 一致性；
+  检出已移除的旧 `角色文档` 列直接报错并指引迁移
 - 子系统目录：单层、已登记、有 README；无嵌套作用域
 - 子系统基线扩展字段：depends_on / external_deps 的目标、版本与闭合
-- 系统发布清单：发布项有效性、基线存在、patch_log、依赖闭合、外部依赖冲突
-- 跨子系统：完整编码唯一定义、前缀归属、跨作用域引用、全局术语表
+- 系统发布清单：architecture_rev 修订追溯、发布项有效性、基线存在、
+  patch_log、依赖闭合、外部依赖冲突
+- 跨子系统：完整编码唯一定义、前缀归属、SYS 命名空间引用与锚点可达性、
+  跨作用域简写、全局术语表
 
 文档内部规则（编码、状态、定义块、单作用域产品基线等）由 design-doc 的
 check_docs.py 负责；两者互不导入。
@@ -17,7 +24,6 @@ check_docs.py 负责；两者互不导入。
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 from collections import defaultdict
@@ -35,14 +41,25 @@ VERSION_RE = re.compile(r"^v(\d+)\.(\d+)$")
 FULL_VERSION_RE = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 KEY_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 PREFIX_RE = re.compile(r"^[A-Z][A-Z0-9]{1,4}$")
-ROLE_RE = re.compile(r"^(?:[A-Z][A-Z0-9]{1,4}-)?CMP-\d{2,4}$")
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 RELEASE_FILE_RE = re.compile(r"^sys-v(\d+)\.(\d+)\.yaml$")
-RESERVED_DIRS = {"releases", "references", "assets", "deprecated", "baselines"}
+
+# 系统根保留目录（统一单一真源，_is_reserved_path / 结构扫描共用）
+RESERVED_DIRS = {"architecture", "releases", "references", "assets", "deprecated", "baselines"}
+RESERVED_PREFIXES = {"SYS"}
 LAYER_DIR_RE = re.compile(r"^L[0-6]-")
 PLACEHOLDER_RE = re.compile(r"\{[^}]*\}")
+FOUR_STATES = ("初稿", "正式", "草案", "废弃")
 
-# design-doc 的类型码快照；仅用于识别「细项定义标题」，不承担类型规则
+# 系统级标识（与子系统编码严格隔离）
+SYS_CON_HEADING_RE = re.compile(r"^\s{0,3}#{2,6}\s+(SYS-CON-\d{2,4})\b")
+SYS_ADR_FILE_RE = re.compile(r"^(SYS-ADR-\d{2,4})-.+\.md$")
+SYS_ADR_CODE_RE = re.compile(r"^SYS-ADR-\d{2,4}$")
+SYS_CON_CODE_RE = re.compile(r"^SYS-CON-\d{2,4}$")
+SYS_ANY_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(SYS-[A-Z]{1,5}[0-9]?-\d{2,4})\b")
+ANCHOR_TAG_RE = re.compile(r'<a\s+(?:id|name)\s*=\s*["\']([^"\']+)["\']', re.IGNORECASE)
+
+# design-doc 的类型码快照；仅用于识别子系统「细项定义标题」，不承担类型规则
 TYPE_CODES = {
     "GOL", "STK", "SCN", "FR", "NFR", "UC", "PRN", "DEC", "CMP", "IF", "FLW",
     "ALG", "DOM", "ASM", "RSK", "MET", "TC", "AC", "CON", "RUL", "ACT", "PLN",
@@ -59,13 +76,22 @@ DEP_ATTR_RE = re.compile(
 # 无前缀简写：只从链接文字与表格行识别为引用，正文散文里的裸编码不在此校验。
 BARE_CODE_RE = re.compile(
     r"(?<![A-Za-z0-9_/-])([A-Z]{1,5}[0-9]?-\d{2,4})(?![0-9A-Za-z.])")
+MD_LINK_RE = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")
 MD_LINK_TEXT_RE = re.compile(r"\[([^\]]+)\]\([^)]*\)")
 INLINE_CODE_RE = re.compile(r"`[^`]*`")
 DOC_META_CODE_RE = re.compile(r"^(?:[A-Z][A-Z0-9]{1,4}-)?(?:L[0-6]|ADR|EVAL|REF)-\d{2,4}$")
-# 设计文档文件名以完整文档编码开头（含可选项目前缀），见 design-doc 文件名规则
 DESIGN_DOC_FILE_RE = re.compile(DOC_META_CODE_RE.pattern[:-1] + "-")
 TERM_HEADING_RE = re.compile(r"^###\s+(.+?)\s*$")
 ATTR_RE = re.compile(r"^-\s+\*\*(.+?)\*\*\s*[:：]\s*(.*)$")
+H2_RE = re.compile(r"^\s{0,3}##\s+(.+?)\s*$")
+
+ARCH_REQUIRED_SECTIONS = (
+    "系统定义",
+    "子系统职责分配",
+    "系统交互",
+    "系统级约束",
+    "修订记录",
+)
 
 
 @dataclass
@@ -74,13 +100,75 @@ class Subsystem:
     name: str
     directory: str
     prefix: str
-    role_doc: str
     status: str
     line: int = 0
 
     @property
     def dir_path(self) -> Path:
         return Path(self.directory)
+
+
+@dataclass
+class ArchRevision:
+    rev: int
+    line: int
+    date: str
+    ver_type: str
+    summary: str
+
+
+@dataclass
+class ArchResponsibilityRow:
+    line: int
+    key: str
+    role: str
+    responsibility: str
+    non_responsibility: str
+
+
+@dataclass
+class ArchInteractionRow:
+    line: int
+    provider: str
+    consumer: str
+    purpose: str
+    mode: str
+    contract: str
+
+
+@dataclass
+class ArchInfo:
+    path: Path
+    exists: bool = False
+    lines: List[str] = field(default_factory=list)
+    meta: Dict[str, str] = field(default_factory=dict)
+    status: str = ""
+    rev: Optional[int] = None
+    sections: Dict[str, Tuple[int, int]] = field(default_factory=dict)
+    resp_table_found: bool = False
+    responsibilities: List[ArchResponsibilityRow] = field(default_factory=list)
+    resp_by_key: Dict[str, ArchResponsibilityRow] = field(default_factory=dict)
+    interaction_table_found: bool = False
+    interactions: List[ArchInteractionRow] = field(default_factory=list)
+    sys_cons: Dict[str, List[Tuple[int, Optional[str]]]] = field(
+        default_factory=lambda: defaultdict(list))
+    anchors: Set[str] = field(default_factory=set)
+    rev_table_found: bool = False
+    revisions: Dict[int, ArchRevision] = field(default_factory=dict)
+    rev_rows_raw: List[Tuple[int, str, str, str, str]] = field(default_factory=list)
+
+
+@dataclass
+class SysAdrInfo:
+    path: Path
+    file_code: str
+    meta_code: str
+    status: str
+    rev: Optional[int]
+    rev_raw: str
+    impact_raw: str
+    replacement: str
+    lines: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -163,6 +251,13 @@ def parse_meta(lines: Sequence[str]) -> Dict[str, str]:
     return meta
 
 
+def parse_pos_int(raw: str) -> Optional[int]:
+    s = (raw or "").strip()
+    if re.fullmatch(r"[1-9]\d*", s):
+        return int(s)
+    return None
+
+
 def link_target(cell: str) -> str:
     m = re.search(r"\]\(([^)]+)\)", cell or "")
     return m.group(1).strip() if m else ""
@@ -196,6 +291,18 @@ def xy_of(version: str) -> str:
     return ""
 
 
+def is_external_actor(value: str) -> bool:
+    v = (value or "").strip()
+    if not v:
+        return True
+    low = v.lower()
+    if low.startswith("external:") or low.startswith("ext:"):
+        return True
+    if any(tok in v for tok in ("外部", "用户", "第三方", "客户端")):
+        return True
+    return False
+
+
 class SystemChecker:
     LEVELS = ("CRITICAL", "ERROR", "WARNING", "INFO")
 
@@ -218,8 +325,13 @@ class SystemChecker:
         self.releases: List[Dict] = []
         self.release_index: List[str] = []
         self.glossary_rows: List[Dict[str, str]] = []
+        # 子系统域：仅扫描子系统作用域，与 ued/architecture/ 严格隔离
         self.doc_code_map: Dict[str, List[Path]] = defaultdict(list)
         self.definitions: Dict[str, List[Tuple[str, Path, int]]] = defaultdict(list)
+        # 系统架构域：独立数据结构
+        self.arch: ArchInfo = ArchInfo(path=self.ued_path / "architecture" / "system-architecture.md")
+        self.sys_adrs: Dict[str, List[SysAdrInfo]] = defaultdict(list)
+        self.arch_extra_md: List[Path] = []
 
     # ---------------------------------------------------------------- 记录
 
@@ -248,6 +360,8 @@ class SystemChecker:
         self._find_registry()
         self._parse_subsystems()
         self._scan_doc_codes()
+        if self.is_system:
+            self._scan_architecture()
 
     def _find_registry(self) -> None:
         for _idx, header, rows in iter_tables(self.readme_lines):
@@ -262,12 +376,18 @@ class SystemChecker:
         if not self.is_system:
             return
         col = {name: i for i, name in enumerate(self.registry_header)}
-        required = ["subsystem_key", "子系统名称", "目录", "编码前缀", "角色文档", "状态"]
+        if "角色文档" in col:
+            self.add("ERROR", "注册表含已移除的旧列",
+                     f"{self.rel(self.readme)}: 注册表含 v1.x 旧列 `角色文档`；"
+                     "v2.0 改为 5 列，子系统角色与职责边界统一归 "
+                     "`ued/architecture/system-architecture.md` 权威定义，"
+                     "请按 migration-from-design-doc.md 迁移")
+        required = ["subsystem_key", "子系统名称", "目录", "编码前缀", "状态"]
         missing = [name for name in required if name not in col]
         if missing:
             self.add("ERROR", "注册表缺列",
                      f"{self.rel(self.readme)}: 缺 {'、'.join(missing)}；"
-                     "固定六列 MUST 齐备")
+                     "固定五列 MUST 齐备")
             return
         for lineno, cells in self.registry_rows:
             if not any(cells):
@@ -280,7 +400,6 @@ class SystemChecker:
                 name=cell("子系统名称"),
                 directory=cell("目录"),
                 prefix=cell("编码前缀"),
-                role_doc=cell("角色文档"),
                 status=cell("状态"),
                 line=lineno + 1,
             )
@@ -294,10 +413,14 @@ class SystemChecker:
                 self.prefix_owner.setdefault(sub.prefix, sub)
 
     def _scan_doc_codes(self) -> None:
+        """只扫描子系统作用域文档，严格跳过所有系统保留目录（含 architecture/）。"""
         if not self.ued_path.is_dir():
             return
         for path in sorted(self.ued_path.rglob("*.md")):
             if self._is_reserved_path(path):
+                continue
+            # 跳过系统根直接文件（README.md / glossary.md）
+            if self._scope_of(path) == "":
                 continue
             try:
                 text = read_text(path)
@@ -326,12 +449,187 @@ class SystemChecker:
                 if typ in TYPE_CODES:
                     self.definitions[full].append((self._scope_of(path), path, i + 1))
 
+    def _scan_architecture(self) -> None:
+        """独立扫描 ued/architecture/，与子系统编码集完全隔离。"""
+        arch_dir = self.ued_path / "architecture"
+        arch_file = arch_dir / "system-architecture.md"
+        self.arch = ArchInfo(path=arch_file, exists=arch_file.is_file())
+        if not arch_dir.is_dir():
+            return
+
+        if arch_file.is_file():
+            try:
+                text = read_text(arch_file)
+            except RuntimeError:
+                text = ""
+            lines = mask_fences(text)
+            self.arch.lines = lines
+            self.arch.meta = parse_meta(lines)
+            self.arch.status = norm(self.arch.meta.get("状态") or "")
+            self.arch.rev = parse_pos_int(self.arch.meta.get("修订版本号") or "")
+            self._parse_arch_sections(lines)
+            self._parse_arch_tables(lines)
+            self._parse_arch_sys_cons(lines)
+
+        for path in sorted(arch_dir.rglob("*.md")):
+            if path == arch_file:
+                continue
+            if path.parent != arch_dir:
+                self.arch_extra_md.append(path)
+                continue
+            m = SYS_ADR_FILE_RE.match(path.name)
+            if m:
+                self._load_sys_adr(path, m.group(1))
+            elif path.name != "README.md":
+                self.arch_extra_md.append(path)
+
+    def _parse_arch_sections(self, lines: Sequence[str]) -> None:
+        h2_list: List[Tuple[str, int]] = []
+        for i, line in enumerate(lines):
+            m = H2_RE.match(line)
+            if m:
+                h2_list.append((norm(m.group(1)), i))
+        for idx, (title, start) in enumerate(h2_list):
+            end = h2_list[idx + 1][1] if idx + 1 < len(h2_list) else len(lines)
+            self.arch.sections[title] = (start, end)
+
+    def _section_slice(self, name: str) -> Optional[Tuple[int, int]]:
+        return self.arch.sections.get(name)
+
+    def _parse_arch_tables(self, lines: Sequence[str]) -> None:
+        # 1. 子系统职责分配表
+        sec = self._section_slice("子系统职责分配")
+        if sec is not None:
+            start, end = sec
+            for rel_idx, header, rows in iter_tables(lines[start:end]):
+                heads = [norm(h) for h in header]
+                if "subsystem_key" not in heads:
+                    continue
+                col = {h: i for i, h in enumerate(heads)}
+                non_resp_key = (
+                    "明确非职责与边界" if "明确非职责与边界" in col
+                    else ("明确非职责" if "明确非职责" in col else "")
+                )
+                if "系统角色" in col and "核心职责" in col and non_resp_key:
+                    self.arch.resp_table_found = True
+                    for r_ln, cells in rows:
+                        if not any(cells):
+                            continue
+                        def c(k: str) -> str:
+                            idx = col[k]
+                            return cells[idx] if idx < len(cells) else ""
+                        row = ArchResponsibilityRow(
+                            line=start + r_ln + 1,
+                            key=c("subsystem_key"),
+                            role=c("系统角色"),
+                            responsibility=c("核心职责"),
+                            non_responsibility=c(non_resp_key),
+                        )
+                        self.arch.responsibilities.append(row)
+                    break
+
+        # 2. 系统交互表（允许无表而写显式说明）
+        sec = self._section_slice("系统交互")
+        if sec is not None:
+            start, end = sec
+            for _rel_idx, header, rows in iter_tables(lines[start:end]):
+                heads = [norm(h) for h in header]
+                if "提供方" in heads and "消费方" in heads:
+                    self.arch.interaction_table_found = True
+                    col = {h: i for i, h in enumerate(heads)}
+                    for r_ln, cells in rows:
+                        if not any(cells):
+                            continue
+                        def ic(k: str) -> str:
+                            idx = col.get(k, -1)
+                            return cells[idx] if 0 <= idx < len(cells) else ""
+                        self.arch.interactions.append(ArchInteractionRow(
+                            line=start + r_ln + 1,
+                            provider=ic("提供方"),
+                            consumer=ic("消费方"),
+                            purpose=ic("交互目的"),
+                            mode=ic("方式"),
+                            contract=ic("契约"),
+                        ))
+                    break
+
+        # 3. 修订记录表
+        sec = self._section_slice("修订记录")
+        if sec is not None:
+            start, end = sec
+            for _rel_idx, header, rows in iter_tables(lines[start:end]):
+                heads = [norm(h) for h in header]
+                if not all(h in heads for h in ("修订号", "日期", "版本类型", "变更摘要")):
+                    continue
+                self.arch.rev_table_found = True
+                col = {h: i for i, h in enumerate(heads)}
+                for r_ln, cells in rows:
+                    if not any(cells):
+                        continue
+                    def rc(k: str) -> str:
+                        idx = col[k]
+                        return cells[idx] if idx < len(cells) else ""
+                    self.arch.rev_rows_raw.append((
+                        start + r_ln + 1,
+                        rc("修订号"),
+                        rc("日期"),
+                        rc("版本类型"),
+                        rc("变更摘要"),
+                    ))
+                break
+
+    def _parse_arch_sys_cons(self, lines: Sequence[str]) -> None:
+        for line in lines:
+            for am in ANCHOR_TAG_RE.finditer(line):
+                self.arch.anchors.add(am.group(1).strip())
+        for i, line in enumerate(lines):
+            m = SYS_CON_HEADING_RE.match(line)
+            if not m:
+                continue
+            code = m.group(1)
+            # 向上跳过空行找紧邻的 <a id="...">
+            anchor_found: Optional[str] = None
+            j = i - 1
+            while j >= 0 and not lines[j].strip():
+                j -= 1
+            if j >= 0:
+                am = ANCHOR_TAG_RE.search(lines[j])
+                if am:
+                    anchor_found = am.group(1).strip()
+            self.arch.sys_cons[code].append((i + 1, anchor_found))
+
+    def _load_sys_adr(self, path: Path, file_code: str) -> None:
+        try:
+            lines = mask_fences(read_text(path))
+        except RuntimeError:
+            lines = []
+        meta = parse_meta(lines)
+        meta_code = norm(meta.get("文档编码") or "")
+        status = norm(meta.get("状态") or "")
+        rev_raw = norm(meta.get("修订版本号") or "")
+        rev = parse_pos_int(rev_raw)
+        impact_raw = norm(meta.get("影响范围") or "")
+        replacement = norm(meta.get("替代方案") or "")
+        info = SysAdrInfo(
+            path=path,
+            file_code=file_code,
+            meta_code=meta_code,
+            status=status,
+            rev=rev,
+            rev_raw=rev_raw,
+            impact_raw=impact_raw,
+            replacement=replacement,
+            lines=lines,
+        )
+        key = meta_code if SYS_ADR_CODE_RE.match(meta_code) else file_code
+        self.sys_adrs[key].append(info)
+
     def _is_reserved_path(self, path: Path) -> bool:
         try:
             rel = path.relative_to(self.ued_path)
         except ValueError:
             return False
-        return bool(rel.parts) and rel.parts[0] in {"releases", "references", "assets", "deprecated"}
+        return bool(rel.parts) and rel.parts[0] in RESERVED_DIRS
 
     def _scope_of(self, path: Path) -> str:
         try:
@@ -377,7 +675,7 @@ class SystemChecker:
     def _check_non_system(self) -> None:
         nested = []
         for child in sorted(self.ued_path.iterdir()):
-            if not child.is_dir() or child.name in {"releases", "references", "assets", "deprecated"}:
+            if not child.is_dir() or child.name in RESERVED_DIRS:
                 continue
             readme = child / "README.md"
             if not readme.is_file():
@@ -442,7 +740,9 @@ class SystemChecker:
             if not KEY_RE.match(sub.key):
                 self.add("ERROR", "subsystem_key 格式错误",
                          f"{loc}: `{sub.key}` MUST 匹配 [a-z][a-z0-9-]*")
-            if sub.key.lower() in RESERVED_DIRS or re.match(r"^l[0-6]", sub.key.lower()):
+            if (sub.key.lower() in RESERVED_DIRS
+                    or sub.key.lower() == "glossary"
+                    or re.match(r"^l[0-6]", sub.key.lower())):
                 self.add("ERROR", "subsystem_key 使用保留名",
                          f"{loc}: `{sub.key}` 与系统保留目录 / 层级前缀冲突")
             if sub.key in seen_key:
@@ -458,7 +758,6 @@ class SystemChecker:
                          f"{loc}: `{status}` 只允许 初稿 / 正式 / 废弃；`草案` 不适用")
             self._check_directory(sub, loc, seen_dir)
             self._check_prefix(sub, loc, seen_prefix)
-            self._check_role_doc(sub, loc)
             self._check_active_requirements(sub, loc)
 
     def _check_directory(self, sub: Subsystem, loc: str, seen: Dict[str, int]) -> None:
@@ -491,6 +790,9 @@ class SystemChecker:
         meta = parse_meta(mask_fences(read_text(readme))) if readme.is_file() else {}
         declared = norm(meta.get("project_code") or "")
         if prefix:
+            if prefix in RESERVED_PREFIXES:
+                self.add("ERROR", "编码前缀使用系统保留词",
+                         f"{loc}: `{prefix}` 为系统级保留前缀，子系统 MUST NOT 使用")
             if not PREFIX_RE.match(prefix):
                 self.add("ERROR", "编码前缀格式错误",
                          f"{loc}: `{prefix}` MUST 匹配 [A-Z][A-Z0-9]{1,4}")
@@ -510,58 +812,6 @@ class SystemChecker:
                 self.add("ERROR", "project_code 未登记",
                          f"{loc}: {self.rel(readme)} 声明 `project_code={declared}`，"
                          "但注册表编码前缀为空")
-
-    def _check_role_doc(self, sub: Subsystem, loc: str) -> None:
-        role = (sub.role_doc or "").strip()
-        if not role:
-            if sub.status == "正式":
-                self.add("ERROR", "正式子系统缺角色文档",
-                         f"{loc}: `{sub.key}` 为 `正式`，`角色文档` MUST 指向一个 `CMP` 细项")
-            elif sub.status == "初稿":
-                self.add("WARNING", "初稿子系统未登记角色文档",
-                         f"{loc}: `{sub.key}` 尚无 `角色文档`；激活前 MUST 补齐")
-            return
-        if not ROLE_RE.match(role):
-            self.add("ERROR", "角色文档编码非法",
-                     f"{loc}: `{role}` MUST 为 `CMP-{序号}` 或 `{前缀}-CMP-{序号}`")
-            return
-        root = self.ued_path / sub.directory.strip("/")
-        found = self._find_item_status(root, role)
-        if found is None:
-            self.add("ERROR", "角色文档不存在",
-                     f"{loc}: 在 {self.rel(root)} 内未找到 `{role}` 的定义标题")
-            return
-        status, path, line_no = found
-        if sub.status == "正式" and status != "正式":
-            self.add("ERROR", "角色文档非正式",
-                     f"{self.rel(path)}:{line_no}: `{role}` 的细项状态为 "
-                     f"`{status or '（空）'}`；正式子系统 MUST 使用正式角色文档")
-        elif sub.status == "初稿" and status != "正式":
-            self.add("WARNING", "角色文档尚未正式",
-                     f"{self.rel(path)}:{line_no}: `{role}` 尚未 `正式`；激活前 MUST 补齐")
-
-    def _find_item_status(self, root: Path, code: str) -> Optional[Tuple[str, Path, int]]:
-        if not root.is_dir():
-            return None
-        pattern = re.compile(r"^\s{0,3}#{1,6}\s+" + re.escape(code) + r"\b")
-        for path in sorted(root.rglob("*.md")):
-            if "deprecated" in path.parts:
-                continue
-            try:
-                lines = mask_fences(read_text(path))
-            except RuntimeError:
-                continue
-            for i, line in enumerate(lines):
-                if not pattern.match(line):
-                    continue
-                status = ""
-                for j in range(i + 1, min(len(lines), i + 40)):
-                    m = ATTR_RE.match(lines[j])
-                    if m and norm(m.group(1)) == "细项状态":
-                        status = norm(m.group(2))
-                        break
-                return status, path, i + 1
-        return None
 
     def _check_active_requirements(self, sub: Subsystem, loc: str) -> None:
         root = self.ued_path / sub.directory.strip("/")
@@ -586,6 +836,278 @@ class SystemChecker:
         elif sub.status == "初稿" and pv and not VERSION_RE.match(pv):
             self.add("WARNING", "子系统产品版本格式错误",
                      f"{loc}: `{pv}` MUST 为 v主.次")
+
+    # ---------------------------------------------------------------- 系统架构
+
+    def check_architecture(self) -> None:
+        """校验 ued/architecture/：系统架构描述、职责分配、交互、SYS-CON、修订记录与 SYS-ADR。"""
+        if not self.is_system:
+            return
+        arch_dir = self.ued_path / "architecture"
+        has_active_sub = any(s.status == "正式" for s in self.subsystems)
+
+        if arch_dir.is_dir():
+            for child in sorted(arch_dir.iterdir()):
+                if child.is_dir() and (LAYER_DIR_RE.match(child.name) or child.name == "baselines"):
+                    self.add("ERROR", "architecture 目录不得为 design-doc 作用域",
+                             f"{self.rel(child)}: ued/architecture/ MUST NOT 出现 "
+                             "L0–L6 或 baselines/")
+            for extra in self.arch_extra_md:
+                if DESIGN_DOC_FILE_RE.match(extra.name):
+                    self.add("ERROR", "architecture 目录含子系统设计文档",
+                             f"{self.rel(extra)}: L*/ADR/EVAL/REF 属于子系统；"
+                             "系统架构决策请使用 `SYS-ADR-{序号}-{slug}.md`")
+                else:
+                    self.add("WARNING", "architecture 目录含未规范文件",
+                             f"{self.rel(extra)}: architecture/ 建议只放 "
+                             "system-architecture.md 与 SYS-ADR-*.md")
+
+        if not self.arch.exists:
+            if has_active_sub:
+                self.add("ERROR", "缺系统架构文档",
+                         f"存在正式子系统但缺 {self.rel(self.arch.path)}；"
+                         "系统层职责分配与全局约束 MUST 由 system-architecture.md 权威定义")
+            else:
+                self.add("WARNING", "尚未建立系统架构文档",
+                         f"建议尽早创建 {self.rel(self.arch.path)}（激活正式子系统前 MUST 齐备）")
+            self._check_sys_adrs()
+            return
+
+        loc = self.rel(self.arch.path)
+        if self.arch.status not in FOUR_STATES:
+            self.add("ERROR", "系统架构文档状态非法",
+                     f"{loc}: `状态` 为 `{self.arch.status or '（空）'}`，"
+                     f"MUST 为 {' / '.join(FOUR_STATES)}")
+        if self.arch.rev is None:
+            self.add("ERROR", "系统架构文档修订版本号非法",
+                     f"{loc}: `修订版本号` MUST 为正整数")
+
+        for sec_name in ARCH_REQUIRED_SECTIONS:
+            if sec_name not in self.arch.sections:
+                self.add("ERROR", "系统架构缺必选章节",
+                         f"{loc}: 缺 `## {sec_name}` 必选章节")
+
+        self._check_arch_revisions(loc, has_active_sub)
+        self._check_arch_responsibilities(loc)
+        self._check_arch_interactions(loc)
+        self._check_arch_sys_cons(loc)
+        self._check_sys_adrs()
+
+    def _check_arch_revisions(self, loc: str, has_active_sub: bool) -> None:
+        if "修订记录" in self.arch.sections and not self.arch.rev_table_found:
+            self.add("ERROR", "系统架构缺固定格式修订记录表",
+                     f"{loc}: `## 修订记录` MUST 包含四列表：修订号 | 日期 | 版本类型 | 变更摘要")
+            return
+
+        seen_rev: Dict[int, int] = {}
+        for line_no, rev_raw, date_raw, ver_type, summary in self.arch.rev_rows_raw:
+            if PLACEHOLDER_RE.search(rev_raw) or PLACEHOLDER_RE.search(date_raw):
+                self.add("ERROR", "修订记录含占位符", f"{loc}:{line_no}: 存在未替换占位符")
+                continue
+            rnum = parse_pos_int(rev_raw)
+            if rnum is None:
+                self.add("ERROR", "修订记录修订号非法",
+                         f"{loc}:{line_no}: `{rev_raw}` MUST 为正整数")
+                continue
+            if rnum in seen_rev:
+                self.add("ERROR", "修订记录修订号重复",
+                         f"{loc}:{line_no}: 修订号 `{rnum}` 与第 {seen_rev[rnum]} 行重复")
+                continue
+            seen_rev[rnum] = line_no
+            if not DATE_RE.match(date_raw):
+                self.add("ERROR", "修订记录日期非法",
+                         f"{loc}:{line_no}: `{date_raw}` MUST 为 YYYY-MM-DD")
+            if ver_type not in ("正式", "初稿"):
+                self.add("ERROR", "修订记录版本类型非法",
+                         f"{loc}:{line_no}: `{ver_type}` MUST 为 `正式` 或 `初稿`")
+            self.arch.revisions[rnum] = ArchRevision(
+                rev=rnum, line=line_no, date=date_raw, ver_type=ver_type, summary=summary
+            )
+
+        if self.arch.rev is not None and self.arch.rev_table_found:
+            cur = self.arch.revisions.get(self.arch.rev)
+            if cur is None:
+                self.add("ERROR", "当前架构修订未记入修订记录",
+                         f"{loc}: 元信息 `修订版本号` 为 {self.arch.rev}，但修订记录表中无此行")
+            elif self.arch.status == "正式" and cur.ver_type != "正式":
+                self.add("ERROR", "正式架构的当前修订未标为正式",
+                         f"{loc}:{cur.line}: 文档状态为 `正式`，但修订号 {self.arch.rev} "
+                         f"的 `版本类型` 为 `{cur.ver_type}`")
+
+        if has_active_sub:
+            if self.arch.status in ("初稿", "废弃"):
+                self.add("ERROR", "系统架构文档未正式",
+                         f"{loc}: 存在正式子系统，但系统架构文档状态为 `{self.arch.status}`；"
+                         "MUST 先将系统架构定稿为 `正式`")
+            elif self.arch.status == "草案":
+                if not any(r.ver_type == "正式" for r in self.arch.revisions.values()):
+                    self.add("ERROR", "系统架构文档无正式修订",
+                             f"{loc}: 文档状态为 `草案`，但修订记录中没有 `正式` 修订；"
+                             "存在正式子系统时 MUST 已有有效正式修订")
+
+    def _check_arch_responsibilities(self, loc: str) -> None:
+        if "子系统职责分配" in self.arch.sections and not self.arch.resp_table_found:
+            self.add("ERROR", "系统架构缺职责分配表",
+                     f"{loc}: `## 子系统职责分配` MUST 包含四列表："
+                     "subsystem_key | 系统角色 | 核心职责 | 明确非职责与边界")
+            return
+
+        seen_keys: Dict[str, int] = {}
+        for row in self.arch.responsibilities:
+            if PLACEHOLDER_RE.search(row.key):
+                self.add("ERROR", "架构职责表含占位符",
+                         f"{loc}:{row.line}: `{row.key}` 含未替换占位符")
+                continue
+            if not row.key:
+                self.add("ERROR", "架构职责表缺 subsystem_key", f"{loc}:{row.line}")
+                continue
+            if row.key in seen_keys:
+                self.add("ERROR", "架构职责表 subsystem_key 重复",
+                         f"{loc}:{row.line}: `{row.key}` 与第 {seen_keys[row.key]} 行重复")
+                continue
+            seen_keys[row.key] = row.line
+            self.arch.resp_by_key[row.key] = row
+            if row.key not in self.by_key:
+                self.add("ERROR", "架构职责表含未登记子系统",
+                         f"{loc}:{row.line}: `{row.key}` 未在系统根注册表登记")
+
+        for sub in self.subsystems:
+            if not sub.key or PLACEHOLDER_RE.search(sub.key):
+                continue
+            row = self.arch.resp_by_key.get(sub.key)
+            if sub.status == "正式":
+                if row is None:
+                    self.add("ERROR", "正式子系统缺架构职责分配",
+                             f"{loc}: 正式子系统 `{sub.key}` 未出现在 `## 子系统职责分配` 表")
+                else:
+                    missing_fields = [
+                        label for label, val in (
+                            ("系统角色", row.role),
+                            ("核心职责", row.responsibility),
+                            ("明确非职责与边界", row.non_responsibility),
+                        )
+                        if not val or PLACEHOLDER_RE.search(val)
+                    ]
+                    if missing_fields:
+                        self.add("ERROR", "正式子系统职责分配不完整",
+                                 f"{loc}:{row.line}: `{sub.key}` 缺 {'、'.join(missing_fields)}")
+            elif sub.status == "初稿" and row is None:
+                self.add("WARNING", "初稿子系统未分配架构职责",
+                         f"{loc}: 初稿子系统 `{sub.key}` 尚未出现在职责分配表；激活前 MUST 补齐")
+
+    def _check_arch_interactions(self, loc: str) -> None:
+        sec = self._section_slice("系统交互")
+        if sec is None:
+            return
+        start, end = sec
+        if not self.arch.interaction_table_found:
+            body_lines = [
+                ln.strip() for ln in self.arch.lines[start + 1:end]
+                if ln.strip() and not ln.strip().startswith("#")
+            ]
+            if not body_lines:
+                self.add("WARNING", "系统交互章节为空",
+                         f"{loc}: `## 系统交互` 无交互表也无说明；"
+                         "确无直接交互时请显式声明「无直接交互」")
+            return
+
+        for row in self.arch.interactions:
+            if PLACEHOLDER_RE.search(row.provider) or PLACEHOLDER_RE.search(row.consumer):
+                self.add("ERROR", "系统交互表含占位符", f"{loc}:{row.line}")
+                continue
+            for col_name, actor in (("提供方", row.provider), ("消费方", row.consumer)):
+                if is_external_actor(actor):
+                    continue
+                if actor not in self.by_key:
+                    self.add("ERROR", "系统交互含未登记子系统",
+                             f"{loc}:{row.line}: `{col_name}` 的 `{actor}` 未在注册表登记"
+                             "（外部系统请以 `external:` 或「外部：」标注）")
+            if row.contract and not PLACEHOLDER_RE.search(row.contract):
+                provider_sub = self.by_key.get(row.provider)
+                for m in REF_CODE_RE.finditer(row.contract):
+                    code, prefix = m.group(1), m.group(2)
+                    if prefix in RESERVED_PREFIXES:
+                        continue
+                    if prefix not in self.prefix_owner:
+                        self.add("WARNING", "系统交互契约前缀未登记",
+                                 f"{loc}:{row.line}: 契约 `{code}` 的前缀 `{prefix}` 未登记")
+                        continue
+                    owner = self.prefix_owner[prefix]
+                    item_sites = self.definitions.get(code, [])
+                    doc_paths = self.doc_code_map.get(code, [])
+                    if not item_sites and not doc_paths:
+                        self.add("WARNING", "系统交互契约悬空",
+                                 f"{loc}:{row.line}: 契约 `{code}` 在 `{owner.key}` 内无定义")
+                    elif provider_sub is not None and owner.key != provider_sub.key:
+                        self.add("ERROR", "系统交互契约归属不符",
+                                 f"{loc}:{row.line}: 提供方为 `{provider_sub.key}`，"
+                                 f"但契约 `{code}` 属于 `{owner.key}`")
+
+    def _check_arch_sys_cons(self, loc: str) -> None:
+        sec = self._section_slice("系统级约束")
+        for code, sites in self.arch.sys_cons.items():
+            if len(sites) > 1:
+                self.add("ERROR", "系统约束编码重复",
+                         f"{loc}: `{code}` 重复定义于行 "
+                         + "、".join(str(ln) for ln, _a in sites))
+            for line_no, anchor in sites:
+                want = code.lower()
+                if anchor is None:
+                    self.add("ERROR", "系统约束缺锚点",
+                             f"{loc}:{line_no}: `{code}` 上方 MUST 有 `<a id=\"{want}\"></a>`")
+                elif anchor != want:
+                    self.add("ERROR", "系统约束锚点与编码不符",
+                             f"{loc}:{line_no}: `{code}` 上方锚点为 `{anchor}`，"
+                             f"MUST 为 `{want}`")
+        if sec is not None and not self.arch.sys_cons:
+            start, end = sec
+            body_lines = [
+                ln.strip() for ln in self.arch.lines[start + 1:end]
+                if ln.strip() and not ln.strip().startswith("#")
+            ]
+            if not body_lines:
+                self.add("WARNING", "系统级约束章节为空",
+                         f"{loc}: `## 系统级约束` 无 SYS-CON 也无说明；"
+                         "确无独立全局约束时请显式声明「暂无独立系统级约束」")
+
+    def _check_sys_adrs(self) -> None:
+        for code, infos in self.sys_adrs.items():
+            if len(infos) > 1:
+                self.add("ERROR", "SYS-ADR 编码重复",
+                         f"`{code}` 出现于多个文件："
+                         + " / ".join(self.rel(x.path) for x in infos))
+            for info in infos:
+                loc = self.rel(info.path)
+                if info.meta_code != info.file_code:
+                    self.add("ERROR", "SYS-ADR 文档编码与文件名不符",
+                             f"{loc}: 文件名编码 `{info.file_code}` ≠ 元信息 `文档编码` "
+                             f"`{info.meta_code or '（空）'}`")
+                if info.status not in FOUR_STATES:
+                    self.add("ERROR", "SYS-ADR 状态非法",
+                             f"{loc}: `状态` 为 `{info.status or '（空）'}`，"
+                             f"MUST 为 {' / '.join(FOUR_STATES)}")
+                if info.rev is None:
+                    self.add("ERROR", "SYS-ADR 修订版本号非法",
+                             f"{loc}: `修订版本号` `{info.rev_raw}` MUST 为正整数")
+                if info.impact_raw and not PLACEHOLDER_RE.search(info.impact_raw):
+                    tokens = [
+                        norm(t) for t in re.split(r"[,，、;/\s]+", info.impact_raw)
+                        if norm(t)
+                    ]
+                    for tok in tokens:
+                        if tok in ("全系统", "无", "-", "—"):
+                            continue
+                        if tok not in self.by_key:
+                            self.add("ERROR", "SYS-ADR 影响范围含未登记子系统",
+                                     f"{loc}: `影响范围` 中的 `{tok}` 未在注册表登记；"
+                                     "MUST 使用已登记的 `subsystem_key`")
+                if info.status == "废弃":
+                    rep = info.replacement
+                    if not rep or rep in ("无", "-", "—"):
+                        self.add("WARNING", "废弃 SYS-ADR 未注明替代方案",
+                                 f"{loc}: 状态为 `废弃`，建议在 `替代方案` 注明替代 SYS-ADR 或废弃原因")
+
+    # ---------------------------------------------------------------- 子系统目录
 
     def check_subsystem_dirs(self) -> None:
         if not self.is_system:
@@ -814,6 +1336,7 @@ class SystemChecker:
             if not DATE_RE.match(created):
                 self.add("ERROR", "发布清单 created 非法",
                          f"{self.rel(path)}: `{created}` MUST 为 YYYY-MM-DD")
+            self._check_release_architecture_rev(path, data)
             self._check_release_pins(path, data)
         for name in self.release_index:
             if name and name not in file_names:
@@ -822,6 +1345,36 @@ class SystemChecker:
         for name in sorted(file_names - set(self.release_index)):
             self.add("WARNING", "发布未登记索引",
                      f"{self.rel(self.readme)}: releases/{name}.yaml 未出现在发布索引")
+
+    def _check_release_architecture_rev(self, path: Path, data: Dict) -> None:
+        loc = self.rel(path)
+        if "architecture_rev" not in data or data.get("architecture_rev") is None:
+            self.add("WARNING", "发布清单缺 architecture_rev",
+                     f"{loc}: 存量历史发布可保留；新发布 MUST 填写 `architecture_rev` "
+                     "绑定系统架构正式修订号")
+            return
+        raw = data.get("architecture_rev")
+        if isinstance(raw, bool) or not isinstance(raw, int) or raw <= 0:
+            self.add("ERROR", "发布清单 architecture_rev 非法",
+                     f"{loc}: `architecture_rev` ({raw!r}) MUST 为正整数")
+            return
+        if not self.arch.exists:
+            self.add("ERROR", "发布清单 architecture_rev 无架构文档",
+                     f"{loc}: 引用了 architecture_rev={raw}，但 {self.rel(self.arch.path)} 不存在")
+            return
+        if self.arch.rev is not None and raw > self.arch.rev:
+            self.add("ERROR", "发布清单 architecture_rev 超前",
+                     f"{loc}: architecture_rev={raw} 大于当前系统架构修订号 {self.arch.rev}")
+            return
+        rev_entry = self.arch.revisions.get(raw)
+        if rev_entry is None:
+            self.add("ERROR", "发布清单 architecture_rev 不存在于修订记录",
+                     f"{loc}: architecture_rev={raw} 未在 {self.rel(self.arch.path)} 修订记录表中找到")
+            return
+        if rev_entry.ver_type != "正式":
+            self.add("ERROR", "发布清单 architecture_rev 引用非正式修订",
+                     f"{loc}: architecture_rev={raw} 在修订记录中的版本类型为 "
+                     f"`{rev_entry.ver_type}`；发布 MUST 绑定 `正式` 修订")
 
     def _parse_release_index(self) -> None:
         for _idx, header, rows in iter_tables(self.readme_lines):
@@ -982,7 +1535,7 @@ class SystemChecker:
             self.add("WARNING", "发布外部依赖未被使用",
                      f"{loc}: `{name}` 未被子系统 external_deps 声明")
 
-    # ---------------------------------------------------------------- 跨作用域
+    # ---------------------------------------------------------------- 跨作用域与 SYS 命名空间
 
     @staticmethod
     def _item_key(code: str) -> Tuple[str, int]:
@@ -999,21 +1552,15 @@ class SystemChecker:
         return texts
 
     def check_cross_scope(self) -> None:
-        """跨子系统编码归属与引用。
-
-        子系统内部的定义/引用前缀由 design-doc 的 `check_docs.py` 按
-        `project_code` 校验；本方法只处理跨子系统：重复定义、定义占用他子系统
-        前缀、跨子系统引用悬空/归属不符、跨作用域简写。
-
-        覆盖：所有非标题行（含「本文引用」钉住表行）中的全量编码存在性与前缀
-        归属。不覆盖：钉住表的 `类型` / `所在文档` / `钉住代际` / `钉住日期`
-        等语义列——两套检查器各自解析同一张表会放大不一致，暂不实现，另行评估。
-        前缀未在子系统注册表登记时，普通引用行跳过（定义行仍由前缀规则校验），
-        同属未覆盖项；`依赖` 行不跳过——悬空或未登记前缀均按 ERROR 判，与本地
-        `依赖` 目标不存在的严重度对齐。
-        """
+        """跨子系统编码归属、SYS 命名空间引用与全局术语表。"""
         if not self.is_system:
             return
+        for code, paths in self.doc_code_map.items():
+            if code.startswith("SYS-"):
+                for p in paths:
+                    self.add("ERROR", "子系统不得定义 SYS 编码",
+                             f"{self.rel(p)}: 文档编码 `{code}` 属于系统层保留命名空间，"
+                             "只能在 ued/architecture/ 定义")
         for code, sites in self.definitions.items():
             if len(sites) <= 1:
                 continue
@@ -1047,23 +1594,30 @@ class SystemChecker:
                 reported: Set[Tuple[str, bool]] = set()
                 reported_bare: Set[str] = set()
                 for i, line in enumerate(lines):
-                    # 定义行由下方「定义前缀」规则处理，不当作引用
-                    if not HEADING_CODE_RE.match(line):
+                    # 定义行由下方定义前缀规则处理，不当作引用
+                    if not HEADING_CODE_RE.match(line) and not SYS_ANY_HEADING_RE.match(line):
                         self._check_cross_refs(path, i, line, sub, reported)
+                        self._check_arch_link_anchors(path, i, line)
                     for text in self._reference_texts(line):
                         for m in BARE_CODE_RE.finditer(text):
                             bare = m.group(1)
                             key = self._item_key(bare)
                             if not key[0] or key in local_keys:
-                                continue        # 本子系统简写，交给 check_docs.py
+                                continue
                             if key not in global_keys or bare in reported_bare:
-                                continue        # 无同键定义 → 悬空，由 check_docs.py 报
+                                continue
                             reported_bare.add(bare)
                             self.add("ERROR", "跨作用域简写",
                                      f"{self.rel(path)}:{i + 1}: `{bare}` 在本子系统"
                                      "无定义，其他子系统有同键编码；跨子系统引用 MUST "
                                      "写全量编码")
                 for i, line in enumerate(lines):
+                    sm = SYS_ANY_HEADING_RE.match(line)
+                    if sm:
+                        self.add("ERROR", "子系统不得定义 SYS 编码",
+                                 f"{self.rel(path)}:{i + 1}: `{sm.group(1)}` 属于系统层保留"
+                                 "命名空间，只能在 ued/architecture/ 定义")
+                        continue
                     m = HEADING_CODE_RE.match(line)
                     if not m:
                         continue
@@ -1076,7 +1630,10 @@ class SystemChecker:
                     prefix = cm.group(1) or ""
                     if prefix == sub.prefix:
                         continue
-                    if prefix and prefix in self.prefix_owner:
+                    if prefix in RESERVED_PREFIXES:
+                        self.add("ERROR", "子系统不得定义 SYS 编码",
+                                 f"{self.rel(path)}:{i + 1}: `{full}` 属于系统层保留命名空间")
+                    elif prefix and prefix in self.prefix_owner:
                         self.add("ERROR", "定义了他子系统前缀",
                                  f"{self.rel(path)}:{i + 1}: `{full}` 使用前缀 `{prefix}`，"
                                  f"属于 {self.prefix_owner[prefix].key}；本子系统前缀为 `{sub.prefix}`")
@@ -1088,11 +1645,7 @@ class SystemChecker:
 
     def _check_cross_refs(self, path: Path, i: int, line: str, sub: Subsystem,
                           reported: Set[Tuple[str, bool]]) -> None:
-        """跨子系统全量引用：目标须存在，且归属被引用前缀的子系统。
-
-        `依赖` 是生效前提，悬空与未登记前缀按 ERROR 判；普通引用维持 WARNING
-        与「未登记前缀跳过」的既有口径。两者共用同一张定义表，只是严重度不同。
-        """
+        """跨子系统及系统级（SYS-*）全量引用校验。"""
         is_dep = bool(DEP_ATTR_RE.match(line))
         for m in REF_CODE_RE.finditer(line):
             code, prefix = m.group(1), m.group(2)
@@ -1102,6 +1655,11 @@ class SystemChecker:
             if key in reported:
                 continue
             loc = f"{self.rel(path)}:{i + 1}: `{code}`"
+            # 独立系统命名空间：SYS-*
+            if prefix in RESERVED_PREFIXES:
+                reported.add(key)
+                self._check_sys_ref(loc, code, is_dep)
+                continue
             if prefix not in self.prefix_owner:
                 if is_dep:
                     reported.add(key)
@@ -1128,6 +1686,54 @@ class SystemChecker:
             if owner_dir not in scopes:
                 self.add("ERROR", "跨子系统引用前缀与定义不符",
                          f"{loc} 使用前缀 `{prefix}`，但定义不在 {owner.key} 子系统内")
+
+    def _check_sys_ref(self, loc: str, code: str, is_dep: bool) -> None:
+        if SYS_CON_CODE_RE.match(code):
+            if code not in self.arch.sys_cons:
+                if is_dep:
+                    self.add("ERROR", "系统约束依赖悬空",
+                             f"{loc} 在 {self.rel(self.arch.path)} 内无定义")
+                else:
+                    self.add("WARNING", "系统约束引用悬空",
+                             f"{loc} 在 {self.rel(self.arch.path)} 内无定义")
+            elif is_dep and self.arch.status == "初稿":
+                self.add("ERROR", "依赖指向初稿系统架构",
+                         f"{loc}: `{self.rel(self.arch.path)}` 当前为 `初稿`，不可作为正式依赖前提")
+            return
+        if SYS_ADR_CODE_RE.match(code):
+            adrs = self.sys_adrs.get(code, [])
+            if not adrs:
+                if is_dep:
+                    self.add("ERROR", "系统决策依赖悬空",
+                             f"{loc} 在 ued/architecture/ 内无对应 SYS-ADR 文件")
+                else:
+                    self.add("WARNING", "系统决策引用悬空",
+                             f"{loc} 在 ued/architecture/ 内无对应 SYS-ADR 文件")
+            elif is_dep and all(a.status == "初稿" for a in adrs):
+                self.add("ERROR", "依赖指向初稿系统决策",
+                         f"{loc}: 对应 SYS-ADR 当前为 `初稿`，不可作为正式依赖前提")
+            return
+        if is_dep:
+            self.add("ERROR", "未知系统级编码",
+                     f"{loc}: 系统层仅允许 `SYS-CON` 与 `SYS-ADR` 编码")
+        else:
+            self.add("WARNING", "未知系统级编码",
+                     f"{loc}: 系统层仅允许 `SYS-CON` 与 `SYS-ADR` 编码")
+
+    def _check_arch_link_anchors(self, path: Path, i: int, line: str) -> None:
+        if not self.arch.exists:
+            return
+        for m in MD_LINK_RE.finditer(line):
+            dest = m.group(2).strip()
+            if "#" not in dest or "system-architecture.md#" not in dest:
+                continue
+            frag = dest.split("#", 1)[1].strip()
+            if not frag or PLACEHOLDER_RE.search(frag):
+                continue
+            if frag not in self.arch.anchors:
+                self.add("ERROR", "系统架构锚点不可达",
+                         f"{self.rel(path)}:{i + 1}: 链接 `{dest}` 的锚点 `#{frag}` "
+                         f"在 {self.rel(self.arch.path)} 中不存在")
 
     def _check_glossary(self) -> None:
         glos = self.ued_path / "glossary.md"
@@ -1197,7 +1803,6 @@ class SystemChecker:
         return None
 
     def _check_terms_registered(self, glos_rows: List[Tuple[int, Dict[str, str]]]) -> None:
-        registered = {(r["zh"], r["en"].casefold()) for _ln, r in glos_rows if r["zh"] and r["en"]}
         by_zh = {r["zh"] for _ln, r in glos_rows if r["zh"]}
         by_en = {r["en"].casefold() for _ln, r in glos_rows if r["en"]}
         for sub in self.subsystems:
@@ -1232,9 +1837,7 @@ class SystemChecker:
                     if not m:
                         continue
                     name = norm(m.group(1))
-                    value = norm(m.group(2))
                     if name in ("中文名称", "英文名称") and current:
-                        # 简化：以术语小节标题作为中文名，检查是否登记
                         if current not in by_zh and current.casefold() not in by_en:
                             self.add("ERROR", "术语未登记到全局表",
                                      f"{self.rel(path)}:{i + 1}: 术语「{current}」"
@@ -1251,13 +1854,18 @@ class SystemChecker:
             self.add("WARNING", "系统 README 缺结构说明",
                      f"{self.rel(self.readme)}: SHOULD 有「当前结构」说明，"
                      "明确这是系统 + 子系统")
-        for field in ("project_name", "scope", "author", "last_updated"):
-            if not self.meta.get(field):
+        for field_name in ("project_name", "scope", "author", "last_updated"):
+            if not self.meta.get(field_name):
                 self.add("WARNING", "系统 README 缺元信息",
-                         f"{self.rel(self.readme)}: 缺 `{field}`")
+                         f"{self.rel(self.readme)}: 缺 `{field_name}`")
         if "系统" not in (self.meta.get("scope") or ""):
             self.add("WARNING", "系统 README scope 未说明系统",
                      f"{self.rel(self.readme)}: `scope` SHOULD 说明为系统（含子系统）")
+        if self.arch.exists and not re.search(
+                r"\]\([^)]*architecture/system-architecture\.md(?:[#)])", text):
+            self.add("WARNING", "系统 README 未链接系统架构",
+                     f"{self.rel(self.readme)}: 存在 {self.rel(self.arch.path)}，"
+                     "但系统根 README 未链接该架构文档")
 
     # ---------------------------------------------------------------- 报告
 
@@ -1269,6 +1877,10 @@ class SystemChecker:
 
     def generate_report(self) -> str:
         counts = self.level_count()
+        arch_status = (
+            f"{self.arch.status or '未知'} (rev {self.arch.rev})"
+            if self.arch.exists else "缺失"
+        )
         lines = [
             "=" * 80,
             "SystemDesignDoc 系统检查报告",
@@ -1277,6 +1889,7 @@ class SystemChecker:
             f"检查目录: {self.ued_path}",
             f"检查时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
             f"结构判定: {'系统 + 子系统' if self.is_system else '非系统 / 单系统'}",
+            f"系统架构: {arch_status}",
             f"子系统数: {len(self.subsystems)}",
             f"系统发布数: {len(self.releases) if self.releases else len(list((self.ued_path / 'releases').glob('*.yaml')) if (self.ued_path / 'releases').is_dir() else [])}",
             "",
@@ -1349,6 +1962,7 @@ def main() -> int:
     checker.check_structure()
     if checker.is_system:
         checker.check_registry()
+        checker.check_architecture()
         checker.check_subsystem_dirs()
         checker.check_dependencies()
         checker.check_releases()

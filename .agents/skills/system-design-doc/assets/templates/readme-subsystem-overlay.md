@@ -9,8 +9,9 @@
 <!-- TEMPLATE:BEGIN 子系统 README 系统归属片段 -->
 ## 系统归属
 
-本子系统登记于系统根 [README](../README.md) 的子系统注册表。
+本子系统登记于系统根 [README](../README.md) 的子系统注册表，系统级职责边界与全局约束以系统架构文档为准。
 
+- 系统架构描述：[../architecture/system-architecture.md](../architecture/system-architecture.md)
 - 系统发布清单目录：[../releases/](../releases/)
 - 全局术语表：[../glossary.md](../glossary.md)
 - 依赖钉住：见 `baselines/{vX.Y}.yaml` 的 `depends_on` / `external_deps`

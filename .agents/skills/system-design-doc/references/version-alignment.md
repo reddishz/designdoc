@@ -79,6 +79,7 @@ items:
 
 ```yaml
 release: sys-v1.0
+architecture_rev: 1
 created: 2026-10-28
 note: "首个产品集发布"
 subsystems:
@@ -95,6 +96,7 @@ external_deps:
 
 发布清单的规则：
 
+- 新发布 **MUST** 填写 `architecture_rev`，指向 `ued/architecture/system-architecture.md` 修订记录中真实存在的 `正式` 修订号（存量历史发布缺失仅报 WARNING，不回改历史清单）。
 - 每个子系统至多一次；不包含 `初稿`；发布时纳入项须为 `正式`（历史清单中事后 `废弃` 的项保留）。
 - **不要求覆盖全部 `正式` 子系统**：未纳入者只是不在本次组合内，其自身状态、基线与后续发布不受影响。
 - 每项钉住 `product_version` 与 `full_version`；后者 **MUST** 出现在该基线 `patch_log` 中。

@@ -727,9 +727,9 @@ def run_single_scope_and_extension_cases():
         root.mkdir()
         (root / "README.md").write_text(
             "# 系统\n\n## 子系统注册表\n\n"
-            "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 角色文档 | 状态 |\n"
-            "|---------------|------------|------|----------|----------|------|\n"
-            "| crm | CRM | `crm/` | CRM | CMP-01 | 正式 |\n",
+            "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 状态 |\n"
+            "|---------------|------------|------|----------|------|\n"
+            "| crm | CRM | `crm/` | CRM | 正式 |\n",
             encoding="utf-8")
         crm = root / "crm"
         crm.mkdir()
@@ -900,13 +900,13 @@ def run_cross_scope_glossary_cases():
         if registry:
             rows = []
             if scope_registered:
-                rows.append("| crm | CRM | `crm/` | CRM | CMP-01 | 正式 |")
+                rows.append("| crm | CRM | `crm/` | CRM | 正式 |")
             if oms_status:
-                rows.append(f"| oms | OMS | `oms/` | OMS | CMP-02 | {oms_status} |")
+                rows.append(f"| oms | OMS | `oms/` | OMS | {oms_status} |")
             (root / "README.md").write_text(
                 "# 系统\n\n## 子系统注册表\n\n"
-                "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 角色文档 | 状态 |\n"
-                "|---------------|------------|------|----------|----------|------|\n"
+                "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 状态 |\n"
+                "|---------------|------------|------|----------|------|\n"
                 + "\n".join(rows) + "\n",
                 encoding="utf-8")
         else:
@@ -1334,16 +1334,21 @@ def run_dep_graph_cases():
     registry = (
         "# 系统\n\n"
         "## 子系统注册表\n\n"
-        "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 角色文档 | 状态 |\n"
-        "|---------------|------------|------|----------|----------|------|\n"
-        "| alpha | 甲 | `alpha/` | ALP | ALP-CMP-001 | 初稿 |\n"
-        "| beta | 乙 | `beta/` | BET | BET-CMP-001 | 初稿 |\n")
+        "| subsystem_key | 子系统名称 | 目录 | 编码前缀 | 状态 |\n"
+        "|---------------|------------|------|----------|------|\n"
+        "| alpha | 甲 | `alpha/` | ALP | 初稿 |\n"
+        "| beta | 乙 | `beta/` | BET | 初稿 |\n")
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td) / "ued"
         (root / "alpha").mkdir(parents=True)
         (root / "beta").mkdir()
+        (root / "architecture").mkdir()
         (root / "README.md").write_text(registry, encoding="utf-8")
+        (root / "architecture" / "system-architecture.md").write_text(
+            "# 系统架构描述\n\n<a id=\"sys-con-001\"></a>\n"
+            "### SYS-CON-001：统一 UTC\n\n- **细项状态**：初稿\n",
+            encoding="utf-8")
         (root / "alpha" / "README.md").write_text(
             scope_readme("ALP", "甲"), encoding="utf-8")
         (root / "beta" / "README.md").write_text(
@@ -1360,7 +1365,9 @@ def run_dep_graph_cases():
                  "../alpha/ALP-L2-001.md#alp-fr-001")])
             + item("BET-FR-002", "乙目标", "正式", [
                 ("ALP-FR-002", "甲目标",
-                 "../alpha/ALP-L2-001.md#alp-fr-002")]))), encoding="utf-8")
+                 "../alpha/ALP-L2-001.md#alp-fr-002"),
+                ("SYS-CON-001", "统一 UTC",
+                 "../architecture/system-architecture.md#sys-con-001")]))), encoding="utf-8")
 
         checker = check_docs.DesignDocChecker(str(root))
         with contextlib.redirect_stdout(io.StringIO()):
@@ -1368,6 +1375,8 @@ def run_dep_graph_cases():
         check("跨作用域依赖指向初稿",
               any("BET-FR-001" in i["description"] and "ALP-FR-001" in i["description"]
                   for i in hits(checker, "跨作用域依赖指向初稿")))
+        check("跨作用域检查跳过 architecture 目录",
+              not any("SYS-CON-001" in i["description"] for i in checker.issues))
         check("跨作用域依赖图按原义记录",
               "ALP-FR-001" in checker.dep_forward.get("BET-FR-001", []))
 
@@ -1388,6 +1397,43 @@ def run_dep_graph_cases():
             checker.run_cross_scope_deps()
         check("非系统根拒绝跨作用域检查",
               hits(checker, "跨作用域依赖检查未在系统根运行"))
+
+        # 子系统在 `来源` 引用 SYS-CON-001 且在「本文引用」表登记 → 不报悬空/不报缺钉住
+        beta_sys_ref = (
+            doc("BET-L2-001", "L2", (
+                "<a id=\"bet-fr-003\"></a>\n"
+                "### BET-FR-003：时间统一\n\n"
+                "- **细项状态**：正式\n"
+                "- **修订版本号**：1\n"
+                "- **来源**：[SYS-CON-001（统一 UTC）](../../architecture/system-architecture.md#sys-con-001)\n\n"
+                "## 本文引用\n\n"
+                "| 引用对象 | 类型 | 所在文档 | 钉住代际 | 钉住日期 |\n"
+                "|----------|------|----------|----------|----------|\n"
+                "| SYS-CON-001 | 细项 | system-architecture | 1 | 2026-01-01 |\n"
+            ))
+        )
+        beta_doc.write_text(beta_sys_ref, encoding="utf-8")
+        c_sub = check_docs.DesignDocChecker(str(root / "beta"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            c_sub.scan_docs()
+            c_sub.check_references()
+            c_sub.check_pin_table()
+        check("子系统来源引用 SYS-CON-001 且已钉住无告警",
+              not any("SYS-CON-001" in i["description"] for i in c_sub.issues))
+
+        # 漏写「本文引用」钉住行 → 正常报缺钉住
+        beta_doc.write_text(
+            beta_sys_ref.replace(
+                "| SYS-CON-001 | 细项 | system-architecture | 1 | 2026-01-01 |\n", ""),
+            encoding="utf-8")
+        c_sub2 = check_docs.DesignDocChecker(str(root / "beta"))
+        with contextlib.redirect_stdout(io.StringIO()):
+            c_sub2.scan_docs()
+            c_sub2.check_references()
+            c_sub2.check_pin_table()
+        check("子系统引用 SYS-CON-001 漏钉住正常告警",
+              any(i["title"] == "缺本文引用钉住行" and "SYS-CON-001" in i["description"]
+                  for i in c_sub2.issues))
 
     if fails:
         print("FAIL 细项依赖图用例未通过")

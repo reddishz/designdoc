@@ -4,7 +4,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Skill](https://img.shields.io/badge/design--doc-v10.10-blue.svg)](./.agents/skills/design-doc/SKILL.md)
-[![Skill](https://img.shields.io/badge/system--design--doc-v1.8-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/system--design--doc-v2.0-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
 把本仓库的 skill 装进项目后，直接对 AI 说「写一份 L4 系统设计」即可。多数项目从需求（L2）和系统设计（L4）起步，不必一次生成全套。单系统用 `design-doc`；由多个子系统组成的系统另加 `system-design-doc` 管注册表、依赖钉住与系统发布。
@@ -23,7 +23,7 @@
 
 - **分层文档** — 从战略、需求、架构到详细设计与验证；未指定时默认写 L2 或 L4
 - **单一作用域** — `design-doc` 一次只维护一个系统或一个子系统；多子系统结构下每个 `ued/{子系统}/` 各有一套元信息、编码索引和产品基线
-- **系统与子系统** — 配套的 `system-design-doc` 维护子系统注册表、角色与边界、跨子系统依赖钉住和不可变的系统发布清单，避免接口版本错配
+- **系统与子系统** — 配套的 `system-design-doc` 确立系统架构权威（`ued/architecture/` 定义子系统职责分配、系统交互、`SYS-CON` 约束与 `SYS-ADR` 决策），并维护 5 列子系统注册表、跨子系统依赖钉住和绑定 `architecture_rev` 的不可变系统发布清单
 - **现成模板** — 含产品路线图、规划总览、架构决策（ADR）和外部资料（REF）
 - **全局编码** — 文档和细项都有唯一编号，正文用编码跳转，不用「见上一节」
 - **四种状态** — 初稿 / 正式 / 草案 / 废弃。正式后不就地改含义；废弃保留编号，便于追溯
@@ -114,10 +114,11 @@ python3 .agents/skills/system-design-doc/scripts/check_system.py -p ued
 
 当项目由多个子系统组成时，用配套的 [system-design-doc](./.agents/skills/system-design-doc/SKILL.md)：
 
-- 系统根 `ued/README.md` 只写当前结构、子系统注册表与系统发布索引；**不持有**产品版本或基线
+- 系统根 `ued/README.md` 只写当前结构、架构入口、5 列子系统注册表与系统发布索引；**不持有**产品版本或基线
+- `ued/architecture/system-architecture.md` 是子系统职责分配、系统交互与系统级约束（`SYS-CON`）的唯一真源，重大跨子系统决策记为 `SYS-ADR-*.md`；子系统内部 `CMP` 仅表达内部逻辑组件
 - 每个 `ued/{子系统}/` 仍按 `design-doc` 维护，各自有产品版本与 `baselines/`
 - 共享库没有特殊目录：需要时按普通子系统登记，可以有一个或几个，也可以不建
-- 子系统的基线可钉住它依赖的其他子系统版本（精确 `vX.Y`）；系统发布清单按需锁定一组精确版本，避免接口错配，不要求覆盖全部正式子系统
+- 子系统的基线可钉住它依赖的其他子系统版本（精确 `vX.Y`）；系统发布清单按需锁定一组精确版本与 `architecture_rev`，避免接口错配，不要求覆盖全部正式子系统
 - 接口不兼容变更走 MAJOR；消费方钉住精确版本，PATCH 不改公开语义
 
 ## 支持的 IDE

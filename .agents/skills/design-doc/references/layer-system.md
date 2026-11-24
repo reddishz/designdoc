@@ -69,12 +69,14 @@ ued/
 
 ```
 ued/
-├── README.md                # 系统根：结构 + 子系统注册表 + 系统发布（system-design-doc）
+├── README.md                # 系统根：结构 + 5 列子系统注册表 + 架构入口 + 发布索引（system-design-doc）
 ├── glossary.md              # 全局术语表（全项目唯一）
+├── architecture/            # 系统层架构描述（system-architecture.md）与系统级决策（SYS-ADR-*.md）
+├── releases/                # 系统发布清单（sys-vX.Y.yaml）
 ├── crm/                     # 子系统作用域（普通 design-doc 目录）
 │   ├── README.md            # 元信息 + 索引 + 计数器 + 产品版本
 │   ├── L2-requirements/
-│   ├── L3-architecture/
+│   ├── L3-architecture/     # CMP 仅表达本子系统内部逻辑组件
 │   └── baselines/
 └── oms/                     # 另一个子系统（按需裁剪层级）
     ├── README.md
@@ -83,7 +85,7 @@ ued/
 ```
 
 **要点**：
-- 子系统划分、编码前缀、角色文档与状态以系统根注册表为真值源；子系统 README 与之对齐。
+- 子系统组成、编码前缀与状态以系统根注册表为真值源；子系统角色与职责边界由 `ued/architecture/system-architecture.md` 权威定义，子系统内部 `CMP` 仅表达内部逻辑组件。
 - 共享库**没有**固定目录与特殊规则：需要时按普通子系统登记（如 `foundation/`），也可有多个；不需要时就不建。
 - 层级目录按需创建，不必每级都有；空目录不必预建。
 

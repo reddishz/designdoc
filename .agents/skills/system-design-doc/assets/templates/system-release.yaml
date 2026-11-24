@@ -4,6 +4,7 @@
 # TEMPLATE:BEGIN 系统发布清单
 
 release: sys-v1.0
+architecture_rev: 1
 created: 2026-01-01
 note: "首个产品集发布"
 

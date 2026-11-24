@@ -4726,10 +4726,19 @@ class DesignDocChecker:
                 f"{self.ued_path}: 未找到子系统注册表；该检查须以 `-p ued` 在系统根运行")
             return self.issues
 
+        def _in_system_reserved(doc_path: str) -> bool:
+            try:
+                rel = Path(doc_path).resolve().relative_to(self.ued_path.resolve())
+            except ValueError:
+                return False
+            return bool(rel.parts) and rel.parts[0] in (
+                "architecture", "releases", "references", "assets", "deprecated", "baselines"
+            )
+
         status_of: Dict[str, str] = {}
         defined_in: Dict[str, str] = {}
         for doc in self.docs:
-            if doc.archived:
+            if doc.archived or _in_system_reserved(doc.path):
                 continue
             for it in self._doc_items(doc):
                 if it.defined and it.item_status:
@@ -4738,7 +4747,7 @@ class DesignDocChecker:
 
         dep_forward: Dict[str, List[str]] = {}
         for doc in self.docs:
-            if doc.archived:
+            if doc.archived or _in_system_reserved(doc.path):
                 continue
             for it in self._doc_items(doc):
                 if not (it.defined and it.path == doc.path):
