@@ -3,7 +3,7 @@
 
 只检查系统级架构权威与编排，不检查子系统文档内部规则：
 
-- 系统根 README：5 列子系统注册表、当前结构、架构入口、发布索引、`规范版本目标`（与已装规范比对）；
+- 系统根 README：5 列子系统注册表、当前结构、架构入口、发布索引、`规范版本目标`（与已装规范比对）；系统架构与 SYS-ADR 的逐篇 `规范版本`（缺失 / 超前 / 待迁移）；
   根上不得有产品版本 / 基线 / L0–L6 / 全局设计索引
 - 系统架构（ued/architecture/）：独立扫描通道，与子系统文档完全隔离；
   校验 system-architecture.md 元信息、必选章节、职责分配覆盖、系统交互契约、
@@ -42,6 +42,13 @@ VERSION_RE = re.compile(r"^v(\d+)\.(\d+)$")
 SPEC_VERSION_RE = re.compile(r"^\d+\.\d+$")
 SPEC_VERSION_META = re.compile(r'^\s+version:\s*"?(\d+\.\d+)"?\s*$', re.M)
 SKILL_ROOT = Path(__file__).resolve().parents[1]
+
+
+def spec_version_key(ver: str) -> Tuple[int, ...]:
+    """`2.10` → `(2, 10)`；非法返回空元组。数值比较，不做字符串比较。"""
+    if not SPEC_VERSION_RE.match(ver or ""):
+        return ()
+    return tuple(int(x) for x in ver.split("."))
 
 
 def installed_spec_version() -> str:
@@ -183,6 +190,7 @@ class SysAdrInfo:
     impact_raw: str
     replacement: str
     lines: List[str] = field(default_factory=list)
+    meta: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -634,6 +642,7 @@ class SystemChecker:
             impact_raw=impact_raw,
             replacement=replacement,
             lines=lines,
+            meta=meta,
         )
         key = meta_code if SYS_ADR_CODE_RE.match(meta_code) else file_code
         self.sys_adrs[key].append(info)
@@ -1883,27 +1892,64 @@ class SystemChecker:
         self._check_spec_target()
 
     def _check_spec_target(self) -> None:
-        """系统根 `规范版本目标`：声明本系统层要求对齐的规范版本。
+        """系统层规范版本：根 README `规范版本目标` + 系统架构 / SYS-ADR 封面 `规范版本`。
 
-        只记根 README 一处，不逐篇记录（系统层文档数量少，迁移进度由目标与
-        system-architecture.md / 发布清单的 architecture_rev 共同追溯）。规则见
-        references/version-alignment.md · 规范版本目标。
+        `规范版本目标` 声明要对齐到哪一版；各文档 `规范版本` 记录该篇实际完成迁移或
+        核对的版本。`architecture_rev` 追溯的是架构**内容**修订，纯格式迁移不会改变它，
+        因此不能代替逐篇记录。发布清单与注册表不逐篇记录。规则见
+        references/spec-upgrade.md。
         """
         installed = installed_spec_version()
         raw = norm(self.meta.get("规范版本目标") or "")
+        target = ""
         if not raw:
             self.add("WARNING", "系统 README 缺规范版本目标",
                      f"{self.rel(self.readme)}: 缺 `规范版本目标`；填当前已装 "
                      f"system-design-doc 版本 {installed or '（不可读）'}")
-            return
-        if not SPEC_VERSION_RE.match(raw):
+        elif not SPEC_VERSION_RE.match(raw):
             self.add("WARNING", "系统 README 规范版本目标格式错误",
                      f"{self.rel(self.readme)}: `规范版本目标` '{raw}' 应为主.次")
-            return
-        if installed and raw != installed:
-            self.add("WARNING", "系统 README 规范版本目标与已装不一致",
-                     f"{self.rel(self.readme)}: `规范版本目标` 为 {raw}，已装为 "
-                     f"{installed}；升级后确认影响并更新目标，或恢复对应技能包")
+        else:
+            target = raw
+            if installed and raw != installed:
+                self.add("WARNING", "系统 README 规范版本目标与已装不一致",
+                         f"{self.rel(self.readme)}: `规范版本目标` 为 {raw}，已装为 "
+                         f"{installed}；升级后确认影响表并更新目标，或恢复对应技能包")
+        if installed:
+            self._check_arch_spec_versions(installed, target)
+
+    def _check_arch_spec_versions(self, installed: str, target: str) -> None:
+        """系统架构与 SYS-ADR 的逐篇 `规范版本`：缺失 / 格式 / 超前 / 待迁移。"""
+        docs: List[Tuple[Path, Dict[str, str]]] = []
+        if self.arch.exists:
+            docs.append((self.arch.path, self.arch.meta))
+        for infos in self.sys_adrs.values():
+            for info in infos:
+                docs.append((info.path, info.meta))
+        inst_key = spec_version_key(installed)
+        target_key = spec_version_key(target)
+        for path, meta in docs:
+            loc = self.rel(path)
+            sv = norm(meta.get("规范版本") or "")
+            if not sv:
+                self.add("WARNING", "系统文档缺规范版本",
+                         f"{loc}: 元信息缺 `规范版本`；填本篇已对齐的规范版本"
+                         f"（当前已装 {installed}），迁移或核对后更新，不随规范升级批量改")
+                continue
+            key = spec_version_key(sv)
+            if not key:
+                self.add("WARNING", "系统文档规范版本格式错误",
+                         f"{loc}: `规范版本` '{sv}' 应为主.次（如 {installed}）")
+            elif key > inst_key:
+                self.add("ERROR", "系统文档规范版本超前",
+                         f"{loc}: `规范版本` {sv} 高于已装规范 {installed}；"
+                         "技能回退或版本不一致，MUST 恢复对应版本的技能包后再校验")
+            elif target_key and key < target_key:
+                self.add("WARNING", "系统文档待迁移规范",
+                         f"{loc}: `规范版本` {sv} 低于根 README 目标 {target}；"
+                         "按 references/spec-upgrade.md 判定性质：格式 / 补记不递增修订号、"
+                         "不改 architecture_rev；改变系统定义的转实质变更；核对无需改动的"
+                         "仅更新本字段")
 
     # ---------------------------------------------------------------- 报告
 

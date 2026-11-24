@@ -1762,6 +1762,15 @@ def run_spec_version_cases():
         expect("901 无任何规范版本问题",
                {k for k, v in got.items() if "L2-901-spec.md" in v}, set())
 
+        # 归档文档（deprecated/）不参与迁移统计：无字段、落后、超前均不报
+        (root / "deprecated").mkdir()
+        (root / "deprecated" / "L2-906-spec.md").write_text(doc_text(906, ""), encoding="utf-8")
+        (root / "deprecated" / "L2-907-spec.md").write_text(doc_text(907, sv("99.0")), encoding="utf-8")
+        got = run(root)
+        expect("归档文档不被要求迁移",
+               {n for v in got.values() for n in v if n in ("L2-906-spec.md", "L2-907-spec.md")},
+               set())
+
         # README 目标缺失 → 缺目标；目标不等于已装 → 不一致；待迁移判定随之跳过
         (root / "README.md").write_text(readme_tpl.replace(
             "{target_row}", "| 规范版本目标 | 9.0 |\n"), encoding="utf-8")
@@ -1783,8 +1792,11 @@ def run_spec_version_cases():
         (root / "README.md").write_text(readme_tpl.replace(
             "{target_row}", f"| 规范版本目标 | {installed} |\n"), encoding="utf-8")
         (root / "L2-901-spec.md").write_text(doc_text(901, sv(installed)), encoding="utf-8")
-        with contextlib.redirect_stdout(io.StringIO()):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
             check_docs.DesignDocChecker(str(root)).bump_product_version(note="首份")
+        expect("文档均已对齐时立基线不提示迁移",
+               [] if "尚未完成规范迁移" not in out.getvalue() else ["多余提示"], [])
         bpath = root / "baselines" / "v1.0.yaml"
         text = bpath.read_text(encoding="utf-8")
         expect("新基线盖章", [] if f'spec_version: "{installed}"' in text else ["缺"], [])
@@ -1800,6 +1812,27 @@ def run_spec_version_cases():
         got = run(root)
         expect("合规基线无规范版本问题",
                {k for k in got if k.startswith("产品基线")}, set())
+
+    # 立新基线不被迁移进度阻塞：有文档落后时只提示数量，基线照常创建并盖章
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "README.md").write_text(readme_tpl.replace(
+            "{target_row}", f"| 规范版本目标 | {installed} |\n"), encoding="utf-8")
+        (root / "L2-901-spec.md").write_text(doc_text(901, sv(installed)), encoding="utf-8")
+        (root / "L2-902-spec.md").write_text(doc_text(902, sv("9.0")), encoding="utf-8")
+        (root / "L2-903-spec.md").write_text(doc_text(903, ""), encoding="utf-8")
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            check_docs.DesignDocChecker(str(root)).bump_product_version(note="首份")
+        text = out.getvalue()
+        expect("落后文档只提示数量",
+               [] if "INFO: 当前作用域有 2 篇文档尚未完成规范迁移" in text
+               and "本次基线仍可正常创建" in text else ["缺提示"], [])
+        bfile = root / "baselines" / "v1.0.yaml"
+        expect("落后文档不阻止建基线并仍盖章",
+               [] if bfile.is_file()
+               and yaml.safe_load(bfile.read_text(encoding="utf-8")).get("spec_version") == installed
+               else ["被阻止或未盖章"], [])
 
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -1831,6 +1864,13 @@ items: []
         (bdir / "v1.0.yaml").write_text(base.replace("{sv}", ""), encoding="utf-8")
         got = run(root)
         expect("存量缺失仅提示", got.get("产品基线缺规范版本", set()), {"v1.0.yaml"})
+        chk = check_docs.DesignDocChecker(str(root))
+        with contextlib.redirect_stdout(io.StringIO()):
+            miss = [i for i in chk.run_checks() if i["title"] == "产品基线缺规范版本"]
+        expect("存量缺失为 INFO 且声明不补写",
+               [] if miss and all(i["level"] == "INFO" and "不补写" in i["description"]
+                                  and "能确定时" not in i["description"] for i in miss)
+               else ["不符"], [])
         # 未加引号的历史 spec_version：PATCH 须拒绝，不得静默改写为 10.1
         (bdir / "v1.0.yaml").write_text(base.replace("{sv}", "spec_version: 10.10"),
                                         encoding="utf-8")

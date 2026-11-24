@@ -15,6 +15,7 @@
 | 状态 | 初稿 |
 | 修订版本号 | 1 |
 | 最后更新 | {YYYY-MM-DD} |
+| 规范版本 | {当前已装规范版本，取 SKILL.md metadata.version} |
 | 影响范围 | {subsystem_key 列表，如 w3sentinel, w3trade} |
 | 替代方案 | 无 |
 

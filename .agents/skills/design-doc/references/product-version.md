@@ -95,7 +95,7 @@ full_version: v5.26.2           # 本文件当前 tip（SemVer）
 created: 2026-10-13             # 本 vX.Y 文件首次建立；此后不变
 updated: 2026-10-13             # 最近一次写入（含 PATCH）
 prev: v5.25.3                   # 新建本文件时前一基线 tip；PATCH 不改；首版 null
-spec_version: "10.10"           # 创建时依据的设计文档规范版本（加引号）；冻结后不改
+spec_version: "10.10"           # 创建基线时使用的规范版本（加引号）；仅追溯生成环境，不代表成员文档均已迁移；冻结后不改
 patch_log:
   - full_version: v5.26.0
     date: 2026-10-13
@@ -126,7 +126,7 @@ items:
 | `full_version` | MUST；前两段 = `product_version`；新建为 `vX.Y.0`；PATCH 时 Z+1；是当前工作 tip，不是不可变快照标识 |
 | `created` / `updated` | MUST；新建时相同；PATCH 只改 `updated` |
 | `prev` | 首版 `null`；否则 MUST 为完整 SemVer，且 `baselines/{其两段}.yaml` 存在；**MUST NOT** 按 patch 建文件名 |
-| `spec_version` | MUST（新建时由检查器 / `--bump-product` 盖章）；取值为创建时已装的设计文档规范版本，**MUST** 加引号（未加引号的 `10.10` 会被 YAML 解析为 `10.1`）；创建后 PATCH 与立新基线均 **MUST NOT** 改写旧文件的值。存量缺失 WARNING，按[规范版本记录](spec-upgrade.md)处理，不得为凑齐而改写成当前版本 |
+| `spec_version` | MUST（新建时由检查器 / `--bump-product` 盖章）；取值为创建基线时使用的设计文档规范版本，仅用于追溯基线生成环境，**不代表**成员文档均已完成该版本迁移（迁移进度见各文档 `规范版本`）；**MUST** 加引号（未加引号的 `10.10` 会被 YAML 解析为 `10.1`）；创建后 PATCH 与立新基线均 **MUST NOT** 改写旧文件的值。存量缺失仅 INFO，按[规范版本记录](spec-upgrade.md)处理：历史基线保留原状，**MUST NOT** 补写，更不得为凑齐而改写成当前版本 |
 | `patch_log` | MUST；每升一次 tip（含 `.0`）追加一条；**MUST NOT** 改写旧条；只记版本/日期/说明，不保存当次 `items` |
 | `added`/`removed`/`changed` | 只表达**基线版本之间**的成员与 revision 差异；相对 `prev` 指向的冻结基线重算（累计值，不是相对上一 PATCH），首份基线无前驱、三块恒空；**MUST NOT** 记录开发期操作历史 |
 | `items` | 首份基线的 PATCH 可增删成员（只改 `items`，不写增量字段）；其他基线创建后成员不变；按 `code` 字典序 |

@@ -91,6 +91,7 @@ compatibility: 需能访问 `ued/` 系统根；子系统内部校验需 design-d
 | 创建系统发布 / 产品集发版 | [system-release.md](references/workflows/system-release.md) |
 | 审查系统架构、结构与发布 | [review-system.md](references/workflows/review-system.md) |
 | 版本对齐、依赖冲突、外部依赖 | [version-alignment.md](references/version-alignment.md) |
+| 技能升级后让系统层文档跟随新规范（`规范版本目标` / 封面 `规范版本`） | [spec-upgrade.md](references/spec-upgrade.md) |
 | 接口兼容性与破坏性变更 | [compatibility.md](references/compatibility.md) |
 | 从旧多应用结构或 v1.x 迁移至 v2.0 | [migration-from-design-doc.md](references/migration-from-design-doc.md) |
 | 子系统内部设计（L0–L6、内部 CMP） | 转 [design-doc](../design-doc/SKILL.md) |

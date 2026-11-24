@@ -11,7 +11,7 @@ DesignDoc 文档检查工具
 - 锁定矩阵：标题与引用处的一致性（`--refs CODE` 可反查某编码的全部出现位置）
 - 修订号递增时机（仅 `正式→草案` 解冻或 `废弃→草案` 复活时 +1）、修订号不得改小、变更记录倒序
 - 维护性变更：`变更记录` 中的 `N（维护）` 行（批次片段 / 类型 / 倒序 / 末尾 `；语义不变`）、与同号语义行的位置、文档修订号只与最新语义行比对
-- 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项；增量字段相对冻结前驱复算，首份恒空；`spec_version` 为创建时依据的规范版本（加引号，冻结后不改）
+- 产品基线：`baselines/vX.Y.yaml` 与 README `产品版本` 对齐；`items` 须为正式细项；增量字段相对冻结前驱复算，首份恒空；`spec_version` 为创建时使用的规范版本（加引号，冻结后不改；不证明成员文档已迁移）
 - 规范版本（逐篇迁移记录）：README `规范版本目标` 与各文档 `规范版本` 对照已装规范；低于目标列为待迁移，高于已装规范为 ERROR（规则见 `references/spec-upgrade.md`）
 - 基线谱系缓存：`引入版本` / `退出版本` 为产品基线号；立新基线时按成员归属回写（首份取 `items`，其余取 `added` / `removed`）；`初稿` / 初稿期作废不得带；有 `退出版本` 则须已 `废弃`
 - 废弃流程字段（含 `建议归档日期`）、`替代方案` 值形态与活跃引用
@@ -2546,6 +2546,46 @@ class DesignDocChecker:
                 self.add_issue("WARNING", "产品版本格式错误",
                                f"{doc.path}: `产品版本` '{pv}' 应为 v主.次（如 v1.0）")
 
+    @staticmethod
+    def _spec_tracked(doc: "DocInfo") -> bool:
+        """参与规范迁移进度的文档：归档、索引、术语表与无文档编码类别者不计。"""
+        return not (doc.archived or doc.is_index or doc.is_glossary
+                    or not doc.status_category)
+
+    def _spec_lagging_docs(self, docs: Iterable["DocInfo"], target: str) -> List[str]:
+        """`规范版本` 缺失或低于 target 的文档路径（供立新基线时提示，不阻断）。"""
+        want = spec_version_key(target)
+        lag: List[str] = []
+        for doc in docs:
+            if not self._spec_tracked(doc):
+                continue
+            have = spec_version_key((doc.meta.get("规范版本") or "").strip())
+            if not have or have < want:
+                lag.append(doc.path)
+        return lag
+
+    def _notice_spec_lag(self, docs: Iterable["DocInfo"], readme_path: Path) -> None:
+        """立新基线时：有文档尚未完成规范迁移则提示，不阻止建基线。
+
+        `spec_version` 只记录创建时所用规范版本，不证明成员文档均已迁移；迁移进度
+        由各文档 `规范版本` 与 README `规范版本目标` 表达（见 references/spec-upgrade.md）。
+        """
+        installed = installed_spec_version()
+        if not installed:
+            return
+        target = installed
+        rdoc = next((d for d in self.docs
+                     if Path(d.path).resolve() == Path(readme_path).resolve()), None)
+        if rdoc is not None:
+            raw = (rdoc.meta.get("规范版本目标") or "").strip()
+            if SPEC_VERSION_RE.match(raw):
+                target = raw
+        lag = self._spec_lagging_docs(docs, target)
+        if lag:
+            print(f"INFO: 当前作用域有 {len(lag)} 篇文档尚未完成规范迁移"
+                  f"（`规范版本` 缺失或低于 {target}）。本次基线仍可正常创建；"
+                  "`spec_version` 仅记录创建时使用的规范版本。")
+
     def check_spec_versions(self) -> None:
         """规范版本（逐篇迁移记录）：作用域 README `规范版本目标` 与各文档 `规范版本`。
 
@@ -2582,7 +2622,8 @@ class DesignDocChecker:
                                    f"{installed}；升级后确认影响表并更新目标，或恢复对应技能包")
 
         for doc in self.docs:
-            if doc.is_index or doc.is_glossary or not doc.status_category:
+            # 归档文档是历史记录：保留原规范版本，不参与迁移进度
+            if not self._spec_tracked(doc):
                 continue
             sv = (doc.meta.get("规范版本") or "").strip()
             if not sv:
@@ -2670,12 +2711,13 @@ class DesignDocChecker:
                     bpath, formal, formal_status, live_check=True)
 
     def _check_baseline_spec_version(self, rel: str, data: Dict) -> None:
-        """基线 `spec_version`：创建时依据的规范版本，冻结后不改。存量缺失仅 WARNING。"""
+        """基线 `spec_version`：创建时使用的规范版本（追溯生成环境，不证明成员文档已迁移），
+        冻结后不改。存量缺失仅 INFO，不补写。"""
         sv = data.get("spec_version")
         if sv in (None, ""):
-            self.add_issue("WARNING", "产品基线缺规范版本",
-                           f"{rel}: 缺 `spec_version`；存量无法从文件追溯其创建时的规范版本，"
-                           "能确定时人工补写（加引号，如 `spec_version: \"10.10\"`）")
+            self.add_issue("INFO", "产品基线缺规范版本",
+                           f"{rel}: 历史基线缺少创建时的规范版本，无法追溯；保留原状，不补写"
+                           "（存量基线按 `不处理存量` 处理，见 references/spec-upgrade.md）")
             return
         if not isinstance(sv, str) or not SPEC_VERSION_RE.match(sv):
             self.add_issue("WARNING", "产品基线规范版本格式错误",
@@ -3023,6 +3065,7 @@ class DesignDocChecker:
         snap["spec_version"] = installed_spec_version()
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(dump_baseline(snap), encoding="utf-8")
+        self._notice_spec_lag(scoped or self.docs, readme_path)
         # 谱系按成员归属回写：首份创建时不写，冻结时才按最终 `items` 归属首份
         # 两段，并清掉开发期残留的同版本缓存；本次相对 prev 的 added/removed
         # 归属新两段。非首份基线的成员集合创建即固定，已在创建时盖章，不能按

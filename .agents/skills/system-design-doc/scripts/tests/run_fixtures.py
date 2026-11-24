@@ -157,6 +157,7 @@ def system_arch(
 | 状态 | {status} |
 | 修订版本号 | {rev} |
 | 最后更新 | 2026-01-01 |
+| 规范版本 | {installed_spec_version()} |
 
 ## 系统定义
 
@@ -200,6 +201,7 @@ def sys_adr_doc(
 | 状态 | {status} |
 | 修订版本号 | {rev} |
 | 最后更新 | 2026-01-01 |
+| 规范版本 | {installed_spec_version()} |
 | 影响范围 | {impact} |
 | 替代方案 | {replacement} |
 
@@ -966,6 +968,64 @@ def main() -> int:
                       spec_target=target if target else "")
         c = case("spec-target-" + label, {"ued/README.md": text})
         check(f"{label}告警", any(i.title == want and i.level == "WARNING" for i in c.issues))
+
+    # ---- 系统架构 / SYS-ADR 逐篇规范版本 ----
+    ARCH = "ued/architecture/system-architecture.md"
+    ADR = "ued/architecture/SYS-ADR-001-split-crm-oms.md"
+    row = f"| 规范版本 | {inst} |\n"
+
+    def titles(c, level=None):
+        return {i.title for i in c.issues if level is None or i.level == level}
+
+    files = valid_files()
+    check("夹具含逐篇规范版本行", row in files[ARCH] and row in files[ADR])
+    c = case("arch-spec-ok", files)
+    check("系统文档规范版本对齐无相关问题",
+          not any("系统文档" in t and "规范版本" in t for t in titles(c)))
+
+    for label, doc in (("系统架构", ARCH), ("SYS-ADR", ADR)):
+        files = valid_files()
+        files[doc] = files[doc].replace(row, "")
+        c = case(f"{label}-spec-missing", files)
+        check(f"{label}缺规范版本告警", "系统文档缺规范版本" in titles(c, "WARNING"))
+        check(f"{label}缺规范版本仅一条且指向该文档",
+              sum(1 for i in c.issues if i.title == "系统文档缺规范版本") == 1)
+
+        files = valid_files()
+        files[doc] = files[doc].replace(row, "| 规范版本 | 99.0 |\n")
+        c = case(f"{label}-spec-ahead", files)
+        check(f"{label}规范版本超前报错", "系统文档规范版本超前" in titles(c, "ERROR"))
+
+        files = valid_files()
+        files[doc] = files[doc].replace(row, "| 规范版本 | two |\n")
+        c = case(f"{label}-spec-badfmt", files)
+        check(f"{label}规范版本格式错误告警", "系统文档规范版本格式错误" in titles(c, "WARNING"))
+
+        files = valid_files()
+        files[doc] = files[doc].replace(row, "| 规范版本 | 1.0 |\n")
+        c = case(f"{label}-spec-lag", files)
+        check(f"{label}低于根目标列为待迁移", "系统文档待迁移规范" in titles(c, "WARNING"))
+
+    # 10.x 式数值比较：2.10 高于 2.9，不得按字符串比较
+    files = valid_files()
+    files[ARCH] = files[ARCH].replace(row, "| 规范版本 | 1.10 |\n")
+    files["ued/README.md"] = files["ued/README.md"].replace(
+        f"| 规范版本目标 | {inst} |", "| 规范版本目标 | 1.9 |")
+    c = case("arch-spec-numeric", files)
+    check("数值比较：1.10 不低于目标 1.9", "系统文档待迁移规范" not in titles(c))
+
+    # 根 README 缺目标时不判待迁移（只有缺目标告警）
+    files = valid_files()
+    files[ARCH] = files[ARCH].replace(row, "| 规范版本 | 1.0 |\n")
+    files["ued/README.md"] = files["ued/README.md"].replace(f"| 规范版本目标 | {inst} |\n", "")
+    c = case("arch-spec-no-target", files)
+    check("根目标缺失时不判待迁移",
+          "系统文档待迁移规范" not in titles(c) and "系统 README 缺规范版本目标" in titles(c))
+
+    # 发布清单与注册表不逐篇记录：release yaml 无 规范版本 也不得报
+    c = case("release-no-spec", valid_files())
+    check("发布清单无规范版本不告警",
+          not any("发布" in t and "规范版本" in t for t in titles(c)))
 
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0
