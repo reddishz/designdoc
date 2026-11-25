@@ -37,7 +37,7 @@
 
 | 文件 | 内容 |
 |------|------|
-| [project-agents-guide.md](project-agents-guide.md) | 项目接入：根 AGENTS.md 托管块、常驻规则、旧式章节迁移、冒烟验证、检查器报告 |
+| [project-agents-guide.md](project-agents-guide.md) | 项目接入：根 AGENTS.md 托管块（核心，与宿主无关）、宿主适配、旧式章节迁移、冒烟验证、检查器报告 |
 
 ## 非模板资源
 

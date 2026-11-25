@@ -1934,6 +1934,7 @@ def run_agents_block_cases():
         "项目缺 AGENTS.md", "AGENTS.md 缺设计优先托管块", "AGENTS.md 托管块不完整",
         "AGENTS.md 托管块落后", "AGENTS.md 托管块超前", "AGENTS.md 托管块正文不一致",
         "AGENTS.md 含旧式设计优先章节", "缺 design-doc 常驻规则",
+        "存在多个带托管块的 AGENTS.md",
     }
     readme = """# 托管块测试
 
@@ -1955,8 +1956,8 @@ def run_agents_block_cases():
         text = src if rev is None else src.replace(f"block={installed}", f"block={rev}")
         return text.replace("<!-- design-doc:end -->", extra_body + "<!-- design-doc:end -->")
 
-    def run(scope):
-        checker = check_docs.DesignDocChecker(str(scope))
+    def run(scope, hosts=("cursor",)):
+        checker = check_docs.DesignDocChecker(str(scope), hosts=hosts)
         with contextlib.redirect_stdout(io.StringIO()):
             issues = checker.run_checks()
         return {i["title"] for i in issues if i["title"] in titles}
@@ -2039,6 +2040,51 @@ def run_agents_block_cases():
         rule.write_text(rule_src, encoding="utf-8")
         rule.unlink()
         expect("规则缺失", run(scope), {"缺 design-doc 常驻规则"})
+
+        # 规则解析负例：alwaysApply 必须是 frontmatter 中的布尔 true；正文须指向 AGENTS.md 与 Gate
+        bad_rules = {
+            "frontmatter 为 false、正文含同名字符串": (
+                "---\ndescription: design-doc\nalwaysApply: false\n---\n\nalwaysApply: true design-doc AGENTS.md 编码前设计 Gate\n"),
+            "true 只在注释里": (
+                "---\ndescription: design-doc\n# alwaysApply: true\n---\n\nAGENTS.md 编码前设计 Gate\n"),
+            "alwaysApply 值非布尔": (
+                "---\ndescription: x\nalwaysApply: 'true'\n---\n\nAGENTS.md 编码前设计 Gate\n"),
+            "正文未指向 AGENTS.md": (
+                "---\ndescription: x\nalwaysApply: true\n---\n\n编码前设计 Gate\n"),
+            "正文未指向 Gate": (
+                "---\ndescription: x\nalwaysApply: true\n---\n\n见 AGENTS.md\n"),
+            "无 frontmatter": "alwaysApply: true\nAGENTS.md 编码前设计 Gate\n",
+            "frontmatter 未闭合": "---\nalwaysApply: true\nAGENTS.md 编码前设计 Gate\n",
+        }
+        for name, text in bad_rules.items():
+            rule.write_text(text, encoding="utf-8")
+            expect(f"规则负例：{name}", run(scope), {"缺 design-doc 常驻规则"})
+        rule.write_text(rule_src, encoding="utf-8")
+        expect("规则恢复合格", run(scope), set())
+
+        # 宿主无关：未启用 cursor 宿主时，缺规则文件不报；AGENTS 托管块检查照常
+        rule.unlink()
+        expect("未启用 cursor 不查规则", run(scope, hosts=()), set())
+        agents.write_text("# 项目\n\n无块\n", encoding="utf-8")
+        expect("未启用 cursor 仍查 AGENTS", run(scope, hosts=()), {"AGENTS.md 缺设计优先托管块"})
+        agents.write_text("# 项目\n\n" + block(), encoding="utf-8")
+        rule.write_text(rule_src, encoding="utf-8")
+
+    # 多个候选项目根都带托管块：报 WARNING，不静默择一
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td)
+        (repo / ".git").mkdir()
+        (repo / "AGENTS.md").write_text("# 仓库根\n\n" + block(), encoding="utf-8")
+        sub_proj = repo / "project-a"
+        scope = sub_proj / "ued"
+        scope.mkdir(parents=True)
+        (scope / "README.md").write_text(readme, encoding="utf-8")
+        (sub_proj / "AGENTS.md").write_text("# 子项目\n\n" + block(), encoding="utf-8")
+        (sub_proj / ".cursor" / "rules").mkdir(parents=True)
+        (sub_proj / ".cursor" / "rules" / "design-doc-bootstrap.mdc").write_text(rule_src, encoding="utf-8")
+        expect("两个带块的 AGENTS.md", run(scope), {"存在多个带托管块的 AGENTS.md"})
+        (repo / "AGENTS.md").write_text("# 仓库根\n\n无块\n", encoding="utf-8")
+        expect("仅一个带块的 AGENTS.md", run(scope), set())
 
     # 无 ued/ 的新项目：AGENTS 与规则检查仍执行（接入前即需要）
     with tempfile.TemporaryDirectory() as td:

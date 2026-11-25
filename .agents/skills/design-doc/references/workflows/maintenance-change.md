@@ -8,6 +8,8 @@
 
 ## 第一步：判定性质（MUST）
 
+本流程的入口是编码前设计 Gate 的判定 **M**（见 [before-code-change.md](before-code-change.md)）：先输出 Gate 记录，再按下表确认语义不变。
+
 按 [语义不变判据](../status-definitions.md#语义不变判据mandatory) 逐项核对：适用范围、行为、输入与输出、约束、验收口径、数值、模态词、量词、接口、依赖、术语定义、类型码、基线成员身份。
 
 | 结论 | 走哪条路 |

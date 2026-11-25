@@ -13,7 +13,7 @@ description: >
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.12"
+  version: "10.13"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -47,7 +47,7 @@ metadata:
     - "全局术语表与单一权威定义"
     - "非语义维护与变更追溯"
     - "变更代码前的设计对照与文档优先（编码前设计 Gate）"
-    - "项目接入：根 AGENTS.md 托管块"
+    - "项目接入：根 AGENTS.md 托管块与宿主适配（与宿主无关）"
 compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执行主体标识
 ---
 
@@ -90,7 +90,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 审查设计文档 | [review-guidelines.md](references/review-guidelines.md) |
 | **改功能 / 修缺陷 / 改行为 / 改 `ued/` 文档**（有 `ued/` 或项目声明采用本技能） | [before-code-change.md](references/workflows/before-code-change.md)（**编码前设计 Gate：先判定设计要不要改、状态能不能改**） |
 | **按已定设计实现代码** | [implement-from-design.md](references/workflows/implement-from-design.md) |
-| 项目接入 / 检查接入 / 写入或更新根 `AGENTS.md` 托管块与 `.cursor/rules/design-doc-bootstrap.mdc` 常驻规则 | [project-agents-guide.md](references/project-agents-guide.md) |
+| 项目接入 / 检查接入 / 写入或更新根 `AGENTS.md` 托管块与宿主适配文件（如 Cursor 规则） | [project-agents-guide.md](references/project-agents-guide.md) |
 | 写流程图 / 判断用 Mermaid 还是箭头 | [flowchart-guide.md](assets/guides/flowchart-guide.md) |
 
 动代码或动 `ued/` 相关意图：**MUST** 先走 `before-code-change`（Gate），**MUST NOT** 默认先改业务代码或先改正式文档。
@@ -155,5 +155,5 @@ python3 .agents/skills/design-doc/scripts/tests/run_fixtures.py
 - **正式就能实现吗？** → 还须在当前基线 `items` 且 revision 对齐  
 - **加功能只写 L4/L5？** → 已有上层则先 [change-feature.md](references/workflows/change-feature.md) 向上核对  
 - **改功能/修 bug 直接改代码？** → 有 `ued/` 或项目声明采用本技能时否；先过 [Gate](references/workflows/before-code-change.md)  
-- **新项目还没有 `ued/` 怎么办？** → 先接入：根 `AGENTS.md` 写入托管块、项目写入常驻规则（见 [project-agents-guide.md](references/project-agents-guide.md)），再起草设计；检查器无 `ued/` 时仍检查这两项  
+- **新项目还没有 `ued/` 怎么办？** → 先接入：根 `AGENTS.md` 写入托管块，并按使用的宿主接上常驻入口（见 [project-agents-guide.md](references/project-agents-guide.md)），再起草设计；检查器无 `ued/` 时仍检查 AGENTS  
 - **冲突听谁的？** → 不允许并存；当轮修正（见上文「一致性」）  

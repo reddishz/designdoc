@@ -356,6 +356,32 @@ AGENTS_LEGACY_HEAD = re.compile(r"^#{1,6}[ \t]*设计文档优先", re.M)
 AGENTS_RULE_REL = Path(".cursor") / "rules" / "design-doc-bootstrap.mdc"
 
 
+def _mdc_rule_problem(text: str) -> str:
+    """校验常驻规则。返回问题描述；合格返回空串。仅做 frontmatter 的简单 `key: value` 解析。"""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        return "缺 frontmatter（首行须为 `---`）"
+    try:
+        end = next(i for i in range(1, len(lines)) if lines[i].strip() == "---")
+    except StopIteration:
+        return "frontmatter 未闭合"
+    meta = {}
+    for ln in lines[1:end]:
+        if not ln.strip() or ln.lstrip().startswith("#") or ln[:1] in (" ", "\t"):
+            continue
+        k, sep, v = ln.partition(":")
+        if sep:
+            meta[k.strip()] = v.strip()
+    if meta.get("alwaysApply") != "true":
+        return "frontmatter 的 `alwaysApply` 必须为布尔值 `true`"
+    body = "\n".join(lines[end + 1:])
+    if "AGENTS.md" not in body:
+        return "规则正文未指向根 `AGENTS.md`"
+    if "编码前设计 Gate" not in body:
+        return "规则正文未指向「编码前设计 Gate」"
+    return ""
+
+
 def _agents_block_body(text: str) -> Tuple[Optional[int], str]:
     """取首个托管块的 (块修订号, 规范化正文)。正文为起止标记之间的行，去行尾空白与首尾空行。
     无完整块返回 (None, "")。"""
@@ -929,8 +955,11 @@ class DocInfo:
 class DesignDocChecker:
     """设计文档检查器"""
 
-    def __init__(self, ued_path: str = "./ued", glossary_path: str = ""):
+    def __init__(self, ued_path: str = "./ued", glossary_path: str = "",
+                 hosts: Iterable[str] = ()):
         self.ued_path = Path(ued_path)
+        # 宿主适配检查按需启用（如 cursor）；默认不检查任何宿主专用文件，design-doc 本体与宿主无关
+        self.hosts = frozenset(hosts)
         self.glossary_path = Path(glossary_path) if glossary_path else None
         self.type_codes = load_type_codes()
         self.known_types = self.type_codes | DOC_CODE_PREFIXES | LEGACY_TYPE_CODES
@@ -2652,7 +2681,7 @@ class DesignDocChecker:
         规则本体见 references/project-agents-guide.md。无 `ued/` 时仍执行（接入前即需检查）。
         托管块：缺文件 / 缺块 / 不完整 / 块号落后或超前 / 块号相同但正文与已装块不一致。
         旧式章节：块外残留未带标记的「设计文档优先」章节，须替换为托管块。
-        常驻规则：项目 `.cursor/rules/design-doc-bootstrap.mdc` 缺失。
+        常驻规则（仅 `--host cursor` 启用）：项目 `.cursor/rules/design-doc-bootstrap.mdc` 缺失。
         检查器只能证明机械一致；是否被 Agent 遵循只能靠对话冒烟验证。
         """
         installed, installed_body = installed_agents_block()
@@ -2688,6 +2717,17 @@ class DesignDocChecker:
             self._check_legacy_section(files[0], text=legacy_text)
             self._check_agent_rule(files[0].parent)
             return
+        with_block = []
+        for f in files:
+            try:
+                if AGENTS_BEGIN_RE.search(f.read_text(encoding="utf-8")):
+                    with_block.append(f)
+            except OSError:
+                continue
+        if len(with_block) > 1:
+            self.add_issue("WARNING", "存在多个带托管块的 AGENTS.md",
+                           f"{', '.join(str(f) for f in with_block)}: 多个候选项目根都含 design-doc 托管块；"
+                           "检查器采用最近设计目录的上级，请确认唯一的项目根入口，删除或改名其余块")
         self._check_agent_block_in(chosen, text, installed, installed_body)
         self._check_legacy_section(chosen, text=text)
         self._check_agent_rule(chosen.parent)
@@ -2735,7 +2775,14 @@ class DesignDocChecker:
                            "并以托管块替代（须用户确认）")
 
     def _check_agent_rule(self, project_root: Path) -> None:
-        """项目级常驻规则 `.cursor/rules/design-doc-bootstrap.mdc`：宿主每次会话注入的提醒。"""
+        """Cursor 宿主适配：项目级常驻规则 `.cursor/rules/design-doc-bootstrap.mdc`。
+
+        仅当 `--host cursor` 启用时检查；其他宿主的常驻入口见 project-agents-guide.md「宿主适配」。
+        解析 frontmatter（首行 `---`，到下一个 `---` 为止）：`alwaysApply` MUST 为布尔 `true`；
+        正文 MUST 指向根 `AGENTS.md` 与「编码前设计 Gate」。注释与正文中的同名字符串不算。
+        """
+        if "cursor" not in self.hosts:
+            return
         rule = project_root / AGENTS_RULE_REL
         if not rule.is_file():
             self.add_issue("WARNING", "缺 design-doc 常驻规则",
@@ -2746,10 +2793,10 @@ class DesignDocChecker:
             t = rule.read_text(encoding="utf-8")
         except OSError:
             return
-        if "alwaysApply: true" not in t or "design-doc" not in t:
+        problem = _mdc_rule_problem(t)
+        if problem:
             self.add_issue("WARNING", "缺 design-doc 常驻规则",
-                           f"{rule}: 规则文件缺 `alwaysApply: true` 或未指向 design-doc；"
-                           "按 references/project-agents-guide.md 重写")
+                           f"{rule}: {problem}；按 references/project-agents-guide.md 重写")
 
     def check_spec_versions(self) -> None:
         """规范版本（逐篇迁移记录）：作用域 README `规范版本目标` 与各文档 `规范版本`。
@@ -5455,6 +5502,9 @@ def main() -> int:
                         help="配合 --bump-product：发版/补丁说明（写入 patch_log）")
     parser.add_argument("--force-version", default="",
                         help="配合 --bump-product：强制两段式产品版本号（如 v5.17；不可用于 --patch）")
+    parser.add_argument("--host", action="append", choices=["cursor"], default=[],
+                        help="启用宿主适配检查（可重复）。默认不检查任何宿主专用文件；"
+                             "cursor：检查 .cursor/rules/design-doc-bootstrap.mdc")
     parser.add_argument("--cross-scope-deps", action="store_true",
                         help="系统根只读跨作用域细项 `依赖` 检查（跨子系统成环与"
                              "目标状态）；须以 -p ued 在系统根运行，配合 system-design-doc 审查")
@@ -5468,7 +5518,8 @@ def main() -> int:
     if args.instantiate:
         return _print_instantiated(args.instantiate, args.segment)
 
-    checker = DesignDocChecker(args.path, glossary_path=args.glossary)
+    checker = DesignDocChecker(args.path, glossary_path=args.glossary,
+                               hosts=args.host or ())
 
     if args.bump_product:
         if sum(bool(x) for x in (args.patch, args.minor, args.major)) > 1:
