@@ -2126,6 +2126,90 @@ def run_agents_block_cases():
     return 1 if fails else 0
 
 
+def run_dec_layer_cases():
+    """DEC 定义层级：允许 L3 / L4 / L5；L2 定义给 WARNING；ADR 文件不做特例。"""
+    import tempfile
+
+    readme = """# DEC 层级测试
+
+## 项目元信息
+
+| 字段 | 值 |
+|------|----|
+| project_name | DEC 层级测试 |
+| project_code | DCT |
+| 产品版本 | v1.0 |
+
+## 发版记录
+
+| 产品版本 | 日期 | 说明 |
+|----------|------|------|
+"""
+
+    def doc(code, layer, dec_code):
+        return f"""# {code} 测试文档
+
+| 属性 | 值 |
+|:---|:---|
+| 文档编码 | {code} |
+| 层级 | {layer} |
+| 修订版本号 | 1 |
+| 状态 | 正式 |
+| 作者 | 测试 |
+| 创建日期 | 2026-11-25 |
+| 最后更新 | 2026-11-25 |
+
+## 决策
+
+<a id="{dec_code.lower()}"></a>
+### {dec_code}：测试决策
+
+- **细项状态**：正式
+- **修订版本号**：1
+- **创建日期**：2026-11-25
+- **最后修订日期**：2026-11-25
+
+**选定**：采用方案甲。
+
+## 变更记录
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1 | 2026-11-25 | 初稿 |
+"""
+
+    def titles_for(layer, doc_type_code, dec_code):
+        with tempfile.TemporaryDirectory() as td:
+            scope = Path(td) / "ued"
+            sub = scope / ("L2-requirements" if layer == "L2" else
+                           "L3-architecture" if layer == "L3" else
+                           "L4-interface" if layer == "L4" else "L5-detail-design")
+            sub.mkdir(parents=True)
+            (scope / "README.md").write_text(readme, encoding="utf-8")
+            (sub / f"DCT-{doc_type_code}.md").write_text(
+                doc(f"DCT-{doc_type_code}", layer, dec_code), encoding="utf-8")
+            checker = _load_checker().DesignDocChecker(str(scope))
+            with contextlib.redirect_stdout(io.StringIO()):
+                issues = checker.run_checks()
+            return [i for i in issues if i["title"] == "DEC 定义层级不允许"]
+
+    fails = []
+    cases = [
+        ("L2 定义 DEC 报 WARNING", "L2", "L2-001", "DCT-DEC-001", 1),
+        ("L3 定义 DEC 不报", "L3", "L3-001", "DCT-DEC-002", 0),
+        ("L4 定义 DEC 不报", "L4", "L4-001", "DCT-DEC-003", 0),
+        ("L5 定义 DEC 不报", "L5", "L5-001", "DCT-DEC-004", 0),
+    ]
+    for name, layer, code, dec_code, want in cases:
+        got = titles_for(layer, code, dec_code)
+        if len(got) != want:
+            fails.append((name, len(got), want))
+    for name, got, want in fails:
+        print(f"  FAIL DEC 层级：{name}：得到 {got} 条，期望 {want} 条")
+    print(f"DEC 层级用例{'全部通过' if not fails else '有失败'}")
+    return 1 if fails else 0
+
+
 def main():
     require_test_deps()
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
@@ -2177,6 +2261,7 @@ def main():
     rc |= run_version_flow_cases()
     rc |= run_spec_version_cases()
     rc |= run_agents_block_cases()
+    rc |= run_dec_layer_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
 

@@ -27,7 +27,7 @@ DesignDoc 文档检查工具
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
-- ADR / EVAL / REF 的必备小节；`DEC` 落在 L2/L3 时的量级提示（升格为 ADR）
+- ADR / EVAL / REF 的必备小节；`DEC` 不在 L2 定义（允许 L3 / L4 / L5）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
 - `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文），以及技能包内部 `文件.md#锚点` 可达性
 - `--instantiate TPL`：剥除哨兵输出模板实例化后的正文，供预览评估
@@ -4349,22 +4349,20 @@ class DesignDocChecker:
                         "也无同名标题 slug）；细项锚点 MUST 由定义块的锚点行提供")
 
     def check_dec_layer(self) -> None:
-        """`DEC` 量级提示：定义位落在 L2/L3 文档时提示评估是否升格为 ADR。
+        """`DEC` 定义层级：允许 L3 / L4 / L5，不允许在 L2 定义（产品承诺用 FR / NFR）。
 
-        仅 INFO、**不报违规**：`DEC` 未锁定单层，MAY 出现在 L4/L5 或 ADR。ADR 文档
-        自身豁免：ADR 就是「已升格」的形态，其《决策》小节收录 DEC 是房规允许的做法。
+        与所在文件是否为 ADR 无关，ADR 文件内的 DEC 同等对待，不做特例。
         """
         for doc in self.docs:
-            if doc.archived or doc.doc_type == "ADR" or doc.layer not in ("L2", "L3"):
+            if doc.archived or doc.layer != "L2":
                 continue
             for item in self._doc_items(doc):
                 if item.type_code != "DEC" or not item.defined or item.path != doc.path:
                     continue
                 self.add_issue(
-                    "INFO", "DEC 量级可能偏大",
-                    f"{doc.path}:{item.line} `{item.code}`: `DEC` 定义在 L4/L5 或 ADR，"
-                    f"本定义位落在 {doc.layer} 文档；若该决策属技术栈选型、子系统划分、"
-                    "数据一致性策略等宏观架构级，SHOULD 评估升格为 ADR 文档（一事一档）")
+                    "WARNING", "DEC 定义层级不允许",
+                    f"{doc.path}:{item.line} `{item.code}`: `DEC` 不在 L2 定义（允许 L3 / L4 / L5）；"
+                    "产品承诺请改用 `FR` / `NFR`，选型类决策可移至 L3（ADR 或概念架构）或 L4/L5")
 
     def _item_block(self, doc: DocInfo, code: str) -> str:
         return "\n".join(doc.lines[i - 1] for i in self._own_lines(doc, code, block=True))
