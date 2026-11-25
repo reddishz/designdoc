@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.13-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.14-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.14 | 托管块精简为 6 条约束（`block=4`），步骤细则交给 Skill 与 workflow；检查器限制规则条数（上限 7） |
 | v10.13 | 编码前设计 Gate 新增 M（维护性变更）判定，Gate 记录早于任何编辑，B/C/D 本回合结束等待确认；托管块 `block=3`；宿主适配与宿主无关，Cursor 规则检查改为 `--host cursor` 按需启用；多个带托管块的 AGENTS.md 报告 |
 | v10.12 | 新增编码前设计 Gate（动手前输出 Gate 记录，四种判定，改 `ued/` 同样适用）、实现中范围漂移即停与完成后逐条对照；项目接入：根 `AGENTS.md` 托管块（检查块号与正文）、项目级 always-apply 常驻规则、旧式章节迁移；检查器无 `ued/` 时仍检查接入项；术语口径表，「落码」统一为「分配编码」 |
 | v10.11 | 新增规范版本记录：文档封面 `规范版本` 逐篇记录已对齐的规范，作用域 README `规范版本目标` 声明升级要求，基线 `spec_version` 盖章创建时规范；升级影响表见 `references/spec-upgrade.md` |

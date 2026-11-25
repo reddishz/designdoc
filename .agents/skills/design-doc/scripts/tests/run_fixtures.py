@@ -1934,8 +1934,14 @@ def run_agents_block_cases():
         "项目缺 AGENTS.md", "AGENTS.md 缺设计优先托管块", "AGENTS.md 托管块不完整",
         "AGENTS.md 托管块落后", "AGENTS.md 托管块超前", "AGENTS.md 托管块正文不一致",
         "AGENTS.md 含旧式设计优先章节", "缺 design-doc 常驻规则",
-        "存在多个带托管块的 AGENTS.md",
+        "存在多个带托管块的 AGENTS.md", "AGENTS.md 托管块规则过多",
     }
+    # 已装托管块的通用规则不得超过上限
+    _rules = check_docs.AGENTS_RULE_ITEM.findall(body)
+    if len(_rules) > check_docs.AGENTS_RULE_MAX:
+        fails_pre = [f"已装托管块规则 {len(_rules)} 条，超过上限 {check_docs.AGENTS_RULE_MAX}"]
+        print("  FAIL " + fails_pre[0])
+        return 1
     readme = """# 托管块测试
 
 ## 项目元信息
@@ -1987,6 +1993,12 @@ def run_agents_block_cases():
 
         agents.write_text("# 项目\n\n" + block(), encoding="utf-8")
         expect("块正常", run(scope), set())
+
+        over = "".join(f"{i}. 规则 {i}\n" for i in range(1, check_docs.AGENTS_RULE_MAX + 2))
+        agents.write_text("# 项目\n\n<!-- design-doc:begin block=%d -->\n## 设计优先\n%s<!-- design-doc:end -->\n"
+                          % (installed, over), encoding="utf-8")
+        expect("规则超过上限", run(scope), {"AGENTS.md 托管块规则过多", "AGENTS.md 托管块正文不一致"})
+        agents.write_text("# 项目\n\n" + block(), encoding="utf-8")
 
         agents.write_text("# 项目\n\n项目自有说明。\n\n" + block()
                           + "\n## 其他\n块外内容随意。\n", encoding="utf-8")

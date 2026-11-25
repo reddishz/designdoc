@@ -353,6 +353,9 @@ AGENTS_BLOCK_ATTR = re.compile(r"\bblock=(\d+)\s*$")
 
 
 AGENTS_LEGACY_HEAD = re.compile(r"^#{1,6}[ \t]*设计文档优先", re.M)
+# 托管块通用规则条数上限：常驻入口只表达约束，超出说明在复制 workflow 细节
+AGENTS_RULE_MAX = 7
+AGENTS_RULE_ITEM = re.compile(r"^\d+\.\s", re.M)
 AGENTS_RULE_REL = Path(".cursor") / "rules" / "design-doc-bootstrap.mdc"
 
 
@@ -2743,6 +2746,12 @@ class DesignDocChecker:
                            "按 references/project-agents-guide.md 整块重写")
             return
         rev, body = _agents_block_body(text)
+        n_rules = len(AGENTS_RULE_ITEM.findall(body or ""))
+        if n_rules > AGENTS_RULE_MAX:
+            self.add_issue("WARNING", "AGENTS.md 托管块规则过多",
+                           f"{chosen}: 托管块含 {n_rules} 条规则，上限 {AGENTS_RULE_MAX} 条；"
+                           "常驻入口只表达约束，具体步骤、字段与审批规则留给 Skill 与 workflow，"
+                           "按 references/project-agents-guide.md 精简后整块替换")
         if rev is None:
             self.add_issue("WARNING", "AGENTS.md 托管块不完整",
                            f"{chosen}: 起标记缺 `block=N`（N 为整数）；"
