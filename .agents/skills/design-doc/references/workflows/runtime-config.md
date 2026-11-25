@@ -22,7 +22,9 @@
 
 ## 解析顺序
 
-**作者**：作用域 README 的 `author`/`maintainer` → 运行环境主体标识 → 默认 `[designdoc](https://github.com/reddishz/designdoc)`。
+**作者**：作用域 `README.md` 元信息表的 `author` 字段；`author` 缺失或留空时取默认值 `[designdoc](https://github.com/reddishz/designdoc)`。
+- 每次创建或修改文档时，元信息 `作者` 与本次变更记录的 `作者` 都按 README 当前的 `author` 写入，不论文档内容是否变化。README 的 `author` 由谁改（人、运行用户或外部修改）均以改后的值为准。
+- 首次创建文档时若 `author` 缺失或留空，SHOULD 提示用户设置；用户未设置则用默认值继续，不阻断。
 
 **项目编码**：作用域 `project_code` →（系统内）注册表 `编码前缀` 交叉校验 → 默认无（简洁编码）。**MUST NOT** 启用前缀，除非已配置且请求方确认。
 
@@ -30,4 +32,4 @@
 
 **提示（MANDATORY）**：出现多子系统迹象 → 提示按子系统登记并迁入子目录；未配置 `project_code` 不得擅自加前缀。缺 README 字段时用解析链末位默认值继续，并 SHOULD 提醒补元信息。
 
-项目编码形态与消歧见 [coding-system.md · 项目编码规则](../coding-system.md#项目编码规则)。README 最小字段（RECOMMENDED）：`project_name`、`project_code`、`scope`、`author`/`maintainer`、`last_updated`、`产品版本`（仅作用域 README）。**MUST NOT** 写 `doc_mode`。
+项目编码形态与消歧见 [coding-system.md · 项目编码规则](../coding-system.md#项目编码规则)。README 最小字段（RECOMMENDED）：`project_name`、`project_code`、`scope`、`author`、`last_updated`、`产品版本`（仅作用域 README）。**MUST NOT** 写 `doc_mode`。

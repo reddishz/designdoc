@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.15-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.16-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.16 | 文档 `作者` 统一取作用域 README 的 `author`，缺失用默认值；每次写入或修改文档时按当前值写入 |
 | v10.15 | `DEC` 定义层级放宽为 L3 / L4 / L5，不再对 ADR 做特例；L2 定义 DEC 报 WARNING |
 | v10.14 | 托管块精简为 6 条约束（`block=4`），步骤细则交给 Skill 与 workflow；检查器限制规则条数（上限 7） |
 | v10.13 | 编码前设计 Gate 新增 M（维护性变更）判定，Gate 记录早于任何编辑，B/C/D 本回合结束等待确认；托管块 `block=3`；宿主适配与宿主无关，Cursor 规则检查改为 `--host cursor` 按需启用；多个带托管块的 AGENTS.md 报告 |

@@ -13,7 +13,7 @@ description: >
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.15"
+  version: "10.16"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -48,7 +48,7 @@ metadata:
     - "非语义维护与变更追溯"
     - "变更代码前的设计对照与文档优先（编码前设计 Gate）"
     - "项目接入：根 AGENTS.md 托管块与宿主适配（与宿主无关）"
-compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执行主体标识
+compatibility: 需能访问 ued/ 目录
 ---
 
 # 产品设计文档规范（UED）
