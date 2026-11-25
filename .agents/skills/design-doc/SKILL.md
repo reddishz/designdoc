@@ -6,12 +6,14 @@ description: >
   `ued/{subsystem}/`；由多个子系统组成的系统级注册表、依赖钉住与发布由
   system-design-doc 负责。
   **design-doc是极其重要的技能，应作为每次开发和设计的基础。**
-  项目有 ued/ 时，改功能、修缺陷或按需求实现代码前 MUST 先对照设计：
+  项目有 ued/，或根 AGENTS.md 声明采用 design-doc（即使 ued/ 尚未建立）时，
+  增改功能、修缺陷、按需求实现代码，以及改动 ued/ 文档之前，MUST 先过「编码前设计 Gate」：
   需改设计则先文档后代码；禁止先写代码再补设计。
+  亦用于项目接入：在根 AGENTS.md 写入或更新 design-doc 托管块。
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.11"
+  version: "10.12"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -35,7 +37,8 @@ metadata:
     - "维护性变更"
   trigger_principle: >
     设计文档维护与据文档改代码均受编码与基线约束；
-    有 ued/ 时改行为类请求亦应加载本技能，先判定设计是否要动，再动代码。
+    有 ued/ 或项目已声明采用本技能时，改行为类请求与改 ued/ 文档的请求
+    都应先加载本技能并过编码前设计 Gate，再动手。
   capabilities:
     - "多层级设计文档生成 (L0-L6)"
     - "全局唯一编码管理与冲突检测"
@@ -43,7 +46,8 @@ metadata:
     - "跨文档引用一致性维护"
     - "全局术语表与单一权威定义"
     - "非语义维护与变更追溯"
-    - "变更代码前的设计对照与文档优先"
+    - "变更代码前的设计对照与文档优先（编码前设计 Gate）"
+    - "项目接入：根 AGENTS.md 托管块"
 compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执行主体标识
 ---
 
@@ -59,6 +63,7 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 
 ## 运行时步骤
 
+0. **动手前先过 Gate。** 用户意图是增改功能、修缺陷、改行为，或要改 `ued/` 内文档时，在第一次编辑 `ued/` 或代码之前，先读 [before-code-change.md](references/workflows/before-code-change.md) 并输出 Gate 记录；其余步骤在 Gate 之后。
 1. 确认当前作用域存在设计树：单系统为 `ued/`，系统内为 `ued/{subsystem}/`；解析配置见 [runtime-config.md](references/workflows/runtime-config.md)。
 2. 若 `ued/README.md` 含**子系统注册表**，说明这是系统根而非单作用域：系统级用 [system-design-doc](../system-design-doc/SKILL.md)，本技能只对每个 `ued/{subsystem}/` 运行。若含 `应用注册表` / `app_key` / `doc_mode`，说明是 9.x 旧多应用结构：停止并指向 system-design-doc 的迁移流程，**MUST NOT** 当单系统继续。
 3. 按下方**任务路由**加载对应 workflow（**MUST read**）；仅在流程分支需要时再打开所列 rule。
@@ -83,12 +88,12 @@ compatibility: 需能访问 ued/ 目录，可选从运行环境获取当前执�
 | 写/改 EVAL | [eval-report-profile.md](references/eval-report-profile.md) + 模板 [eval.md](assets/templates/eval.md) |
 | 维护术语表 / 定义术语 / 术语冲突 | [glossary-conventions.md](references/glossary-conventions.md) + 模板 [glossary.md](assets/templates/glossary.md) |
 | 审查设计文档 | [review-guidelines.md](references/review-guidelines.md) |
-| **改功能 / 修缺陷 / 改行为**（有 `ued/`） | [before-code-change.md](references/workflows/before-code-change.md)（**先判定设计要不要改**） |
+| **改功能 / 修缺陷 / 改行为 / 改 `ued/` 文档**（有 `ued/` 或项目声明采用本技能） | [before-code-change.md](references/workflows/before-code-change.md)（**编码前设计 Gate：先判定设计要不要改、状态能不能改**） |
 | **按已定设计实现代码** | [implement-from-design.md](references/workflows/implement-from-design.md) |
-| 维护项目 `AGENTS.md` / 约定文件 | [project-agents-guide.md](references/project-agents-guide.md) |
+| 项目接入 / 检查接入 / 写入或更新根 `AGENTS.md` 托管块与 `.cursor/rules/design-doc-bootstrap.mdc` 常驻规则 | [project-agents-guide.md](references/project-agents-guide.md) |
 | 写流程图 / 判断用 Mermaid 还是箭头 | [flowchart-guide.md](assets/guides/flowchart-guide.md) |
 
-动代码相关意图：**MUST** 先走 `before-code-change`，**MUST NOT** 默认先改业务代码。
+动代码或动 `ued/` 相关意图：**MUST** 先走 `before-code-change`（Gate），**MUST NOT** 默认先改业务代码或先改正式文档。
 
 ## 不变量（任何任务）
 
@@ -138,7 +143,7 @@ python3 .agents/skills/design-doc/scripts/tests/run_fixtures.py
 
 `--check-templates` / `--instantiate` 见脚本帮助。`--cross-scope-deps` 是系统根只读跨作用域细项 `依赖` 检查（跨子系统成环、`正式` / `草案` 指向他子系统 `初稿`），须以 `-p ued` 在系统根运行，供 [system-design-doc](../system-design-doc/SKILL.md) 审查调用；目标存在性与前缀归属仍由 `check_system.py` 负责。静态检查不代替人工审查与定稿确认。
 
-**适用**：单一作用域（单系统 `ued/` 或一个子系统 `ued/{subsystem}/`）的设计文档全生命周期；有 `ued/` 时变更代码前的设计对照与据文档实现门禁（**不代替**编写业务代码）。多子系统结构、跨子系统依赖与系统发布由 [system-design-doc](../system-design-doc/SKILL.md) 编排。**不适用**：与 `ued/` 无关的纯环境琐事、用户/运维手册。
+**适用**：单一作用域（单系统 `ued/` 或一个子系统 `ued/{subsystem}/`）的设计文档全生命周期；有 `ued/`（或项目声明采用本技能）时变更代码前的设计 Gate 与据文档实现门禁（**不代替**编写业务代码）。多子系统结构、跨子系统依赖与系统发布由 [system-design-doc](../system-design-doc/SKILL.md) 编排。**不适用**：与 `ued/` 无关的纯环境琐事、用户/运维手册。
 
 ## 常见问题（短答）
 
@@ -149,5 +154,6 @@ python3 .agents/skills/design-doc/scripts/tests/run_fixtures.py
 - **定稿要升基线吗？** → 定稿不自动写基线；Checkpoint 5 首份基线有漂移问 PATCH，非首份仅 revision 落后问 PATCH、成员进出问 MINOR/MAJOR  
 - **正式就能实现吗？** → 还须在当前基线 `items` 且 revision 对齐  
 - **加功能只写 L4/L5？** → 已有上层则先 [change-feature.md](references/workflows/change-feature.md) 向上核对  
-- **改功能/修 bug 直接改代码？** → 有 `ued/` 时否；先 [before-code-change.md](references/workflows/before-code-change.md)  
+- **改功能/修 bug 直接改代码？** → 有 `ued/` 或项目声明采用本技能时否；先过 [Gate](references/workflows/before-code-change.md)  
+- **新项目还没有 `ued/` 怎么办？** → 先接入：根 `AGENTS.md` 写入托管块、项目写入常驻规则（见 [project-agents-guide.md](references/project-agents-guide.md)），再起草设计；检查器无 `ued/` 时仍检查这两项  
 - **冲突听谁的？** → 不允许并存；当轮修正（见上文「一致性」）  

@@ -69,6 +69,9 @@ NOISE = {
     "草案待定稿",
     # 夹具不随规范升级补 `规范版本`；该项的正反例由 run_spec_version_cases 专测
     "文档缺规范版本",
+    # 夹具目录没有项目根 AGENTS.md / 常驻规则；该项的正反例由 run_agents_block_cases 专测
+    "项目缺 AGENTS.md",
+    "缺 design-doc 常驻规则",
 }
 
 # 夹具 → 期望命中的目标问题名（空集 = 该规则的正例，MUST 零命中）。
@@ -1913,6 +1916,158 @@ def run_check_templates_smoke():
     return 0
 
 
+def run_agents_block_cases():
+    """项目根 AGENTS.md 托管块、旧式章节、常驻规则。块正文取真实块源，正文比对才有意义。
+    只断言 AGENTS 相关问题名。"""
+    import tempfile
+
+    check_docs = _load_checker()
+    installed, body = check_docs.installed_agents_block()
+    if not installed or not body:
+        print("FAIL 无法读取已装托管块（assets/snippets/agents-block.md）")
+        return 1
+    snippets = ROOT.parent.parent / "assets" / "snippets"
+    src = (snippets / "agents-block.md").read_text(encoding="utf-8")
+    rule_src = (snippets / "design-doc-bootstrap.mdc").read_text(
+        encoding="utf-8")
+    titles = {
+        "项目缺 AGENTS.md", "AGENTS.md 缺设计优先托管块", "AGENTS.md 托管块不完整",
+        "AGENTS.md 托管块落后", "AGENTS.md 托管块超前", "AGENTS.md 托管块正文不一致",
+        "AGENTS.md 含旧式设计优先章节", "缺 design-doc 常驻规则",
+    }
+    readme = """# 托管块测试
+
+## 项目元信息
+
+| 字段 | 值 |
+|------|----|
+| project_name | 托管块测试 |
+| project_code | AGB |
+| 产品版本 | v1.0 |
+
+## 发版记录
+
+| 产品版本 | 日期 | 说明 |
+|----------|------|------|
+"""
+
+    def block(rev=None, extra_body=""):
+        text = src if rev is None else src.replace(f"block={installed}", f"block={rev}")
+        return text.replace("<!-- design-doc:end -->", extra_body + "<!-- design-doc:end -->")
+
+    def run(scope):
+        checker = check_docs.DesignDocChecker(str(scope))
+        with contextlib.redirect_stdout(io.StringIO()):
+            issues = checker.run_checks()
+        return {i["title"] for i in issues if i["title"] in titles}
+
+    fails = []
+
+    def expect(name, got, want):
+        if set(got) != set(want):
+            fails.append((name, sorted(got), sorted(want)))
+
+    with tempfile.TemporaryDirectory() as td:
+        proj = Path(td)
+        scope = proj / "ued"
+        scope.mkdir()
+        (scope / "README.md").write_text(readme, encoding="utf-8")
+        agents = proj / "AGENTS.md"
+        rule = proj / ".cursor" / "rules" / "design-doc-bootstrap.mdc"
+
+        expect("无 AGENTS 无规则", run(scope), {"项目缺 AGENTS.md", "缺 design-doc 常驻规则"})
+
+        rule.parent.mkdir(parents=True)
+        rule.write_text(rule_src, encoding="utf-8")
+        expect("规则有、AGENTS 缺", run(scope), {"项目缺 AGENTS.md"})
+
+        agents.write_text("# 项目\n\n只有项目自己的说明。\n", encoding="utf-8")
+        expect("有文件无块", run(scope), {"AGENTS.md 缺设计优先托管块"})
+
+        agents.write_text("# 项目\n\n" + block(), encoding="utf-8")
+        expect("块正常", run(scope), set())
+
+        agents.write_text("# 项目\n\n项目自有说明。\n\n" + block()
+                          + "\n## 其他\n块外内容随意。\n", encoding="utf-8")
+        expect("块外内容不影响", run(scope), set())
+
+        agents.write_text("# 项目\n\n" + block(installed + 1), encoding="utf-8")
+        expect("块超前", run(scope), {"AGENTS.md 托管块超前"})
+
+        if installed > 1:
+            agents.write_text("# 项目\n\n" + block(installed - 1), encoding="utf-8")
+            expect("块落后", run(scope), {"AGENTS.md 托管块落后"})
+
+        agents.write_text("# 项目\n\n" + block(extra_body="手改一行\n"), encoding="utf-8")
+        expect("同号正文被手改", run(scope), {"AGENTS.md 托管块正文不一致"})
+
+        agents.write_text("# 项目\n\n" + block().replace("## 设计优先（design-doc）", "## 改了标题"),
+                          encoding="utf-8")
+        expect("同号标题改动也算不一致", run(scope), {"AGENTS.md 托管块正文不一致"})
+
+        agents.write_text("# 项目\n\n<!-- design-doc:begin block=1 -->\n正文\n",
+                          encoding="utf-8")
+        expect("缺止标记", run(scope), {"AGENTS.md 托管块不完整"})
+
+        agents.write_text("# 项目\n\n<!-- design-doc:begin -->\n正文\n"
+                          "<!-- design-doc:end -->\n", encoding="utf-8")
+        expect("起标记缺 block=N", run(scope), {"AGENTS.md 托管块不完整"})
+
+        agents.write_text("# 项目\n\n" + block() + block(), encoding="utf-8")
+        expect("块重复", run(scope), {"AGENTS.md 托管块不完整"})
+
+        agents.write_text("# 项目\n\n<!-- design-doc:end -->\n<!-- design-doc:begin block=1 -->\n",
+                          encoding="utf-8")
+        expect("止在起前", run(scope), {"AGENTS.md 托管块不完整"})
+
+        # 旧式章节：块外残留「设计文档优先」（无标记），与托管块并存即报
+        agents.write_text("# 项目\n\n## 设计文档优先（有 ued/ 时 MUST）\n\n旧规则\n\n"
+                          + block(), encoding="utf-8")
+        expect("旧式章节与块并存", run(scope), {"AGENTS.md 含旧式设计优先章节"})
+
+        agents.write_text("# 项目\n\n## 设计文档优先（有 ued/ 时 MUST）\n\n旧规则\n",
+                          encoding="utf-8")
+        expect("旧式章节无块", run(scope),
+               {"AGENTS.md 缺设计优先托管块", "AGENTS.md 含旧式设计优先章节"})
+
+        # 块内出现同名标题不算旧式章节
+        agents.write_text("# 项目\n\n" + block(), encoding="utf-8")
+
+        # 常驻规则：缺 alwaysApply 或未指向 design-doc 即报
+        rule.write_text("---\ndescription: x\n---\n\n无关内容\n", encoding="utf-8")
+        expect("规则内容不合格", run(scope), {"缺 design-doc 常驻规则"})
+        rule.write_text(rule_src, encoding="utf-8")
+        rule.unlink()
+        expect("规则缺失", run(scope), {"缺 design-doc 常驻规则"})
+
+    # 无 ued/ 的新项目：AGENTS 与规则检查仍执行（接入前即需要）
+    with tempfile.TemporaryDirectory() as td:
+        proj = Path(td)
+        scope = proj / "ued"
+        expect("无 ued 无 AGENTS 仍报缺文件", run(scope), {"项目缺 AGENTS.md", "缺 design-doc 常驻规则"})
+        (proj / "AGENTS.md").write_text("# 项目\n\n" + block(), encoding="utf-8")
+        (proj / ".cursor" / "rules").mkdir(parents=True)
+        (proj / ".cursor" / "rules" / "design-doc-bootstrap.mdc").write_text(rule_src, encoding="utf-8")
+        expect("无 ued 但 AGENTS 与规则齐全", run(scope), set())
+
+    # 子系统 `ued/{subsystem}/`：项目根取 `ued/` 的父目录
+    with tempfile.TemporaryDirectory() as td:
+        proj = Path(td)
+        scope = proj / "ued" / "core"
+        scope.mkdir(parents=True)
+        (scope / "README.md").write_text(readme, encoding="utf-8")
+        expect("子系统缺 AGENTS", run(scope), {"项目缺 AGENTS.md", "缺 design-doc 常驻规则"})
+        (proj / "AGENTS.md").write_text("# 项目\n\n" + block(), encoding="utf-8")
+        (proj / ".cursor" / "rules").mkdir(parents=True)
+        (proj / ".cursor" / "rules" / "design-doc-bootstrap.mdc").write_text(rule_src, encoding="utf-8")
+        expect("子系统读项目根的块与规则", run(scope), set())
+
+    for name, got, want in fails:
+        print(f"  FAIL AGENTS 托管块：{name}：得到 {got}，期望 {want}")
+    print(f"AGENTS 托管块用例{'全部通过' if not fails else '有失败'}")
+    return 1 if fails else 0
+
+
 def main():
     require_test_deps()
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
@@ -1963,6 +2118,7 @@ def main():
     rc |= run_template_body_hygiene_cases()
     rc |= run_version_flow_cases()
     rc |= run_spec_version_cases()
+    rc |= run_agents_block_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
 

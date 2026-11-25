@@ -6,7 +6,8 @@
 
 | 你要做什么 | MUST 先读 | 硬阻断（不满足则停） |
 |------------|-----------|----------------------|
-| 改功能 / 修缺陷 / 改行为（项目有 `ued/`） | [before-code-change.md](workflows/before-code-change.md) | 设计需改而未先改文档；实现依据不在**当前**产品基线或 revision 落后 |
+| 改功能 / 修缺陷 / 改行为 / 改 `ued/` 文档（项目有 `ued/` 或已声明采用本技能） | [before-code-change.md](workflows/before-code-change.md)（编码前设计 Gate） | 未输出 Gate 记录就动手；设计需改而未先改文档；`正式` 文档未经确认解冻就改；实现依据不在**当前**产品基线或 revision 落后 |
+| 项目接入 / 根 `AGENTS.md` | [project-agents-guide.md](project-agents-guide.md) | 项目没有常驻入口声明；未经用户确认写入 `AGENTS.md` |
 | 新建 / 改编码、标题、类型码 | [allocate-and-lock.md](workflows/allocate-and-lock.md) + [锁定矩阵](object-model.md#锁定矩阵mandatory) | 删除或复用已分配编码；就地改编码 ID / 类型码 / `正式`·`草案` 标题的语义 / 正式含义 |
 | 统一用语 / 修正措辞或路径 / 名称与标题非语义调整，语义不变 | [maintenance-change.md](workflows/maintenance-change.md) | 与实质变更或状态转换混提交；跳过 `--refs` 与全文扫描；改动修订号 / 基线 / 钉住 |
 | 废弃 / 受控复活 | [item-deprecation.md](item-deprecation.md) / [doc-deprecation.md](doc-deprecation.md) + [状态定义](status-definitions.md) | 废弃字段不齐；仍有活细项就整份废弃；复活条件未逐条满足或未取得人确认 |

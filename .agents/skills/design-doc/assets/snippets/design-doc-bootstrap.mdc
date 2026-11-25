@@ -1,0 +1,11 @@
+---
+description: 本项目采用 design-doc：改功能、修缺陷、改产品行为或改 ued/ 文档前，先按根 AGENTS.md 的设计优先托管块执行编码前设计 Gate
+alwaysApply: true
+---
+
+# design-doc 设计优先（常驻规则）
+
+- 本项目采用 design-doc。改功能、修缺陷、改产品可观察行为，或改动设计目录（`ued/`）文档之前，先读根目录 `AGENTS.md` 中的「设计优先（design-doc）」托管块，并按其中的编码前设计 Gate 执行。
+- 无论设计目录是否已存在，只要用户要做上述变更，本规则都适用。
+- 若根 `AGENTS.md` 不存在、没有 design-doc 托管块，或托管块落后于已装技能：先按 `.agents/skills/design-doc/references/project-agents-guide.md` 处理。写入或更新前 MUST 向用户说明将写入的内容并取得确认，不得静默写入。
+- 本规则只是常驻提醒；规则正文与流程以 `.agents/skills/design-doc/` 为准。

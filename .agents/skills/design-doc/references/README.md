@@ -12,7 +12,7 @@
 | [workflows/maintenance-change.md](workflows/maintenance-change.md) | 非语义维护（用语、措辞、名称、引用、结构） |
 | [workflows/lifecycle.md](workflows/lifecycle.md) | 废弃；定稿与 Checkpoint 5 |
 | [workflows/baseline-change.md](workflows/baseline-change.md) | 基线 PATCH/MINOR/MAJOR |
-| [workflows/before-code-change.md](workflows/before-code-change.md) | 有 ued/ 时改功能/修缺陷/改行为前 |
+| [workflows/before-code-change.md](workflows/before-code-change.md) | 编码前设计 Gate：改功能/修缺陷/改行为/改 ued/ 文档前（有 ued/ 或项目声明采用） |
 | [workflows/implement-from-design.md](workflows/implement-from-design.md) | 据已定设计实现代码 |
 | [workflows/runtime-config.md](workflows/runtime-config.md) | 解析作者/项目编码与作用域 README |
 
@@ -37,7 +37,7 @@
 
 | 文件 | 内容 |
 |------|------|
-| [project-agents-guide.md](project-agents-guide.md) | 为宿主生成 AGENTS.md（含设计优先改代码） |
+| [project-agents-guide.md](project-agents-guide.md) | 项目接入：根 AGENTS.md 托管块、常驻规则、旧式章节迁移、冒烟验证、检查器报告 |
 
 ## 非模板资源
 

@@ -1,0 +1,13 @@
+<!-- design-doc:begin block=2 -->
+## 设计优先（design-doc）
+
+本项目采用 design-doc 管理产品设计，设计目录为 `ued/`（尚未创建时同样适用）。技能入口：`.agents/skills/design-doc/SKILL.md`。
+
+1. **动手前先过 Gate。** 增加功能、修改功能、修复缺陷、改变产品可观察行为，或改动 `ued/` 内任何文档之前，**必须**先读 `.agents/skills/design-doc/references/workflows/before-code-change.md`，完成「编码前设计 Gate」，并在回复中输出该文件规定的 Gate 记录。不得因为任务简单、用户直接要求改代码、或自认已理解需求而跳过。
+2. **依据与顺序。** 只依据已入当前产品基线、revision 对齐的 `正式` 细项实现。设计缺失或有误，先补、改设计并经用户确认，再改代码。禁止先写代码、以后补文档。
+3. **状态交给流程。** 改 `正式` 文档前先经用户确认解冻；修订号、状态、基线与谱系字段只经脚本或确认流程写入，不手填。
+4. **范围漂移即停。** 实现中遇到设计之外的行为、数据结构、接口或约束，立即停下，回到 Gate。
+5. **完成要对照。** 完成后逐条对照所依据的设计条文，不以「测试通过」代替。改过设计目录后运行 `python3 .agents/skills/design-doc/scripts/check_docs.py -p <设计目录>`；报错先查规则，不靠改措辞过关。
+6. **设计目录只放设计。** `ued/` 内不得放可执行实现代码（算法、契约、状态机可以）。
+7. **多子系统结构。** 若 `ued/README.md` 含子系统注册表，系统级设计（注册表、依赖、发布）改用 `.agents/skills/system-design-doc/SKILL.md`；每个 `ued/{subsystem}/` 单独以其为 `<设计目录>` 运行上述检查。
+<!-- design-doc:end -->

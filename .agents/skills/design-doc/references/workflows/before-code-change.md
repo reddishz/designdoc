@@ -1,16 +1,58 @@
-# 变更代码前（消费侧，MANDATORY）
+# 编码前设计 Gate（消费侧，MANDATORY）
 
-> 项目存在 `ued/`，且用户意图是改功能、修缺陷/bug、改产品可观察行为、按需求实现某能力时 **MUST** 加载本流程。  
-> **先想清楚设计要不要改，再动代码。****MUST NOT** 先写代码再补设计。
+> 项目**声明采用 design-doc**（根 `AGENTS.md` 含托管块，见 [project-agents-guide.md](../project-agents-guide.md)）或已有 `ued/`，且用户意图是增加功能、改功能、修缺陷/bug、改产品可观察行为、按需求实现某能力，**或改动 `ued/` 内任何文档**时，**MUST** 先过本 Gate。  
+> **本 Gate 是第一步，不是收尾**：在第一次编辑 `ued/` 或代码**之前**读完并执行。先想清楚设计要不要改、状态能不能改，再动手。**MUST NOT** 先写代码再补设计；**MUST NOT** 先改正式文档再补解冻。
 
-**MUST 另读（按判定）**：需改设计 → [change-feature.md](change-feature.md) / [allocate-and-lock.md](allocate-and-lock.md) / [lifecycle.md](lifecycle.md)；仅实现偏离 → [implement-from-design.md](implement-from-design.md)。
+**MUST 另读**（按判定）：改/补设计 → [change-feature.md](change-feature.md) / [allocate-and-lock.md](allocate-and-lock.md) / [lifecycle.md](lifecycle.md)；可实现 → [implement-from-design.md](implement-from-design.md)。术语口径见 [status-definitions.md · 实现依据口径](../status-definitions.md#实现依据口径术语对照)。
 
-纯笔误、与规格无关的构建/环境失败等 MAY 直接改代码，但 **MUST** 在回复中写明「未触及设计对象」。
+## 步骤
 
-1. **定位**：在 `ued/` 与当前产品基线检索相关细项（关键词、编码、`--refs`、模块/接口名）。列出候选编码。
-2. **对照判定**（三选一，可组合）：
-   - **仅实现偏离**：文档与基线正确，代码不符 → 确认细项在当前基线后改代码（[implement-from-design.md](implement-from-design.md)）。
-   - **文档错误或过时**：设计与预期不符 → **先**修订文档（`正式` 须解冻；增量走 [change-feature.md](change-feature.md)），经 Checkpoint 定稿/漂移询问，**然后**才改代码。
-   - **文档缺失**：无对应细项 → **先**落码补设计，再定稿/入基线，**然后**才实现。
-3. **呈现**：改代码前短表说明「依据哪些编码 / 是否先改文档 / 是否需动基线」；须人审或解冻时 **MUST** 暂停。
-4. **禁止**：以「先改代码后面再补文档」「小改不用改设计」跳过本节；**MUST NOT** 把 `初稿`/`草案`/未入基线内容当作已批准规格去改代码（豁免见 [implement-from-design.md](implement-from-design.md)）。
+1. **定位**：在 `ued/` 与当前产品基线检索相关细项（关键词、编码、`--refs`、模块/接口名），列出候选编码。无候选 → 记为「无对应细项」。
+2. **读事实，不凭记忆**：对每个候选编码打开文档与 `baselines/{产品版本}.yaml`，记下 `细项状态`、文档与细项 `修订版本号`、基线 `items` 中的 revision。拟改 `ued/` 时同样列出拟动文档及其 `状态`。
+3. **判定**（四选一；涉及多个编码时取最严格者）：
+
+   | 判定 | 条件 | 后续 |
+   |------|------|------|
+   | **A 允许实现** | 设计正确，代码偏离；细项 `正式`、在当前基线 `items` 中、revision 对齐 | 进入 [implement-from-design.md](implement-from-design.md) |
+   | **B 先改设计** | 设计与预期不符或已过时 | **先**请求解冻确认（`正式` 须 `正式→草案`，修订号在解冻那一刻 +1），确认后才改文档；增量走 [change-feature.md](change-feature.md)；改完定稿并同步基线，**然后**才改代码 |
+   | **C 先补设计** | 无对应细项 | **先**分配编码并起草设计，经定稿、入基线，**然后**才依据该设计实施代码；向已 `正式` 的文档新增细项须先解冻该文档 |
+   | **D 暂停待人审** | 设计无需改但缺人决策：细项 `草案` / `初稿` 想豁免、正式细项未入基线或 revision 落后需 PATCH / MINOR、范围不清、判定不了 | 说明缺口与选项，等用户确认；**MUST NOT** 自行定稿、豁免或 `--bump-product` |
+
+   「设计未入基线」不是独立判定：它是 A 的前置不满足，按 D 处理。
+
+4. **输出 Gate 记录（MUST，动手之前，写在回复里）**：
+
+   ```text
+   编码前设计 Gate
+   - 设计依据：{编码列表；无则写「无对应细项」}
+   - 产品版本 / 基线：{vX.Y / vX.Y.Z；无基线写「无基线」}
+   - 设计状态：{各编码的 细项状态}
+   - revision（文档 / 基线）：{各编码对照；无则「—」}
+   - 拟改动 ued/ 文档：{路径与当前 状态；不改写「无」}
+   - 判定：A | B | C | D
+   - 后续动作：{下一步，含需用户确认的事项}
+   ```
+
+   判定为 B、C 时，后续动作 **MUST** 列出：要解冻的文档与细项、要起草或修订的编码、定稿与基线动作（PATCH / MINOR）。
+
+5. **一次确认**：B、C 的人审按下表合并，**避免把同一件事拆成多次追问**，但也不省略任何一次确认：
+
+   | 阶段 | 确认内容 |
+   |------|----------|
+   | 动 `正式` 文档前 | 解冻（B；C 中向 `正式` 文档新增细项时）。一次性列出所有要解冻的对象，用户一次确认 |
+   | 起草完成后 | **大纲与核心细项（Checkpoint 1 / 2）、定稿、基线动作合并为一次确认**：呈现起草内容、未冻结对象表与按升格后状态预判的 PATCH / MINOR，用户一次同意即连续执行；`MAJOR` 仍单独询问（见 [lifecycle.md](lifecycle.md) Checkpoint 5） |
+
+   全新项目（尚无 `正式` 文档）只有第二阶段这一次确认。确认之前 **MUST NOT** 改代码。
+
+## 免审声明
+
+仅限：纯笔误、与规格无关的构建/环境失败。这类请求 MAY 跳过判定 A–D，但 **MUST** 在回复中写一行：「未触及设计对象；已检索：{关键词 / 文档范围}」。
+
+- 「小改」「顺手改一下」「用户直接要求改代码」「我已经理解需求」**都不是**免审理由。
+- 改动 `ued/` 内文档**不适用**免审。
+
+## 禁止
+
+- **MUST NOT** 以「先改代码后面再补文档」「小改不用改设计」跳过本节。
+- **MUST NOT** 把 `初稿` / `草案` / 未入基线的内容当作已批准规格去改代码（豁免见 [implement-from-design.md](implement-from-design.md)）。
+- **MUST NOT** 手填修订号、状态、`引入版本` / `退出版本` 等谱系字段：修订号与状态只随受控状态转换变化，谱系由立新基线回写（见 [status-definitions.md](../status-definitions.md)、[product-version.md](../product-version.md)）。

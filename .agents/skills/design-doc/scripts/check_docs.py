@@ -345,6 +345,53 @@ def spec_version_key(ver: str) -> Tuple[int, ...]:
     return tuple(int(x) for x in ver.split("."))
 
 
+# 项目根 AGENTS.md 的 design-doc 托管块：`<!-- design-doc:begin block=N -->` … `<!-- design-doc:end -->`。
+# 块修订号 N 只在块正文变化时递增，与规范版本无关；块源在 assets/snippets/agents-block.md。
+AGENTS_BEGIN_RE = re.compile(r"^[ \t]*<!--\s*design-doc:begin\b([^>]*?)-->[ \t]*$", re.M)
+AGENTS_END_RE = re.compile(r"^[ \t]*<!--\s*design-doc:end\s*-->[ \t]*$", re.M)
+AGENTS_BLOCK_ATTR = re.compile(r"\bblock=(\d+)\s*$")
+
+
+AGENTS_LEGACY_HEAD = re.compile(r"^#{1,6}[ \t]*设计文档优先", re.M)
+AGENTS_RULE_REL = Path(".cursor") / "rules" / "design-doc-bootstrap.mdc"
+
+
+def _agents_block_body(text: str) -> Tuple[Optional[int], str]:
+    """取首个托管块的 (块修订号, 规范化正文)。正文为起止标记之间的行，去行尾空白与首尾空行。
+    无完整块返回 (None, "")。"""
+    b = AGENTS_BEGIN_RE.search(text)
+    if not b:
+        return None, ""
+    e = AGENTS_END_RE.search(text, b.end())
+    if not e:
+        return None, ""
+    attr = AGENTS_BLOCK_ATTR.search(b.group(1).strip())
+    if not attr:
+        return None, ""
+    lines = [ln.rstrip() for ln in text[b.end():e.start()].splitlines()]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    while lines and not lines[-1].strip():
+        lines.pop()
+    return int(attr.group(1)), "\n".join(lines)
+
+
+def installed_agents_block() -> Tuple[int, str]:
+    """已装技能的托管块：(块修订号, 规范化正文)；读不到返回 (0, "")。块源见 assets/snippets/agents-block.md。"""
+    try:
+        text = (SKILL_ROOT / "assets" / "snippets" / "agents-block.md").read_text(
+            encoding="utf-8")
+    except OSError:
+        return 0, ""
+    rev, body = _agents_block_body(text)
+    return (rev or 0), body
+
+
+def installed_agents_block_rev() -> int:
+    """已装技能的托管块修订号；读不到返回 0。"""
+    return installed_agents_block()[0]
+
+
 CODE_CELL = re.compile(
     PROJECT_PREFIX + r"([A-Z]{1,5}[0-9]?)-(\d{2,4})(?=$|[ \uff1a:\uff08(\-\u2014\u3001,])")
 BOLD_ATTR = re.compile(r"^\s*(?:[-*+]\s*)?\*\*(细项状态|状态)\*\*\s*[:\uff1a]\s*(.*)$")
@@ -2585,6 +2632,124 @@ class DesignDocChecker:
             print(f"INFO: 当前作用域有 {len(lag)} 篇文档尚未完成规范迁移"
                   f"（`规范版本` 缺失或低于 {target}）。本次基线仍可正常创建；"
                   "`spec_version` 仅记录创建时使用的规范版本。")
+
+    def _agents_md_candidates(self) -> List[Path]:
+        """项目根 AGENTS.md 的候选目录：按位置推定的项目根，加仓库根（含 `.git` / `.svn`
+        的最近祖先）。单系统 `ued/` 的父目录；子系统 `ued/{subsystem}/` 取 `ued/` 的父目录。"""
+        scope = self.ued_path.resolve()
+        parent = scope.parent
+        cands = [parent.parent if parent.name == "ued" else parent]
+        for p in [scope, *scope.parents]:
+            if (p / ".git").exists() or (p / ".svn").exists():
+                if p not in cands:
+                    cands.append(p)
+                break
+        return cands
+
+    def check_agents_block(self) -> None:
+        """项目根 AGENTS.md 托管块、旧式章节与 design-doc 常驻规则。
+
+        规则本体见 references/project-agents-guide.md。无 `ued/` 时仍执行（接入前即需检查）。
+        托管块：缺文件 / 缺块 / 不完整 / 块号落后或超前 / 块号相同但正文与已装块不一致。
+        旧式章节：块外残留未带标记的「设计文档优先」章节，须替换为托管块。
+        常驻规则：项目 `.cursor/rules/design-doc-bootstrap.mdc` 缺失。
+        检查器只能证明机械一致；是否被 Agent 遵循只能靠对话冒烟验证。
+        """
+        installed, installed_body = installed_agents_block()
+        if not installed:
+            return
+        cands = self._agents_md_candidates()
+        files = [c / "AGENTS.md" for c in cands if (c / "AGENTS.md").is_file()]
+        if not files:
+            self.add_issue("WARNING", "项目缺 AGENTS.md",
+                           f"{cands[0] / 'AGENTS.md'}: 项目根没有 AGENTS.md，约束没有常驻入口；"
+                           "按 references/project-agents-guide.md 写入 design-doc 托管块"
+                           "（写入前须用户确认）")
+            self._check_agent_rule(cands[0])
+            return
+        chosen = None
+        text = ""
+        for f in files:
+            try:
+                t = f.read_text(encoding="utf-8")
+            except OSError:
+                continue
+            if AGENTS_BEGIN_RE.search(t):
+                chosen, text = f, t
+                break
+        if chosen is None:
+            self.add_issue("WARNING", "AGENTS.md 缺设计优先托管块",
+                           f"{files[0]}: 有 AGENTS.md 但没有 design-doc 托管块；"
+                           "按 references/project-agents-guide.md 追加整块，不改块外内容")
+            try:
+                legacy_text = files[0].read_text(encoding="utf-8")
+            except OSError:
+                legacy_text = ""
+            self._check_legacy_section(files[0], text=legacy_text)
+            self._check_agent_rule(files[0].parent)
+            return
+        self._check_agent_block_in(chosen, text, installed, installed_body)
+        self._check_legacy_section(chosen, text=text)
+        self._check_agent_rule(chosen.parent)
+
+    def _check_agent_block_in(self, chosen: Path, text: str,
+                              installed: int, installed_body: str) -> None:
+        begins = AGENTS_BEGIN_RE.findall(text)
+        ends = AGENTS_END_RE.findall(text)
+        if len(begins) != 1 or len(ends) != 1 or (
+                AGENTS_BEGIN_RE.search(text).start() > AGENTS_END_RE.search(text).start()):
+            self.add_issue("WARNING", "AGENTS.md 托管块不完整",
+                           f"{chosen}: design-doc 托管块的起止标记须各一个且起在止前；"
+                           "按 references/project-agents-guide.md 整块重写")
+            return
+        rev, body = _agents_block_body(text)
+        if rev is None:
+            self.add_issue("WARNING", "AGENTS.md 托管块不完整",
+                           f"{chosen}: 起标记缺 `block=N`（N 为整数）；"
+                           "按 references/project-agents-guide.md 整块重写")
+            return
+        if rev > installed:
+            self.add_issue("ERROR", "AGENTS.md 托管块超前",
+                           f"{chosen}: 块修订号 {rev} 高于已装技能 {installed}；"
+                           "技能回退或版本不一致，MUST 恢复对应版本的技能包后再校验")
+        elif rev < installed:
+            self.add_issue("WARNING", "AGENTS.md 托管块落后",
+                           f"{chosen}: 块修订号 {rev} 低于已装技能 {installed}；"
+                           "按 references/project-agents-guide.md 整块更新（须用户确认），"
+                           "块外内容不动")
+        elif body != installed_body:
+            self.add_issue("WARNING", "AGENTS.md 托管块正文不一致",
+                           f"{chosen}: 块号同为 {rev}，但正文与已装块源不同（被手改，或技能块内容变了"
+                           "却未递增块号）；按 references/project-agents-guide.md 整块替换为已装版本"
+                           "（须用户确认）。个性化内容请写在块外")
+
+    def _check_legacy_section(self, chosen: Path, text: str) -> None:
+        """块外残留旧式「设计文档优先」章节（上一版指南生成，无标记）：与托管块规则并存会冲突。"""
+        b = AGENTS_BEGIN_RE.search(text)
+        e = AGENTS_END_RE.search(text, b.end()) if b else None
+        outside = text if not b or not e else text[:b.start()] + text[e.end():]
+        if AGENTS_LEGACY_HEAD.search(outside):
+            self.add_issue("WARNING", "AGENTS.md 含旧式设计优先章节",
+                           f"{chosen}: 块外有未带标记的「设计文档优先」章节（旧版生成）；与托管块"
+                           "并存会出现两套规则。按 references/project-agents-guide.md 删除该章节，"
+                           "并以托管块替代（须用户确认）")
+
+    def _check_agent_rule(self, project_root: Path) -> None:
+        """项目级常驻规则 `.cursor/rules/design-doc-bootstrap.mdc`：宿主每次会话注入的提醒。"""
+        rule = project_root / AGENTS_RULE_REL
+        if not rule.is_file():
+            self.add_issue("WARNING", "缺 design-doc 常驻规则",
+                           f"{rule}: 没有 always-apply 常驻规则，改功能前的 Gate 不会每次会话被提醒；"
+                           "按 references/project-agents-guide.md 写入（写入前须用户确认）")
+            return
+        try:
+            t = rule.read_text(encoding="utf-8")
+        except OSError:
+            return
+        if "alwaysApply: true" not in t or "design-doc" not in t:
+            self.add_issue("WARNING", "缺 design-doc 常驻规则",
+                           f"{rule}: 规则文件缺 `alwaysApply: true` 或未指向 design-doc；"
+                           "按 references/project-agents-guide.md 重写")
 
     def check_spec_versions(self) -> None:
         """规范版本（逐篇迁移记录）：作用域 README `规范版本目标` 与各文档 `规范版本`。
@@ -4990,6 +5155,7 @@ class DesignDocChecker:
         self.check_version_flow()
         self.check_readme_product_version()
         self.check_spec_versions()
+        self.check_agents_block()
         self.check_product_baselines()
         self.check_chapter_references()
         self.check_structure()

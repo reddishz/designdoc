@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.11-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.12-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.12 | 新增编码前设计 Gate（动手前输出 Gate 记录，四种判定，改 `ued/` 同样适用）、实现中范围漂移即停与完成后逐条对照；项目接入：根 `AGENTS.md` 托管块（检查块号与正文）、项目级 always-apply 常驻规则、旧式章节迁移；检查器无 `ued/` 时仍检查接入项；术语口径表，「落码」统一为「分配编码」 |
 | v10.11 | 新增规范版本记录：文档封面 `规范版本` 逐篇记录已对齐的规范，作用域 README `规范版本目标` 声明升级要求，基线 `spec_version` 盖章创建时规范；升级影响表见 `references/spec-upgrade.md` |
 | v10.0 | 移除内置多应用模式：`design-doc` 只管单一作用域，多子系统拆到独立 skill `system-design-doc`（注册表、依赖钉住、系统发布）；共享库按普通子系统登记，不再固定 `shared/` |
 | v9.0 | 把变更分为维护性与实质性：不改含义的整理记 `N（维护）`，不动状态、修订号与基线；首份基线在开发期可原地增删成员 |
