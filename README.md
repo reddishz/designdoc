@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.26-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.27-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.27 | 借鉴 ATAM（CMU/SEI-2000-TR-004）完善设计论证与评审（不引入评估流程、不新增类型）：ADR 后果增质量目标影响与权衡边界；涉及架构决策或质量目标的 RSK 写明决策、质量响应与判断理由；L3 评审增重要性 × 感知风险提示；NFR 口径补 ATAM 场景概念映射；检查器无变更 |
 | v10.26 | 借鉴 SQuaRE（25030 / 25019 / 25002）完善质量需求概念与评审：L6 追溯矩阵为选用汇总（列可裁剪）；MET 评价依据可来自 AC / EVAL / 外部监控（引用按关系语义区分）；新增《质量术语与质量需求的目标实体》；评审增目标实体与条件、MET 评价路径、矩阵与引用一致三项；SCN `预期结果` 选填；检查器无变更 |
 | v10.25 | 依据 w3trade 案例核对修正：NFR 可验证口径分数值型 / 判定型；属性存在性定级（SHOULD 不机检）；新增《TC 测试类型与追溯》；锁定类型越层定义补记 v4.6 生效并加 WARNING；检查器新增测试类型 / 测试优先级枚举 ERROR |
 | v10.24 | 修正 25010 吸收的三处语义：功能适合性子特征单列、不并入 29148 Complete；适用性表改三种判断；旧类别映射仅作人工建议 |
