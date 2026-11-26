@@ -13,7 +13,7 @@ description: >
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.16"
+  version: "10.17"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
