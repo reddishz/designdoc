@@ -399,7 +399,7 @@ def case(name: str, files: Dict[str, str]) -> SystemChecker:
 
 
 def main() -> int:
-    print("system-design-doc v2.1 fixtures")
+    print("system-design-doc v2.2 fixtures")
 
     # ---- 基础结构与注册表 ----
     c = case("valid", valid_files())

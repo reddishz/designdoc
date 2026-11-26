@@ -8,7 +8,7 @@ description: >
   子系统内部的分层设计、组件（CMP）、编码与产品基线由 design-doc 负责。
 license: MIT
 metadata:
-  version: "2.1"
+  version: "2.2"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [system, subsystem, architecture, design, documentation, release, dependency]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""系统 / 子系统结构与架构一致性检查器（system-design-doc v2.1）。
+"""系统 / 子系统结构与架构一致性检查器（system-design-doc v2.2）。
 
 只检查系统级架构权威与编排，不检查子系统文档内部规则：
 

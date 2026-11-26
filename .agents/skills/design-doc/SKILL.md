@@ -13,7 +13,7 @@ description: >
   亦用于创建、审查、更新设计文档与基线发版。
 license: MIT
 metadata:
-  version: "10.27"
+  version: "10.28"
   author: "designdoc"
   spec-compliance: 遵循 Agent Skills 开放标准
   tags: [design, documentation, product, architecture, specification]
@@ -118,6 +118,7 @@ compatibility: 需能访问 ued/ 目录
 | 产品版本 / 基线 | [product-version.md](references/product-version.md) |
 | 层级 / 按需启用 | [layer-system.md](references/layer-system.md) |
 | 术语 / 全局术语表 / `所用术语` | [glossary-conventions.md](references/glossary-conventions.md) |
+| 信息安全威胁识别（STRIDE） | [security-threat-analysis.md](references/security-threat-analysis.md) |
 | 细项 / 文档作废 | [item-deprecation.md](references/item-deprecation.md) / [doc-deprecation.md](references/doc-deprecation.md) |
 
 ## 范围与工具
