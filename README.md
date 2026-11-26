@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.25-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.26-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.26 | 借鉴 SQuaRE（25030 / 25019 / 25002）完善质量需求概念与评审：L6 追溯矩阵为选用汇总（列可裁剪）；MET 评价依据由评价记录 `来源` 指向；新增《质量术语与质量需求的目标实体》；评审增目标实体与条件、MET 评价路径、矩阵与引用一致三项；SCN `预期结果` 选填；检查器无变更 |
 | v10.25 | 依据 w3trade 案例核对修正：NFR 可验证口径分数值型 / 判定型；属性存在性定级（SHOULD 不机检）；新增《TC 测试类型与追溯》；锁定类型越层定义补记 v4.6 生效并加 WARNING；检查器新增测试类型 / 测试优先级枚举 ERROR |
 | v10.24 | 修正 25010 吸收的三处语义：功能适合性子特征单列、不并入 29148 Complete；适用性表改三种判断；旧类别映射仅作人工建议 |
 | v10.23 | NFR 类别按 ISO/IEC 25010:2023 改名（安全拆 Security / Safety）并给迁移提示；新增产品质量属性参考；基线整体判断增加质量属性适用性表 |
