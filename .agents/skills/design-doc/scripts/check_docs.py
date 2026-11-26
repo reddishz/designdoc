@@ -25,7 +25,8 @@ DesignDoc 文档检查工具
 - 属性行组段位：治理段（`细项状态` / `修订版本号` / `创建日期` / `最后修订日期`）齐备且居首、发版谱系段（有则）次之、追溯段居末
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期；细项 `草案` 而文档 `正式` 为门控违规
 - 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING；缺 `来源` → ERROR
-- 正式 `SCN` 无任何 FR / NFR 的 `来源` 指向它 → INFO（场景无需求承接；作用域尚无 FR / NFR 时不报）
+- 正式 FR/NFR 的 `来源` 只指向自身或下层 → 同缺 `来源`（ERROR）
+- 正式 `SCN` 没有 FR / NFR 沿 `来源` 链（含经 UC / 其他需求）追溯到它 → INFO（场景无需求承接；作用域尚无 FR / NFR 时不报）
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / EVAL / REF 的必备小节；`DEC` 不在 L2 定义（允许 L3 / L4 / L5）
@@ -475,6 +476,7 @@ ATTR_NAME_ARROW = re.compile(r"`([^`]+)`\s*\u2192")
 GOV_SEGMENT = ("细项状态", "修订版本号", "创建日期", "最后修订日期")
 LINEAGE_SEGMENT = ("引入版本", "退出版本")
 TRACE_SEGMENT = ("出处", "来源", "依赖")  # 追溯段固定序；`依赖` 不豁免依据方向
+LAYER_ORDER = ["L0", "L1", "L2", "L3", "L4", "L5", "L6"]  # 自上而下；`来源` 不得只指向下层
 REV_VALUE = re.compile(r"^[1-9]\d*$")
 DATE_VALUE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 DATE_IN_TEXT = re.compile(r"\d{4}-\d{2}-\d{2}")   # 表格单元格内提取日期（可带后缀说明）
@@ -4072,12 +4074,25 @@ class DesignDocChecker:
         named_codes: Dict[str, Set[str]] = {n: set() for n in DEP_EXCLUSIVE_ATTRS}
         has_verify = False
         has_source = False
+        source_seen = False
+        own_rank = LAYER_ORDER.index(doc.layer) if doc.layer in LAYER_ORDER else None
         for name, val, lineno in attrs:
             blank = (not val) or "{" in val or val.lower() in EMPTY_MARKS
             if name == "验证方式" and not blank:
                 has_verify = True
-            if name == "来源" and not blank and self._attr_codes(val):
-                has_source = True
+            if name == "来源" and not blank:
+                for sc in self._attr_codes(val):
+                    sc = self.resolve_code(sc)
+                    source_seen = True
+                    if sc == item.code:
+                        continue            # 自指不是依据
+                    tdoc = self._code_target_doc(sc)
+                    t_rank = (LAYER_ORDER.index(tdoc.layer)
+                              if tdoc is not None and tdoc.layer in LAYER_ORDER else None)
+                    # 目标不在本作用域或无层级（REF、`SYS-*` 等）视为有效；
+                    # 引用是否存在由 check_references 负责
+                    if own_rank is None or t_rank is None or t_rank <= own_rank:
+                        has_source = True
             if blank:
                 continue
             codes = [self.resolve_code(c) for c in self._attr_codes(val)]
@@ -4094,10 +4109,13 @@ class DesignDocChecker:
                            "的 FR / NFR SHOULD 有 `验证方式` 指向 AC；缺行不阻断定稿")
         if (item.type_code in ("FR", "NFR") and item.item_status == "正式"
                 and not has_source):
+            why = ("`来源` 只指向自身或下层对象，没有有效的上层依据" if source_seen
+                   else "缺 `来源`")
             self.add_issue("ERROR", "正式需求缺来源",
                            f"{doc.path}:{item.line} `{item.code}`: `细项状态` 为 `正式` "
-                           "的 FR / NFR MUST 有 `来源`（至少一个指向上层依据的标准链接）；"
-                           "无编码依据的写 `出处` 不能替代，应先为依据建 REF / PRN 等细项")
+                           f"的 FR / NFR MUST 有指向上层依据（本层或更上层、非自身）的 `来源`：{why}；"
+                           "`出处` 不能替代。外部资料登记为 REF 再引用，用户反馈 / 访谈等"
+                           "先写成 L1 的 SCN / STK / CON")
 
         seen_dep: Set[str] = set()
         for c, lineno in dep_codes:
@@ -4375,26 +4393,35 @@ class DesignDocChecker:
                     "产品承诺请改用 `FR` / `NFR`，选型类决策可移至 L3（ADR 或概念架构）或 L4/L5")
 
     def check_scn_coverage(self) -> None:
-        """正式 `SCN` 无任何 FR / NFR 的 `来源` 指向它 → INFO（Complete 的机检下限）。
+        """正式 `SCN` 没有任何 FR / NFR 经 `来源` 链（直接或经 UC / 其他需求）承接 → INFO。
 
         只判「零承接」；承接是否充分（场景关键内容是否都被覆盖）归评审。
         作用域内尚无任何 FR / NFR 时不报（L2 还没开始写，逐条报只是噪音）。
         """
-        cited: Set[str] = set()
-        has_req = False
+        src_of: Dict[str, Set[str]] = {}
+        starts: List[str] = []
         for doc in self.docs:
             if doc.archived:
                 continue
             for item in self._doc_items(doc):
-                if (item.type_code not in ("FR", "NFR") or not item.defined
-                        or item.path != doc.path or item.item_status == "废弃"):
+                if not item.defined or item.path != doc.path or item.item_status == "废弃":
                     continue
-                has_req = True
+                srcs = src_of.setdefault(item.code, set())
                 for name, val, _ in self._attr_group(doc, item.line - 1):
                     if name == "来源":
-                        cited.update(self.resolve_code(c) for c in self._attr_codes(val))
-        if not has_req:
+                        srcs.update(self.resolve_code(c) for c in self._attr_codes(val))
+                if item.type_code in ("FR", "NFR"):
+                    starts.append(item.code)
+        if not starts:
             return
+        # 沿 `来源` 链向上追：FR → UC → SCN、FR → FR → SCN 都算承接
+        cited: Set[str] = set()
+        stack = list(starts)
+        while stack:
+            for s in src_of.get(stack.pop(), ()):
+                if s not in cited:
+                    cited.add(s)
+                    stack.append(s)
         for doc in self.docs:
             if doc.archived:
                 continue
@@ -4405,7 +4432,7 @@ class DesignDocChecker:
                 self.add_issue(
                     "INFO", "场景无需求承接",
                     f"{doc.path}:{item.line} `{item.code}`: 正式 `SCN` 没有任何 FR / NFR 的 "
-                    "`来源` 指向它；确认是否漏写需求，或该场景不在本期范围（后者在场景正文说明）")
+                    "`来源` 链（含经 UC / 其他需求）追溯到它；确认是否漏写需求，或该场景不在本期范围（后者在场景正文说明）")
 
     def _item_block(self, doc: DocInfo, code: str) -> str:
         return "\n".join(doc.lines[i - 1] for i in self._own_lines(doc, code, block=True))
@@ -4747,7 +4774,7 @@ class DesignDocChecker:
 
     def check_layer_references(self) -> None:
         """层级引用关系：下层文档应引用上层文档编码。"""
-        layer_order = ["L0", "L1", "L2", "L3", "L4", "L5", "L6"]
+        layer_order = LAYER_ORDER
         for doc in self.docs:
             if not doc.layer or doc.layer == "L0" or doc.archived:
                 continue

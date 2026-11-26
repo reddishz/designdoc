@@ -2266,13 +2266,17 @@ def run_trace_coverage_cases():
 | 1 | 2026-11-26 | 初稿 |
 """
 
-    def titles(l1_body, l2_body):
+    def titles(l1_body, l2_body, l3_body=None):
         with tempfile.TemporaryDirectory() as td:
             scope = Path(td) / "ued"
             (scope / "L1-stakeholder").mkdir(parents=True)
             (scope / "README.md").write_text(readme, encoding="utf-8")
             (scope / "L1-stakeholder" / "TRC-L1-001.md").write_text(
                 doc("TRC-L1-001", "L1", l1_body), encoding="utf-8")
+            if l3_body is not None:
+                (scope / "L3-architecture").mkdir()
+                (scope / "L3-architecture" / "TRC-L3-001.md").write_text(
+                    doc("TRC-L3-001", "L3", l3_body), encoding="utf-8")
             if l2_body is not None:
                 (scope / "L2-requirements").mkdir()
                 (scope / "L2-requirements" / "TRC-L2-001.md").write_text(
@@ -2297,8 +2301,22 @@ def run_trace_coverage_cases():
          block("TRC-NFR-001", "响应", "- **类别**：性能\n") + block("TRC-FR-001", "下单", src),
          ["正式需求缺来源"]),
     ]
-    for name, l1, l2, want in cases:
-        got = sorted(titles(l1, l2))
+    self_src = "- **来源**：[TRC-FR-001（下单）](#trc-fr-001)\n"
+    low_src = "- **来源**：[TRC-CMP-001（组件）](../L3-architecture/TRC-L3-001.md#trc-cmp-001)\n"
+    uc_src = "- **来源**：[TRC-UC-001（下单用例）](#trc-uc-001)\n"
+    scn_via_uc = block("TRC-UC-001", "下单用例", src) + block("TRC-FR-001", "下单", uc_src)
+    cases += [
+        ("来源只指向自身 → ERROR", scn,
+         block("TRC-FR-001", "下单", self_src), ["正式需求缺来源", "场景无需求承接"]),
+        ("来源只指向下层 → ERROR", scn,
+         block("TRC-FR-001", "下单", low_src), ["正式需求缺来源", "场景无需求承接"],
+         block("TRC-CMP-001", "组件")),
+        ("经 UC 链承接 SCN → 不报", scn, scn_via_uc, []),
+    ]
+    for case in cases:
+        name, l1, l2, want = case[:4]
+        l3 = case[4] if len(case) > 4 else None
+        got = sorted(titles(l1, l2, l3))
         if got != sorted(want):
             fails.append((name, got, sorted(want)))
     for name, got, want in fails:
