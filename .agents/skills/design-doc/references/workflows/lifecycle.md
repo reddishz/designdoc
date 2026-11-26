@@ -38,9 +38,9 @@ AI **MUST NOT** 自行升格。
 
 1. **提交提示**：是否提交 git/svn。「暂不提交」则跳过 2–5。
 2. **未冻结扫描**：仅本轮 AI 改过的文件，收集 `初稿`/`草案`。
-3. **呈现与确认**：表列未冻结对象；**MUST** 附「未冻结或未入当前产品基线不得作为实现依据」。本轮拟转正式的 FR / NFR **MUST** 先呈现[质量报告](../review-guidelines.md#需求质量与定稿处理)（含[需求集合检查](../review-guidelines.md#需求集合检查定稿前)），存在 A 类问题时先修正；用户仍确认定稿的，按[带未决项定稿](../review-guidelines.md#需求质量与定稿处理)记录。
+3. **呈现与确认**：表列未冻结对象；**MUST** 附「未冻结或未入当前产品基线不得作为实现依据」。本轮拟转正式的 FR / NFR **MUST** 先呈现[质量报告](../review-guidelines.md#需求质量与定稿处理)（含[需求集合检查](../review-guidelines.md#需求集合检查)的定稿锚点），存在 A 类问题时先修正；用户仍确认定稿的，按[带未决项定稿](../review-guidelines.md#需求质量与定稿处理)记录。
 4. **升格与提交**：确认者 → `正式`（定稿不加修订号；**定稿不写** `baselines/`）。升格自底向上。细项/文档定稿按须人审与[本文引用 · 文档定稿](../coding-system.md#审查与定稿时机)。再按指示 commit。
-5. **基线漂移（MUST 呈现）**：未选暂不提交时，按 [漂移](../product-version.md#相对当前基线的漂移) 列短表。无基线→问首份；首份有漂移→建议 **PATCH**；非首份仅 revision 落后→建议 **PATCH**，有成员进出→**MUST** 建议 **MINOR**；命中条件再问 **MAJOR**。无漂移不追问。**MUST NOT** 未经确认 `--bump-product`。
+5. **基线漂移（MUST 呈现）**：未选暂不提交时，按 [漂移](../product-version.md#相对当前基线的漂移) 列短表。无基线→问首份；首份有漂移→建议 **PATCH**；非首份仅 revision 落后→建议 **PATCH**，有成员进出→**MUST** 建议 **MINOR**；命中条件再问 **MAJOR**。基线有成员增删（建议 MINOR，或首份基线 PATCH 增删成员）时，另 **MUST** 先按[需求集合检查](../review-guidelines.md#需求集合检查)对 `added` / `removed` 作整体判断；仅同步 revision 不触发。无漂移不追问。**MUST NOT** 未经确认 `--bump-product`。
 
 **Gate 触发的合并确认**：本轮由 [before-code-change.md](before-code-change.md) 判定 B / C 触发（设计须先于代码）时，第 3、5 步合并为**一次呈现**：未冻结对象表，加按升格后状态预判的基线动作（PATCH / MINOR），两项动作 **MUST** 分别写明。用户一次同意即按序升格并执行所建议的基线动作；`MAJOR` 仍单独询问。未得到该同意前 **MUST NOT** 升格、动基线或改代码。
 
