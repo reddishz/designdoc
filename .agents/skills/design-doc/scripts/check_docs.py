@@ -30,6 +30,8 @@ DesignDoc 文档检查工具
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / EVAL / REF 的必备小节；`DEC` 不在 L2 定义（允许 L3 / L4 / L5）
+- 锁定类型越层定义 → WARNING（`FR` / `NFR` / `AC` / `UC` 只在 L2，`TC` 只在 L6 等；废弃项与无层级文档不判）
+- 封闭枚举取值：NFR `类别`、FR / NFR `优先级`、TC `测试类型` / `测试优先级`（取值非法 → ERROR）
 - `初稿` / `草案` 对象的定稿提醒（不阻断）
 - `--check-templates`：`assets/templates/` 的哨兵房规（成对、唯一 H1、无残留外层围栏、使用说明 / 写作约束 / 技能包路径未混入待复制正文），以及技能包内部 `文件.md#锚点` 可达性
 - `--instantiate TPL`：剥除哨兵输出模板实例化后的正文，供预览评估
@@ -499,6 +501,18 @@ NFR_CATEGORY_LEGACY = {   # 10.23 前的旧值 → 迁移提示（不自动改�
     "可移植性": "灵活性", "安全": "信息安全（Security）或产品安全（Safety），按内容判定",
 }
 FR_NFR_PRIORITY = ("P0", "P1", "P2")
+TC_TEST_TYPES = ("功能", "集成", "系统", "性能", "安全")   # TC `测试类型` 封闭枚举
+TC_TEST_TYPE_HINTS = {   # 常见的非枚举写法 → 提示（不自动改写）
+    "非功能": "「非功能」不是取值：性能、安全按质量属性选，其余（可靠性、兼容性等）取 `系统`，"
+              "质量属性归属由 `验收标准` → AC → NFR `类别` 表达",
+}
+# 锁定类型 → 唯一允许的定义层（coding-system.md ·《细项定义层级》·「锁定」；自 v4.6 起 MANDATORY）
+TYPE_LAYER_LOCK = {
+    "GOL": "L0", "MET": "L0", "STK": "L1", "SCN": "L1",
+    "FR": "L2", "NFR": "L2", "UC": "L2", "AC": "L2",
+    "PRN": "L3", "CMP": "L3", "IF": "L4", "ACT": "L4", "DOM": "L4",
+    "ALG": "L5", "TC": "L6",
+}
 DEP_EXCLUSIVE_ATTRS = (
     "来源", "处理规则", "所属组件", "参与者", "验证方式", "满足需求",
 )
@@ -4172,7 +4186,7 @@ class DesignDocChecker:
 
     def _check_typed_enums(self, doc: DocInfo, item: ItemInfo,
                            attrs: List[Tuple[str, str, int]]) -> None:
-        """NFR `类别`、FR/NFR `优先级` 的封闭枚举。"""
+        """NFR `类别`、FR/NFR `优先级`、TC `测试类型` / `测试优先级` 的封闭枚举。"""
         for name, val, lineno in attrs:
             val = val.strip()
             if (not val) or "{" in val:
@@ -4196,6 +4210,23 @@ class DesignDocChecker:
                 if val not in FR_NFR_PRIORITY:
                     self.add_issue("ERROR", "优先级取值非法",
                                    f"{doc.path}:{lineno} `{item.code}`: `优先级` '{val}' "
+                                   "MUST 为 " + " / ".join(FR_NFR_PRIORITY))
+            if item.type_code == "TC" and name == "测试类型":
+                parts = [p.strip() for p in val.split("/") if p.strip()]
+                if parts and all(p in TC_TEST_TYPES for p in parts) and "/" in val:
+                    continue            # 模板枚举罗列，尚未选定
+                if val not in TC_TEST_TYPES:
+                    hint = f"；{TC_TEST_TYPE_HINTS[val]}" if val in TC_TEST_TYPE_HINTS else ""
+                    self.add_issue("ERROR", "测试类型取值非法",
+                                   f"{doc.path}:{lineno} `{item.code}`: `测试类型` '{val}' "
+                                   f"不在封闭枚举 {' / '.join(TC_TEST_TYPES)} 内{hint}")
+            if item.type_code == "TC" and name == "测试优先级":
+                parts = [p.strip() for p in val.split("/") if p.strip()]
+                if parts and all(p in FR_NFR_PRIORITY for p in parts) and "/" in val:
+                    continue
+                if val not in FR_NFR_PRIORITY:
+                    self.add_issue("ERROR", "测试优先级取值非法",
+                                   f"{doc.path}:{lineno} `{item.code}`: `测试优先级` '{val}' "
                                    "MUST 为 " + " / ".join(FR_NFR_PRIORITY))
 
     def _check_replacement_value(self, doc: DocInfo, item: ItemInfo,
@@ -4399,6 +4430,33 @@ class DesignDocChecker:
                     "WARNING", "DEC 定义层级不允许",
                     f"{doc.path}:{item.line} `{item.code}`: `DEC` 不在 L2 定义（允许 L3 / L4 / L5）；"
                     "产品承诺请改用 `FR` / `NFR`，选型类决策可移至 L3（ADR 或概念架构）或 L4/L5")
+
+    def check_type_layer(self) -> None:
+        """锁定类型只能在其所回答的那一层定义（越层 → WARNING）。
+
+        房规见 `references/coding-system.md` ·《细项定义层级（MANDATORY）》·「锁定」：
+        `FR` / `NFR` / `AC` / `UC` 只在 L2，`GOL` / `MET` 只在 L0，`STK` / `SCN` 只在 L1，
+        `PRN` / `CMP` 只在 L3，`IF` / `ACT` / `DOM` 只在 L4，`ALG` 只在 L5，`TC` 只在 L6。
+        该规则自 v4.6 起即为 MANDATORY；检查器按 WARNING 报，让存量文档迁移期不被阻断。
+        类型码不得就地改——作废后在正确层新建，原编号永不复用。已 `废弃` 的细项无法再
+        迁移，不报；`DEC` 的层级另由 `check_dec_layer` 判定；无层级的文档（ADR / EVAL /
+        REF / README）不判。
+        """
+        for doc in self.docs:
+            if doc.archived or doc.layer not in LAYER_ORDER:
+                continue
+            for item in self._doc_items(doc):
+                if not item.defined or item.path != doc.path or item.item_status == "废弃":
+                    continue
+                want = TYPE_LAYER_LOCK.get(item.type_code)
+                if want is None or want == doc.layer:
+                    continue
+                self.add_issue(
+                    "WARNING", "类型码定义层级不符",
+                    f"{doc.path}:{item.line} `{item.code}`: `{item.type_code}` 只在 {want} 定义，"
+                    f"本文档属 {doc.layer}；其他层只引用，MUST NOT 开同类型定义块。"
+                    "类型码不得就地改：在正确层新建并作废本项（原编号永不复用）；"
+                    "若本句实为设计手段，应作废后改用 `ALG` / `CON` / `RUL` / `IF` / `FLW`")
 
     def check_scn_coverage(self) -> None:
         """正式 `SCN` 没有任何 FR / NFR 经 `来源` 链（直接或经 UC / 其他需求）承接 → INFO。
@@ -5294,6 +5352,7 @@ class DesignDocChecker:
         self.check_def_blocks()
         self.check_anchor_reachability()
         self.check_dec_layer()
+        self.check_type_layer()
         self.check_scn_coverage()
         self.check_deprecation()
         self.check_draft_finalization()

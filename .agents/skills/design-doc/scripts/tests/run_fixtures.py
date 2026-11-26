@@ -99,6 +99,14 @@ EXPECT = {
     "L2-939-nfr-cat-ok":          set(),
     "L2-940-nfr-cat-bad":         {"类别取值非法"},
     "L2-986-nfr-cat-legacy":      {"类别取值非法"},
+    # TC `测试类型` / `测试优先级` 封闭枚举（可靠性等无专属取值者取 `系统`；`非功能` 非取值）
+    "L6-987-tc-type-ok":          set(),
+    "L6-988-tc-type-nonfunc":     {"测试类型取值非法"},
+    "L6-989-tc-prio-bad":         {"测试优先级取值非法"},
+    # 锁定类型只在其所回答的层定义；废弃项无法迁移，不报
+    "L5-990-fr-wrong-layer":      {"类型码定义层级不符"},
+    "L2-991-tc-wrong-layer":      {"类型码定义层级不符"},
+    "L5-992-void-wrong-layer-ok": set(),
     "L2-941-formal-no-verify":    {"正式需求缺验证方式"},
     "L2-942-formal-tbd":          {"正式文档含待定"},
     "L2-943-chugao-tbd-ok":       set(),
