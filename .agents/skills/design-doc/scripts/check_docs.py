@@ -24,7 +24,8 @@ DesignDoc 文档检查工具
   （《属性行定义集（封闭）》，白名单外一律 ERROR）、前三部分连续
 - 属性行组段位：治理段（`细项状态` / `修订版本号` / `创建日期` / `最后修订日期`）齐备且居首、发版谱系段（有则）次之、追溯段居末
 - 修订号不变式：`初稿` → rev = 1、`草案` → rev ≥ 2、`最后修订日期` 不晚于本文档 `变更记录` 最新日期；细项 `草案` 而文档 `正式` 为门控违规
-- 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING
+- 正式文档含 TBD / 待定 等未决标记 → ERROR；正式 FR/NFR 缺 `验证方式` → WARNING；缺 `来源` → ERROR
+- 正式 `SCN` 无任何 FR / NFR 的 `来源` 指向它 → INFO（场景无需求承接；作用域尚无 FR / NFR 时不报）
 - `--refs CODE`：反查出现位置，并列出依赖两表（谁依赖我 / 我依赖谁）
 - 锚点可达性：链接的 `#fragment` 在目标文档的锚点集合（显式 id ∪ 标题 slug）中存在
 - ADR / EVAL / REF 的必备小节；`DEC` 不在 L2 定义（允许 L3 / L4 / L5）
@@ -4070,10 +4071,13 @@ class DesignDocChecker:
         dep_codes: List[Tuple[str, int]] = []
         named_codes: Dict[str, Set[str]] = {n: set() for n in DEP_EXCLUSIVE_ATTRS}
         has_verify = False
+        has_source = False
         for name, val, lineno in attrs:
             blank = (not val) or "{" in val or val.lower() in EMPTY_MARKS
             if name == "验证方式" and not blank:
                 has_verify = True
+            if name == "来源" and not blank and self._attr_codes(val):
+                has_source = True
             if blank:
                 continue
             codes = [self.resolve_code(c) for c in self._attr_codes(val)]
@@ -4088,6 +4092,12 @@ class DesignDocChecker:
             self.add_issue("WARNING", "正式需求缺验证方式",
                            f"{doc.path}:{item.line} `{item.code}`: `细项状态` 为 `正式` "
                            "的 FR / NFR SHOULD 有 `验证方式` 指向 AC；缺行不阻断定稿")
+        if (item.type_code in ("FR", "NFR") and item.item_status == "正式"
+                and not has_source):
+            self.add_issue("ERROR", "正式需求缺来源",
+                           f"{doc.path}:{item.line} `{item.code}`: `细项状态` 为 `正式` "
+                           "的 FR / NFR MUST 有 `来源`（至少一个指向上层依据的标准链接）；"
+                           "无编码依据的写 `出处` 不能替代，应先为依据建 REF / PRN 等细项")
 
         seen_dep: Set[str] = set()
         for c, lineno in dep_codes:
@@ -4363,6 +4373,39 @@ class DesignDocChecker:
                     "WARNING", "DEC 定义层级不允许",
                     f"{doc.path}:{item.line} `{item.code}`: `DEC` 不在 L2 定义（允许 L3 / L4 / L5）；"
                     "产品承诺请改用 `FR` / `NFR`，选型类决策可移至 L3（ADR 或概念架构）或 L4/L5")
+
+    def check_scn_coverage(self) -> None:
+        """正式 `SCN` 无任何 FR / NFR 的 `来源` 指向它 → INFO（Complete 的机检下限）。
+
+        只判「零承接」；承接是否充分（场景关键内容是否都被覆盖）归评审。
+        作用域内尚无任何 FR / NFR 时不报（L2 还没开始写，逐条报只是噪音）。
+        """
+        cited: Set[str] = set()
+        has_req = False
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            for item in self._doc_items(doc):
+                if (item.type_code not in ("FR", "NFR") or not item.defined
+                        or item.path != doc.path or item.item_status == "废弃"):
+                    continue
+                has_req = True
+                for name, val, _ in self._attr_group(doc, item.line - 1):
+                    if name == "来源":
+                        cited.update(self.resolve_code(c) for c in self._attr_codes(val))
+        if not has_req:
+            return
+        for doc in self.docs:
+            if doc.archived:
+                continue
+            for item in self._doc_items(doc):
+                if (item.type_code != "SCN" or not item.defined or item.path != doc.path
+                        or item.item_status != "正式" or item.code in cited):
+                    continue
+                self.add_issue(
+                    "INFO", "场景无需求承接",
+                    f"{doc.path}:{item.line} `{item.code}`: 正式 `SCN` 没有任何 FR / NFR 的 "
+                    "`来源` 指向它；确认是否漏写需求，或该场景不在本期范围（后者在场景正文说明）")
 
     def _item_block(self, doc: DocInfo, code: str) -> str:
         return "\n".join(doc.lines[i - 1] for i in self._own_lines(doc, code, block=True))
@@ -5216,6 +5259,7 @@ class DesignDocChecker:
         self.check_def_blocks()
         self.check_anchor_reachability()
         self.check_dec_layer()
+        self.check_scn_coverage()
         self.check_deprecation()
         self.check_draft_finalization()
         self.check_status_gating()

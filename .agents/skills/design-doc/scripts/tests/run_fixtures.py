@@ -2210,6 +2210,103 @@ def run_dec_layer_cases():
     return 1 if fails else 0
 
 
+def run_trace_coverage_cases():
+    """正式 FR / NFR 缺 `来源` → ERROR；正式 SCN 无 FR / NFR 承接 → INFO（作用域无 FR / NFR 时不报）。"""
+    import tempfile
+
+    readme = """# 追溯覆盖测试
+
+## 项目元信息
+
+| 字段 | 值 |
+|------|----|
+| project_name | 追溯覆盖测试 |
+| project_code | TRC |
+| 产品版本 | v1.0 |
+
+## 发版记录
+
+| 产品版本 | 日期 | 说明 |
+|----------|------|------|
+"""
+
+    def block(code, title, extra_attr=""):
+        return f"""<a id="{code.lower()}"></a>
+### {code}：{title}
+
+- **细项状态**：正式
+- **修订版本号**：1
+- **创建日期**：2026-11-26
+- **最后修订日期**：2026-11-26
+{extra_attr}
+测试内容。
+
+"""
+
+    def doc(code, layer, body):
+        return f"""# {code} 测试文档
+
+| 属性 | 值 |
+|:---|:---|
+| 文档编码 | {code} |
+| 层级 | {layer} |
+| 修订版本号 | 1 |
+| 状态 | 正式 |
+| 作者 | 测试 |
+| 创建日期 | 2026-11-26 |
+| 最后更新 | 2026-11-26 |
+
+## 内容
+
+{body}
+## 变更记录
+
+| 版本 | 日期 | 说明 |
+|------|------|------|
+| 1 | 2026-11-26 | 初稿 |
+"""
+
+    def titles(l1_body, l2_body):
+        with tempfile.TemporaryDirectory() as td:
+            scope = Path(td) / "ued"
+            (scope / "L1-stakeholder").mkdir(parents=True)
+            (scope / "README.md").write_text(readme, encoding="utf-8")
+            (scope / "L1-stakeholder" / "TRC-L1-001.md").write_text(
+                doc("TRC-L1-001", "L1", l1_body), encoding="utf-8")
+            if l2_body is not None:
+                (scope / "L2-requirements").mkdir()
+                (scope / "L2-requirements" / "TRC-L2-001.md").write_text(
+                    doc("TRC-L2-001", "L2", l2_body), encoding="utf-8")
+            checker = _load_checker().DesignDocChecker(str(scope))
+            with contextlib.redirect_stdout(io.StringIO()):
+                issues = checker.run_checks()
+            return [i["title"] for i in issues
+                    if i["title"] in ("正式需求缺来源", "场景无需求承接")]
+
+    scn = block("TRC-SCN-001", "下单场景")
+    src = "- **来源**：[TRC-SCN-001（下单场景）](../L1-stakeholder/TRC-L1-001.md#trc-scn-001)\n"
+    fails = []
+    cases = [
+        ("正式 FR 缺来源 → ERROR；SCN 无承接 → INFO",
+         scn, block("TRC-FR-001", "下单", "- **优先级**：P1\n"),
+         ["正式需求缺来源", "场景无需求承接"]),
+        ("正式 FR 有来源 → 不报", scn,
+         block("TRC-FR-001", "下单", "- **优先级**：P1\n" + src), []),
+        ("尚无 FR / NFR → SCN 不报", scn, None, []),
+        ("正式 NFR 缺来源 → ERROR", scn,
+         block("TRC-NFR-001", "响应", "- **类别**：性能\n") + block("TRC-FR-001", "下单", src),
+         ["正式需求缺来源"]),
+    ]
+    for name, l1, l2, want in cases:
+        got = sorted(titles(l1, l2))
+        if got != sorted(want):
+            fails.append((name, got, sorted(want)))
+    for name, got, want in fails:
+        print(f"  FAIL 追溯覆盖：{name}：得到 {got}，期望 {want}")
+    print(f"追溯覆盖用例{'全部通过' if not fails else '有失败'}")
+    return 1 if fails else 0
+
+
 def main():
     require_test_deps()
     verbose = "-v" in sys.argv or "--verbose" in sys.argv
@@ -2262,6 +2359,7 @@ def main():
     rc |= run_spec_version_cases()
     rc |= run_agents_block_cases()
     rc |= run_dec_layer_cases()
+    rc |= run_trace_coverage_cases()
     rc |= run_check_templates_smoke()
     return 1 if rc else 0
 

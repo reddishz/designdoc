@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.18-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.19-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.19 | 正式 FR / NFR 的 `来源` 升为 MUST（缺则 ERROR）；新增 INFO「场景无需求承接」；澄清集合「完整」与「可确认」的区别及 `来源` 的覆盖范围 |
 | v10.18 | 需求集合由索引与基线文件界定，定稿做增量检查、基线成员变化时做整体判断；A 类为阻断项，用户接受须记理由；逻辑连接词与 Appropriate 粒度补充 |
 | v10.17 | 需求质量对齐 29148:2018：特征对应表、Correct 须人审、需求集合检查（定稿前）；定稿确认前呈现质量报告，问题按证据强度分 A / B / C；单数允许多个条件，模糊词按 5.2.7 扩充 |
 | v10.16 | 文档 `作者` 统一取作用域 README 的 `author`，缺失用默认值；每次写入或修改文档时按当前值写入 |
