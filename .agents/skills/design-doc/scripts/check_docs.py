@@ -4182,7 +4182,8 @@ class DesignDocChecker:
                 if parts and all(p in NFR_CATEGORIES for p in parts) and "/" in val:
                     continue            # 模板枚举罗列，尚未选定
                 if val not in NFR_CATEGORIES:
-                    hint = (f"；旧值，10.23 起改为 {NFR_CATEGORY_LEGACY[val]}"
+                    hint = (f"；旧值，建议改为 {NFR_CATEGORY_LEGACY[val]}"
+                            "（人工迁移建议，须核对原需求正文）"
                             if val in NFR_CATEGORY_LEGACY else "")
                     self.add_issue("ERROR", "类别取值非法",
                                    f"{doc.path}:{lineno} `{item.code}`: `类别` '{val}' "
