@@ -491,8 +491,13 @@ DEP_OWN_ATTR = re.compile(
     r"^\s*(?:[-*+]\s*)?\*\*依赖\*\*"
     r"(?:\uff08[^\uff09)]*\uff09|\([^)]*\))?\s*[:\uff1a]")
 NFR_CATEGORIES = (
-    "性能", "安全", "可用性", "兼容性", "可靠性", "可维护性", "可移植性", "易用性",
-)
+    "性能效率", "兼容性", "交互能力", "可靠性", "安全（Security）", "安全（Safety）",
+    "可维护性", "灵活性",
+)  # ISO/IEC 25010:2023 质量特征（不含功能适合性，功能性归 FR / AC）
+NFR_CATEGORY_LEGACY = {   # 10.23 前的旧值 → 迁移提示（不自动改写）
+    "性能": "性能效率", "可用性": "可靠性（可用性子特征）", "易用性": "交互能力",
+    "可移植性": "灵活性", "安全": "安全（Security）或安全（Safety），按内容判定",
+}
 FR_NFR_PRIORITY = ("P0", "P1", "P2")
 DEP_EXCLUSIVE_ATTRS = (
     "来源", "处理规则", "所属组件", "参与者", "验证方式", "满足需求",
@@ -4177,10 +4182,12 @@ class DesignDocChecker:
                 if parts and all(p in NFR_CATEGORIES for p in parts) and "/" in val:
                     continue            # 模板枚举罗列，尚未选定
                 if val not in NFR_CATEGORIES:
+                    hint = (f"；旧值，10.23 起改为 {NFR_CATEGORY_LEGACY[val]}"
+                            if val in NFR_CATEGORY_LEGACY else "")
                     self.add_issue("ERROR", "类别取值非法",
                                    f"{doc.path}:{lineno} `{item.code}`: `类别` '{val}' "
                                    "不在封闭枚举 "
-                                   f"{' / '.join(NFR_CATEGORIES)} 内")
+                                   f"{' / '.join(NFR_CATEGORIES)} 内{hint}")
             if item.type_code in ("FR", "NFR") and name == "优先级":
                 parts = [p.strip() for p in val.split("/") if p.strip()]
                 if parts and all(p in FR_NFR_PRIORITY for p in parts) and "/" in val:

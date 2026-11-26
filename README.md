@@ -3,7 +3,7 @@
 与 AI 协作编写标准化的产品设计文档：分层清楚、编码可追溯；定稿并进入当前产品基线后，才作为实现依据。
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Skill](https://img.shields.io/badge/design--doc-v10.22-blue.svg)](./.agents/skills/design-doc/SKILL.md)
+[![Skill](https://img.shields.io/badge/design--doc-v10.23-blue.svg)](./.agents/skills/design-doc/SKILL.md)
 [![Skill](https://img.shields.io/badge/system--design--doc-v2.1-blue.svg)](./.agents/skills/system-design-doc/SKILL.md)
 [![Agent Skills](https://img.shields.io/badge/Agent%20Skills-Standard-green.svg)](https://agentskills.io/specification)
 
@@ -40,6 +40,7 @@
 
 | 版本 | 主要变化 |
 |------|----------|
+| v10.23 | NFR 类别按 ISO/IEC 25010:2023 改名（安全拆 Security / Safety）并给迁移提示；新增产品质量属性参考；基线整体判断增加质量属性适用性表 |
 | v10.22 | 定稿增加全局交互扫描（候选之外的关键交互）；集合 Consistent 措辞改为「归入集合层面的缺陷」；比对阈值与方式记入质量报告 |
 | v10.21 | 集合一致 / 可行 / 可理解补定义与判据；新增比对范围（候选取并集，全量兜底 NFR、总括词需求与 CON，小规模全量）；「只记一次」扩到集合（按根因固定顺序）；须人审增集合质量判断一行 |
 | v10.20 | 正式 FR / NFR 的 `来源` 只指向自身或下层同缺来源（ERROR）；SCN 承接沿 `来源` 链追溯；修正 10.19 措辞（无编码依据归 `REF` 或 L1 的 `SCN` / `STK` / `CON`，删「Correct 的集合版」） |

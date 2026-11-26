@@ -98,6 +98,7 @@ EXPECT = {
     "L2-938-dep-same-source":     {"依赖与来源指向同一对象"},
     "L2-939-nfr-cat-ok":          set(),
     "L2-940-nfr-cat-bad":         {"类别取值非法"},
+    "L2-986-nfr-cat-legacy":      {"类别取值非法"},
     "L2-941-formal-no-verify":    {"正式需求缺验证方式"},
     "L2-942-formal-tbd":          {"正式文档含待定"},
     "L2-943-chugao-tbd-ok":       set(),
